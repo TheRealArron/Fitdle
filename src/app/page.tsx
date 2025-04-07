@@ -1,5 +1,7 @@
 // src/app/page.js
-import Fitdle from './components/Fitdle';  // Relative path
+import Fitdle from '@/components/Fitdle';
+
+  
   // Adjust the path if necessary
 
 export default function Home() {
