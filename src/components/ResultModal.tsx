@@ -1,0 +1,184 @@
+'use client';
+
+import { CirclePlay, Dumbbell, Flame, Share2, Target, Trophy } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { MAX_GUESSES, formVideoUrl, musclesOf } from '@/data/exercises';
+import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles';
+import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
+import { buildShareText, shareResult } from '@/lib/share';
+import { useGameStore } from '@/store/useGameStore';
+import { BodyFigure } from './BodyFigure';
+import { Countdown } from './Countdown';
+import { Modal } from './Modal';
+
+const GROUP_CLASS: Record<MuscleGroup, string> = {
+  Core: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  Legs: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  Chest: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+  Back: 'bg-sky-500/15 text-sky-300 ring-sky-500/30',
+  Shoulders: 'bg-cyan-500/15 text-cyan-300 ring-cyan-500/30',
+  Arms: 'bg-violet-500/15 text-violet-300 ring-violet-500/30',
+  Full: 'bg-orange-500/15 text-orange-300 ring-orange-500/30',
+};
+
+export function ResultModal() {
+  const open = useGameStore((s) => s.modalOpen);
+  const setModalOpen = useGameStore((s) => s.setModalOpen);
+  const status = useGameStore((s) => s.status);
+  const target = useGameStore((s) => s.target);
+  const guesses = useGameStore((s) => s.guesses);
+  const evaluations = useGameStore((s) => s.evaluations);
+  const streak = useGameStore((s) => s.streak);
+  const seed = useGameStore((s) => s.seed);
+  const setToast = useGameStore((s) => s.setToast);
+
+  const [sharing, setSharing] = useState(false);
+  const won = status === 'won';
+
+  // On the result screen the full answer is public, so the figure switches
+  // from "what you probed" to the complete muscle map — the teaching payoff.
+  const answerMuscles = useMemo(() => musclesOf(target), [target]);
+  const probed = useMemo(
+    () => accumulateMuscleFeedback(guesses, target).missed,
+    [guesses, target],
+  );
+  const categoryRegions = useMemo(
+    () => new Set(REGIONS_IN_GROUP[target.group]),
+    [target.group],
+  );
+
+  const onShare = async () => {
+    setSharing(true);
+    const text = buildShareText(seed, evaluations, won, streak);
+    const outcome = await shareResult(text);
+    setSharing(false);
+    setToast(
+      outcome === 'shared'
+        ? 'Shared'
+        : outcome === 'copied'
+          ? 'Result copied to clipboard'
+          : 'Could not share — copy manually',
+    );
+  };
+
+  return (
+    <Modal
+      open={open && status !== 'playing'}
+      onClose={() => setModalOpen(false)}
+      title={won ? 'Rep completed' : 'Set failed'}
+    >
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={[
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
+              won ? 'bg-state-correct/20 text-state-correct' : 'bg-rose-500/15 text-rose-400',
+            ].join(' ')}
+          >
+            {won ? <Trophy className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+          </div>
+          <div className="min-w-0">
+            <p className="font-game text-2xl font-bold tracking-widest text-white">
+              {target.name}
+            </p>
+            <p className="truncate text-sm text-slate-400">{target.display}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={[
+              'rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset',
+              GROUP_CLASS[target.group],
+            ].join(' ')}
+          >
+            {target.group}
+          </span>
+          <span className="flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-white/10">
+            <Dumbbell className="h-3.5 w-3.5" />
+            {target.equipment}
+          </span>
+          <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-white/10">
+            {target.difficulty}
+          </span>
+          <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-white/10">
+            {won ? `${guesses.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`}
+          </span>
+          {streak > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300 ring-1 ring-inset ring-orange-500/30">
+              <Flame className="h-3.5 w-3.5" />
+              {streak}
+            </span>
+          )}
+        </div>
+
+        <section className="rounded-xl bg-black/20 p-3">
+          <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">
+            What it actually works
+          </h3>
+          <BodyFigure
+            shared={answerMuscles}
+            missed={probed}
+            category={categoryRegions}
+            className="mx-auto h-44 w-auto"
+          />
+          <p className="mt-1 text-center text-xs leading-relaxed text-slate-400">
+            <span className="font-semibold text-state-correct">
+              {target.primary.map((m) => MUSCLE_LABEL[m]).join(', ')}
+            </span>
+            {target.secondary.length > 0 && (
+              <> · assisted by {target.secondary.map((m) => MUSCLE_LABEL[m]).join(', ')}</>
+            )}
+          </p>
+        </section>
+
+        {won ? (
+          <section>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+              How to do it
+            </h3>
+            <ol className="flex flex-col gap-2">
+              {target.howTo.map((step, i) => (
+                <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 font-game text-[11px] font-bold text-slate-400">
+                    {i + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : (
+          <section className="flex flex-col gap-3">
+            <p className="text-sm leading-relaxed text-slate-300">
+              Today&apos;s exercise was <strong className="text-white">{target.display}</strong>.
+              Watch the form before you try it.
+            </p>
+            <a
+              href={formVideoUrl(target)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-3 text-sm font-semibold text-white ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10"
+            >
+              <CirclePlay className="h-4 w-4" />
+              Watch {target.display} form video
+            </a>
+          </section>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
+          <Countdown />
+          <button
+            type="button"
+            onClick={onShare}
+            disabled={sharing}
+            className="flex items-center justify-center gap-2 rounded-xl bg-state-correct px-4 py-3 font-game text-sm font-bold uppercase tracking-wider text-white transition-colors hover:brightness-110 disabled:opacity-60"
+          >
+            <Share2 className="h-4 w-4" />
+            {sharing ? 'Sharing…' : 'Share result'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

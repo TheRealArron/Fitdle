@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Surfaces */
+  --color-app-bg: #0f172a;
+  --color-tile-empty: #1e293b;
+  --color-tile-border: #334155;
+  --color-tile-filled: #64748b;
+
+  /* Tile / key result states — exact values from the specification. */
+  --color-state-correct: #22c55e;
+  --color-state-present: #eab308;
+  --color-state-absent: #4b5563;
+
+  /* Keyboard */
+  --color-key-idle: #475569;
+  --color-key-hover: #566579;
+
+  --font-game: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-app-bg);
+  color: white;
+  overflow: hidden;
+  touch-action: manipulation;
+  /* Stops iOS Safari from zooming when a key is double-tapped quickly. */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Tile flip: a real 3D rotation on two stacked faces rather than a colour swap
+ * timed to the midpoint of a keyframe. The back face is pre-rotated 180deg so
+ * it reads upright once the parent has turned over, and backface-visibility
+ * hides whichever face is pointing away. No timers, so the animation cannot
+ * drift out of sync with the state that drives it.
+ */
+/*
+ * The board is width-driven (tiles are aspect-square) but its available space
+ * is height-constrained, and the column count changes daily. Making this a size
+ * container lets the board compute its own width from the height it actually
+ * has, in CSS, with no JS measurement and no per-breakpoint magic numbers:
+ *
+ *   width: min(100cqw, 100cqh * columns / 6)
+ */
+.board-area {
+  container-type: size;
+}
+
+.tile-perspective {
+  perspective: 1000px;
+  /* Makes the tile its own container so letters can size in `cqw`. Grid width
+     varies 5–9 by day, so tiles must scale their own type. */
+  container-type: inline-size;
+}
+
+.tile-3d {
+  transform-style: preserve-3d;
+}
+
+.tile-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.tile-face-back {
+  transform: rotateX(180deg);
+}
+
+/* Respect reduced-motion: keep the colour change, drop the rotation. */
+@media (prefers-reduced-motion: reduce) {
+  .tile-3d,
+  .tile-3d * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-tile-border);
+  border-radius: 9999px;
 }
