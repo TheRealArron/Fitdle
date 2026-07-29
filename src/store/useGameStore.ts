@@ -1,0 +1,312 @@
+'use client';
+
+import { create } from 'zustand';
+import {
+  ANSWERS,
+  CATEGORY_HINT_AT,
+  EQUIPMENT_HINT_AT,
+  MAX_GUESSES,
+  getExercise,
+  isValidGuess,
+  type Answer,
+} from '@/data/exercises';
+import type { Equipment, MuscleGroup } from '@/data/muscles';
+import { getDailySeed, getDailyIndex } from '@/lib/daily';
+import { evaluateGuess, buildKeyStates, type LetterState } from '@/lib/evaluate';
+import {
+  loadSave,
+  writeSave,
+  clearSave,
+  defaultSave,
+  reconcile,
+  commitResult,
+  type SaveData,
+  type GameStatus,
+} from '@/lib/secureStorage';
+
+export interface Toast {
+  id: number;
+  message: string;
+}
+
+export interface GameState {
+  /* ── board ── */
+  seed: number;
+  target: Answer;
+  /** Today's grid width. Varies 5–9 with the answer. */
+  wordLength: number;
+  guesses: string[];
+  evaluations: LetterState[][];
+  currentGuess: string;
+  status: GameStatus;
+
+  /* ── persistence ── */
+  save: SaveData;
+  /** Mirrors `save.streak`; kept top-level per the specification's interface. */
+  streak: number;
+
+  /* ── ui ── */
+  hydrated: boolean;
+  /** Row mid-flip. Blocks input and defers keyboard/figure/hint updates. */
+  revealingRow: number | null;
+  shakeRow: number | null;
+  modalOpen: boolean;
+  toast: Toast | null;
+  tampered: boolean;
+  clockRollback: boolean;
+
+  /* ── actions ── */
+  initGame: () => void;
+  addLetter: (char: string) => void;
+  removeLetter: () => void;
+  submitGuess: () => void;
+  finishReveal: (row: number) => void;
+  setToast: (message: string) => void;
+  clearToast: () => void;
+  clearShake: () => void;
+  setModalOpen: (open: boolean) => void;
+  resetProgress: () => void;
+}
+
+let toastSeq = 0;
+
+const initialTarget = ANSWERS[getDailyIndex()];
+
+export const useGameStore = create<GameState>()((set, get) => ({
+  seed: getDailySeed(),
+  target: initialTarget,
+  wordLength: initialTarget.name.length,
+  guesses: [],
+  evaluations: [],
+  currentGuess: '',
+  status: 'playing',
+
+  save: defaultSave(),
+  streak: 0,
+
+  hydrated: false,
+  revealingRow: null,
+  shakeRow: null,
+  modalOpen: false,
+  toast: null,
+  tampered: false,
+  clockRollback: false,
+
+  initGame: () => {
+    const seed = getDailySeed();
+    const target = ANSWERS[getDailyIndex()];
+
+    const { save: loaded, tampered } = loadSave();
+    const { save, day, alreadyComplete, clockRollback, streakBroken } = reconcile(loaded, seed);
+
+    // A stored board from a build with a different answer pool would have the
+    // wrong width; drop those rows rather than render a broken grid.
+    const restored = day.guesses.filter((g) => g.length === target.name.length);
+    if (restored.length !== day.guesses.length) {
+      day.guesses = restored;
+      save.day = day;
+    }
+
+    writeSave(save);
+
+    set({
+      seed,
+      target,
+      wordLength: target.name.length,
+      guesses: day.guesses,
+      evaluations: day.guesses.map((g) => evaluateGuess(g, target.name)),
+      currentGuess: '',
+      status: day.status,
+      save,
+      streak: save.streak,
+      hydrated: true,
+      revealingRow: null,
+      shakeRow: null,
+      modalOpen: alreadyComplete,
+      tampered,
+      clockRollback,
+      toast: tampered
+        ? { id: ++toastSeq, message: 'Saved progress was invalid — stats reset' }
+        : streakBroken
+          ? { id: ++toastSeq, message: 'You missed a day — streak reset' }
+          : null,
+    });
+  },
+
+  addLetter: (char) => {
+    const { currentGuess, status, revealingRow, wordLength } = get();
+    if (status !== 'playing' || revealingRow !== null) return;
+    if (currentGuess.length >= wordLength) return;
+    if (!/^[a-zA-Z]$/.test(char)) return;
+    set({ currentGuess: currentGuess + char.toUpperCase() });
+  },
+
+  removeLetter: () => {
+    const { status, revealingRow, currentGuess } = get();
+    if (status !== 'playing' || revealingRow !== null) return;
+    set({ currentGuess: currentGuess.slice(0, -1) });
+  },
+
+  submitGuess: () => {
+    const {
+      currentGuess, target, wordLength, guesses, evaluations,
+      status, revealingRow, save, seed, clockRollback,
+    } = get();
+
+    if (status !== 'playing' || revealingRow !== null) return;
+
+    if (currentGuess.length !== wordLength) {
+      set({
+        shakeRow: guesses.length,
+        toast: { id: ++toastSeq, message: `Needs ${wordLength} letters` },
+      });
+      return;
+    }
+
+    // Guesses must be real exercises of today's length — that constraint is
+    // what makes the space knowable, and the exercise index makes it fair.
+    if (!isValidGuess(currentGuess, wordLength)) {
+      set({
+        shakeRow: guesses.length,
+        toast: { id: ++toastSeq, message: 'Not an exercise in the list' },
+      });
+      return;
+    }
+
+    if (guesses.includes(currentGuess)) {
+      set({
+        shakeRow: guesses.length,
+        toast: { id: ++toastSeq, message: 'Already guessed' },
+      });
+      return;
+    }
+
+    const row = guesses.length;
+    const evaluation = evaluateGuess(currentGuess, target.name);
+    const newGuesses = [...guesses, currentGuess];
+    const newEvaluations = [...evaluations, evaluation];
+
+    const won = currentGuess === target.name;
+    const lost = !won && newGuesses.length === MAX_GUESSES;
+    const newStatus: GameStatus = won ? 'won' : lost ? 'lost' : 'playing';
+
+    let nextSave: SaveData = {
+      ...save,
+      day: { seed, guesses: newGuesses, status: newStatus },
+    };
+
+    if (newStatus !== 'playing') {
+      nextSave = commitResult(nextSave, seed, won, newGuesses.length, !clockRollback);
+    }
+
+    writeSave(nextSave);
+
+    set({
+      guesses: newGuesses,
+      evaluations: newEvaluations,
+      currentGuess: '',
+      status: newStatus,
+      save: nextSave,
+      streak: nextSave.streak,
+      revealingRow: row,
+    });
+  },
+
+  finishReveal: (row) => {
+    if (get().revealingRow !== row) return;
+    set({ revealingRow: null });
+
+    const { status } = get();
+    if (status !== 'playing') {
+      setTimeout(
+        () => {
+          if (get().status !== 'playing') set({ modalOpen: true });
+        },
+        status === 'won' ? 1500 : 900,
+      );
+    }
+  },
+
+  setToast: (message) => set({ toast: { id: ++toastSeq, message } }),
+  clearToast: () => set({ toast: null }),
+  clearShake: () => set({ shakeRow: null }),
+  setModalOpen: (open) => set({ modalOpen: open }),
+
+  resetProgress: () => {
+    clearSave();
+    const fresh = defaultSave();
+    writeSave(fresh);
+    set({
+      guesses: [],
+      evaluations: [],
+      currentGuess: '',
+      status: 'playing',
+      save: fresh,
+      streak: 0,
+      revealingRow: null,
+      modalOpen: false,
+      tampered: false,
+      toast: { id: ++toastSeq, message: 'Progress cleared' },
+    });
+  },
+}));
+
+/**
+ * Guesses whose reveal animation has finished. Everything derived — keyboard
+ * colours, the muscle figure, the hint unlocks — reads from this so nothing
+ * updates mid-flip and spoils the reveal.
+ */
+export function revealedCount(state: Pick<GameState, 'guesses' | 'revealingRow'>): number {
+  return state.revealingRow === null ? state.guesses.length : state.revealingRow;
+}
+
+export function selectKeyStates(state: GameState): Record<string, LetterState> {
+  const upTo = revealedCount(state);
+  return buildKeyStates(state.guesses.slice(0, upTo), state.evaluations.slice(0, upTo));
+}
+
+export interface Hints {
+  /** The answer's muscle group, or null while still locked. */
+  category: MuscleGroup | null;
+  equipment: Equipment | null;
+  /** Guesses remaining until the next hint, or null when all are out. */
+  nextHintIn: number | null;
+}
+
+/**
+ * Progressive disclosure. Two blind guesses of genuine deduction first — the
+ * figure still reports overlap from your own guesses during those — then the
+ * category as a safety net, then equipment.
+ *
+ * MUST be wrapped in `useShallow`. It builds a fresh object per call and
+ * Zustand v5 compares snapshots by reference, so a bare `useGameStore(selectHints)`
+ * re-renders until React throws "Maximum update depth exceeded". Same rule as
+ * `selectKeyStates`. All three fields are primitives, so shallow compare is exact.
+ */
+export function selectHints(state: GameState): Hints {
+  const revealed = revealedCount(state);
+  const finished = state.status !== 'playing';
+
+  const categoryOut = finished || revealed >= CATEGORY_HINT_AT - 1;
+  const equipmentOut = finished || revealed >= EQUIPMENT_HINT_AT - 1;
+
+  return {
+    category: categoryOut ? state.target.group : null,
+    equipment: equipmentOut ? state.target.equipment : null,
+    nextHintIn: categoryOut
+      ? equipmentOut
+        ? null
+        : EQUIPMENT_HINT_AT - 1 - revealed
+      : CATEGORY_HINT_AT - 1 - revealed,
+  };
+}
+
+export function selectWinRate(state: GameState): number {
+  const { played, wins } = state.save;
+  return played === 0 ? 0 : Math.round((wins / played) * 100);
+}
+
+/** Display name for a guessed row, used by the guess history list. */
+export function displayNameOf(name: string): string {
+  return getExercise(name)?.display ?? name;
+}
