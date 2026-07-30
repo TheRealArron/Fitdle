@@ -1,14 +1,15 @@
 'use client';
 
-import { CirclePlay, Dumbbell, Flame, Share2, Target, Trophy } from 'lucide-react';
+import { Dumbbell, Flame, Share2, Target, Trophy } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { MAX_GUESSES, formVideoUrl, musclesOf } from '@/data/exercises';
+import { MAX_GUESSES, musclesOf } from '@/data/exercises';
 import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { buildShareText, shareResult } from '@/lib/share';
 import { useGameStore } from '@/store/useGameStore';
 import { BodyFigure } from './BodyFigure';
 import { Countdown } from './Countdown';
+import { FormVideo } from './FormVideo';
 import { Modal } from './Modal';
 
 const GROUP_CLASS: Record<MuscleGroup, string> = {
@@ -132,39 +133,30 @@ export function ResultModal() {
           </p>
         </section>
 
-        {won ? (
-          <section>
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-500">
-              How to do it
-            </h3>
-            <ol className="flex flex-col gap-2">
-              {target.howTo.map((step, i) => (
-                <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 font-game text-[11px] font-bold text-slate-400">
-                    {i + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          </section>
-        ) : (
-          <section className="flex flex-col gap-3">
-            <p className="text-sm leading-relaxed text-slate-300">
-              Today&apos;s exercise was <strong className="text-white">{target.display}</strong>.
-              Watch the form before you try it.
-            </p>
-            <a
-              href={formVideoUrl(target)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 rounded-xl bg-white/5 px-4 py-3 text-sm font-semibold text-white ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10"
-            >
-              <CirclePlay className="h-4 w-4" />
-              Watch {target.display} form video
-            </a>
-          </section>
+        {!won && (
+          <p className="text-sm leading-relaxed text-slate-300">
+            Today&apos;s exercise was <strong className="text-white">{target.display}</strong>.
+          </p>
         )}
+
+        <section>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+            How to do it
+          </h3>
+          <ol className="mb-3 flex flex-col gap-2">
+            {target.howTo.map((step, i) => (
+              <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 font-game text-[11px] font-bold text-slate-400">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+          {/* Shown on wins too — the coaching is the point of the game, and
+              hiding it behind a loss punishes the players who engaged most. */}
+          <FormVideo answer={target} />
+        </section>
 
         <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
           <Countdown />

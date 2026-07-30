@@ -1,12 +1,14 @@
 'use client';
 
-import { TriangleAlert } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { TriangleAlert, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { useGameStore, selectHints, revealedCount } from '@/store/useGameStore';
+import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
 import { ExerciseIndex } from './ExerciseIndex';
 import { Grid } from './Grid';
@@ -14,11 +16,28 @@ import { Header } from './Header';
 import { HelpModal } from './HelpModal';
 import { HintBar } from './HintBar';
 import { Keyboard } from './Keyboard';
+import { MuscleLegend } from './MuscleLegend';
 import { ResultModal } from './ResultModal';
+import { Sidebar } from './Sidebar';
 import { StatsModal } from './StatsModal';
 import { Toast } from './Toast';
 
 const EMPTY: ReadonlySet<MuscleRegion> = new Set();
+
+/**
+ * Desktop is a three-column rail: menu | board | figure.
+ *
+ * The side rails are deliberately the SAME width. An asymmetric layout would
+ * push the board off the viewport centre while the header and keyboard stayed
+ * centred on it, and that mismatch is what reads as "broken alignment" — it was
+ * the bug in the previous version, where the board lived in a flex-1 column
+ * beside a fixed-width figure and centred itself within that column instead.
+ *
+ * Both rails appear together at `xl` or not at all, so the board is either
+ * exactly centred or full-width. There is no in-between state where only one
+ * rail is mounted.
+ */
+const RAIL = 'w-[23%] min-w-[17rem] max-w-[30rem] shrink-0';
 
 export function Game() {
   const initGame = useGameStore((s) => s.initGame);
@@ -34,6 +53,8 @@ export function Game() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [indexOpen, setIndexOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     initGame();
@@ -42,7 +63,8 @@ export function Game() {
   // A tab left open across midnight UTC would keep serving yesterday's word.
   useEffect(() => {
     const id = setInterval(() => {
-      if (useGameStore.getState().seed !== getDailySeed()) initGame();
+      const s = useGameStore.getState();
+      if (s.mode === 'daily' && s.seed !== getDailySeed()) initGame();
     }, 60_000);
     return () => clearInterval(id);
   }, [initGame]);
@@ -53,7 +75,11 @@ export function Game() {
    * a selector would re-render forever. `guesses` is a stable array reference.
    */
   const feedback = useMemo(
-    () => accumulateMuscleFeedback(guesses.slice(0, revealedCount({ guesses, revealingRow })), target),
+    () =>
+      accumulateMuscleFeedback(
+        guesses.slice(0, revealedCount({ guesses, revealingRow })),
+        target,
+      ),
     [guesses, revealingRow, target],
   );
 
@@ -62,75 +88,134 @@ export function Game() {
     [hints.category],
   );
 
+  const sidebarActions = {
+    onOpenHelp: () => setHelpOpen(true),
+    onOpenIndex: () => setIndexOpen(true),
+    onOpenStats: () => setStatsOpen(true),
+    onOpenAccount: () => setAccountOpen(true),
+  };
+
+  const figure = (
+    <BodyFigure
+      shared={feedback.shared}
+      missed={feedback.missed}
+      category={categoryRegions}
+      className="h-auto w-full"
+    />
+  );
+
   return (
-    <div className="flex h-dvh flex-col items-center overflow-hidden">
-      <Header
-        onOpenStats={() => setStatsOpen(true)}
-        onOpenHelp={() => setHelpOpen(true)}
-        onOpenIndex={() => setIndexOpen(true)}
-      />
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <Header onOpenMenu={() => setDrawerOpen(true)} onOpenStats={() => setStatsOpen(true)} />
 
       {clockRollback && (
-        <div className="flex w-full max-w-lg items-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
           <span>Your clock is behind a date you have already played — no streak credit today.</span>
         </div>
       )}
 
-      <main
-        className={[
-          'flex w-full min-h-0 flex-1 flex-col items-center gap-2 overflow-hidden px-2 py-2',
-          // Side by side only once there is width to spare. On a phone a 9-wide
-          // grid and the figure cannot share a row without crushing both.
-          'lg:flex-row lg:items-center lg:justify-center lg:gap-8',
-          'transition-opacity duration-200',
-        ].join(' ')}
-        style={{ opacity: hydrated ? 1 : 0 }}
-      >
-        {/*
-          The figure is the second feedback channel, so it stays on screen while
-          you type rather than hiding in a modal.
-        */}
-        <BodyFigure
-          shared={feedback.shared}
-          missed={feedback.missed}
-          category={categoryRegions}
-          className={[
-            'w-auto shrink-0',
-            'h-[21vh] max-h-52',
-            // A 600px-tall extension popup has no height to spare; give it back
-            // to the board, which is the thing you cannot play without.
-            '[@media(max-height:700px)]:h-[14vh]',
-            'lg:h-auto lg:max-h-[62vh] lg:w-48',
-          ].join(' ')}
-        />
+      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+        {/* Left rail — menu. */}
+        <aside className={`hidden border-r border-white/10 xl:block ${RAIL}`}>
+          <Sidebar {...sidebarActions} />
+        </aside>
 
-        <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 lg:h-full lg:w-auto lg:flex-1">
-          {/* Size container — see .board-area in globals.css. */}
-          <div className="board-area flex min-h-0 w-full flex-1 items-center justify-center">
-            <div
-              style={{
-                // 0.94 absorbs the inter-tile gaps, which the ratio ignores.
-                width: `min(100cqw, calc(100cqh * ${wordLength} / 6 * 0.94))`,
-                maxWidth: '30rem',
-              }}
-            >
-              <Grid />
+        {/* Centre — board, hints, keyboard. */}
+        <main
+          className="flex min-h-0 min-w-0 flex-1 flex-col items-center transition-opacity duration-200"
+          style={{ opacity: hydrated ? 1 : 0 }}
+        >
+          <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-hidden px-2 py-2">
+            {/* Below xl the figure has no rail, so it sits above the board. */}
+            <BodyFigure
+              shared={feedback.shared}
+              missed={feedback.missed}
+              category={categoryRegions}
+              className="h-[21vh] max-h-52 w-auto shrink-0 [@media(max-height:700px)]:h-[14vh] xl:hidden"
+            />
+
+            {/* Size container — see .board-area in globals.css. */}
+            <div className="board-area flex min-h-0 w-full flex-1 items-center justify-center">
+              <div
+                style={{
+                  // 0.94 absorbs the inter-tile gaps, which the ratio ignores.
+                  width: `min(100cqw, calc(100cqh * ${wordLength} / 6 * 0.94))`,
+                  // Upper bound so tiles stay a sane size on very tall screens
+                  // rather than the board ballooning to fill the rail height.
+                  maxWidth: '38rem',
+                }}
+              >
+                <Grid />
+              </div>
             </div>
-          </div>
-          <HintBar />
-        </div>
-      </main>
 
-      <div className="flex w-full shrink-0 justify-center pb-3 pt-1">
-        <Keyboard />
+            <HintBar />
+          </div>
+
+          <div className="flex w-full shrink-0 justify-center pb-3 pt-1">
+            <Keyboard />
+          </div>
+        </main>
+
+        {/* Right rail — the muscle map, big enough to actually read. */}
+        <aside
+          className={`hidden flex-col items-center justify-center gap-5 border-l border-white/10 p-5 xl:flex ${RAIL}`}
+        >
+          {/* No width cap — the figure should use the whole rail. */}
+          <div className="w-full">{figure}</div>
+          <MuscleLegend className="w-full max-w-[12rem]" />
+        </aside>
       </div>
+
+      {/* Mobile / tablet drawer for the same menu. */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex xl:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setDrawerOpen(false)}
+            />
+            <motion.div
+              className="relative flex h-full w-[19rem] max-w-[85vw] flex-col border-r border-white/10 bg-slate-900 shadow-2xl"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menu"
+            >
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Close menu"
+                className="absolute right-3 top-3 z-10 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <Sidebar
+                {...sidebarActions}
+                onNavigate={() => setDrawerOpen(false)}
+                showLegend
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Toast />
       <ResultModal />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExerciseIndex open={indexOpen} onClose={() => setIndexOpen(false)} />
+      <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
     </div>
   );
 }

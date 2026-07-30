@@ -1,39 +1,30 @@
 'use client';
 
-import { ChartColumn, CircleHelp, Dumbbell, Flame, List } from 'lucide-react';
+import { ChartColumn, Dumbbell, Flame, Menu, Shuffle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '@/store/useGameStore';
 
 interface HeaderProps {
+  onOpenMenu: () => void;
   onOpenStats: () => void;
-  onOpenHelp: () => void;
-  onOpenIndex: () => void;
 }
 
-export function Header({ onOpenStats, onOpenHelp, onOpenIndex }: HeaderProps) {
+export function Header({ onOpenMenu, onOpenStats }: HeaderProps) {
   const streak = useGameStore((s) => s.streak);
   const hydrated = useGameStore((s) => s.hydrated);
+  const mode = useGameStore((s) => s.mode);
 
   return (
-    <header className="flex w-full max-w-lg shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-3">
-      <div className="flex items-center gap-1">
+    <header className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-3">
+      <div className="flex flex-1 items-center gap-1">
+        {/* On xl the sidebar is always on screen, so the trigger disappears. */}
         <button
           type="button"
-          onClick={onOpenHelp}
-          aria-label="How to play"
-          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+          onClick={onOpenMenu}
+          aria-label="Open menu"
+          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white xl:hidden"
         >
-          <CircleHelp className="h-5 w-5" />
-        </button>
-        {/* The exercise list is load-bearing, not a nicety — players cannot be
-            expected to know the vocabulary the way they know English. */}
-        <button
-          type="button"
-          onClick={onOpenIndex}
-          aria-label="Exercise list"
-          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <List className="h-5 w-5" />
+          <Menu className="h-5 w-5" />
         </button>
       </div>
 
@@ -42,11 +33,16 @@ export function Header({ onOpenStats, onOpenHelp, onOpenIndex }: HeaderProps) {
         <h1 className="font-game text-xl font-bold uppercase tracking-[0.2em] text-white">
           Fitdle
         </h1>
+        {mode === 'practice' && (
+          <span className="flex items-center gap-1 rounded-full bg-state-present/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yellow-300">
+            <Shuffle className="h-3 w-3" />
+            Practice
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-1">
-        {/* Rendered only after hydration — the streak comes from localStorage. */}
-        {hydrated && streak > 0 && (
+      <div className="flex flex-1 items-center justify-end gap-1">
+        {hydrated && mode === 'daily' && streak > 0 && (
           <motion.span
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}

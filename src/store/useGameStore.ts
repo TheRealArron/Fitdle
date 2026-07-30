@@ -29,6 +29,8 @@ export interface Toast {
   message: string;
 }
 
+export type GameMode = 'daily' | 'practice';
+
 export interface GameState {
   /* ── board ── */
   seed: number;
@@ -39,6 +41,12 @@ export interface GameState {
   evaluations: LetterState[][];
   currentGuess: string;
   status: GameStatus;
+  /**
+   * Practice rounds are pure play: no persistence, no streak, no stats. Keeping
+   * them entirely out of the save is what stops "practise until you win" from
+   * becoming a streak exploit.
+   */
+  mode: GameMode;
 
   /* ── persistence ── */
   save: SaveData;
@@ -66,6 +74,10 @@ export interface GameState {
   clearShake: () => void;
   setModalOpen: (open: boolean) => void;
   resetProgress: () => void;
+  /** Start a random puzzle that cannot affect stats or the streak. */
+  startPractice: () => void;
+  /** Return to today's puzzle, restoring the saved board. */
+  exitPractice: () => void;
 }
 
 let toastSeq = 0;
@@ -80,6 +92,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   evaluations: [],
   currentGuess: '',
   status: 'playing',
+  mode: 'daily',
 
   save: defaultSave(),
   streak: 0,
@@ -112,6 +125,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       seed,
       target,
+      mode: 'daily',
       wordLength: target.name.length,
       guesses: day.guesses,
       evaluations: day.guesses.map((g) => evaluateGuess(g, target.name)),
@@ -150,7 +164,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   submitGuess: () => {
     const {
       currentGuess, target, wordLength, guesses, evaluations,
-      status, revealingRow, save, seed, clockRollback,
+      status, revealingRow, save, seed, clockRollback, mode,
     } = get();
 
     if (status !== 'playing' || revealingRow !== null) return;
@@ -189,6 +203,20 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const won = currentGuess === target.name;
     const lost = !won && newGuesses.length === MAX_GUESSES;
     const newStatus: GameStatus = won ? 'won' : lost ? 'lost' : 'playing';
+
+    // Practice never touches the save. Not persisting is the whole guarantee:
+    // there is no path from a practice round to a streak, so replaying until
+    // you win buys nothing.
+    if (mode === 'practice') {
+      set({
+        guesses: newGuesses,
+        evaluations: newEvaluations,
+        currentGuess: '',
+        status: newStatus,
+        revealingRow: row,
+      });
+      return;
+    }
 
     let nextSave: SaveData = {
       ...save,
@@ -231,6 +259,31 @@ export const useGameStore = create<GameState>()((set, get) => ({
   clearToast: () => set({ toast: null }),
   clearShake: () => set({ shakeRow: null }),
   setModalOpen: (open) => set({ modalOpen: open }),
+
+  startPractice: () => {
+    // Any answer except today's, so practice cannot spoil the daily puzzle.
+    const todays = ANSWERS[getDailyIndex()].name;
+    const pool = ANSWERS.filter((a) => a.name !== todays);
+    const target = pool[Math.floor(Math.random() * pool.length)];
+
+    set({
+      mode: 'practice',
+      target,
+      wordLength: target.name.length,
+      guesses: [],
+      evaluations: [],
+      currentGuess: '',
+      status: 'playing',
+      revealingRow: null,
+      shakeRow: null,
+      modalOpen: false,
+      toast: { id: ++toastSeq, message: 'Practice round — streak is safe' },
+    });
+  },
+
+  // Re-runs the daily reconciliation, which restores the saved board. Practice
+  // state was never written anywhere, so there is nothing to clean up.
+  exitPractice: () => get().initGame(),
 
   resetProgress: () => {
     clearSave();
