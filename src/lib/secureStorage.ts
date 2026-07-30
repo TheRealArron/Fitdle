@@ -311,6 +311,77 @@ function migrateLegacy(): SaveData | null {
   }
 }
 
+/* ── device transfer ──────────────────────────────────────────────────────── */
+
+const CODE_PREFIX = 'FITDLE1:';
+
+/**
+ * Export progress as a paste-able backup code.
+ *
+ * This exists because there is no account system, and telling a player their
+ * streak lives in one browser's localStorage without giving them a way to move
+ * it is a bad deal. It is a device-transfer convenience, NOT a trust boundary:
+ * a crafted code is exactly as powerful as editing localStorage directly, which
+ * the threat model already treats as out of scope. Import still enforces the
+ * full coherence check, so an imported save cannot be internally impossible.
+ */
+export function exportSave(save: SaveData): string {
+  const payload = canonical(save);
+  const json = JSON.stringify({ p: payload, h: digest(payload) });
+  return CODE_PREFIX + toBase64(json);
+}
+
+export type ImportResult =
+  | { ok: true; save: SaveData }
+  | { ok: false; reason: string };
+
+export function importSave(code: string): ImportResult {
+  const trimmed = code.trim().replace(/\s+/g, '');
+  if (!trimmed.startsWith(CODE_PREFIX)) {
+    return { ok: false, reason: 'That does not look like a Fitdle backup code.' };
+  }
+
+  let envelope: { p?: unknown; h?: unknown };
+  try {
+    envelope = JSON.parse(fromBase64(trimmed.slice(CODE_PREFIX.length)));
+  } catch {
+    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+  }
+
+  if (typeof envelope.p !== 'string' || typeof envelope.h !== 'string') {
+    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+  }
+  if (digest(envelope.p) !== envelope.h) {
+    return { ok: false, reason: 'The code failed its integrity check.' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(envelope.p);
+  } catch {
+    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+  }
+  if (!isCoherent(parsed)) {
+    return { ok: false, reason: 'That code contains impossible statistics.' };
+  }
+
+  writeSave(parsed);
+  return { ok: true, save: parsed };
+}
+
+function toBase64(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+function fromBase64(s: string): string {
+  const binary = atob(s);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 /* ── daily reconciliation ─────────────────────────────────────────────────── */
 
 export interface Reconciled {

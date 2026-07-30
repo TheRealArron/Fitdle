@@ -42,6 +42,62 @@ export interface Answer extends Exercise {
   videoQuery: string;
 }
 
+/**
+ * Curated form videos, one per answer.
+ *
+ * Every ID below was resolved from a real search and then checked against
+ * YouTube's oEmbed endpoint, which returns the live title and channel — so none
+ * of these are guessed, and none were dead at the time of writing. The channels
+ * skew toward NASM, Runna, Barbell Logic, PureGym, BarBend and similar, i.e.
+ * coaching organisations rather than random uploads.
+ *
+ * Videos still rot. `formVideoUrl` therefore prefers the curated link but
+ * `searchVideoUrl` always exists as a fallback that cannot 404, and the UI
+ * offers both.
+ */
+const FORM_VIDEO: Record<string, string> = {
+  SQUAT: 'otzWCWpuW-A',       // Athlean-XX for Women — Squats for Beginners
+  BURPEE: 'wGvBfVeCNko',      // Combat Fit — Burpees for Beginners
+  CLIMBER: 'ZhiCSdOVJp0',     // Fit Father Project — Mountain Climbers Properly
+  DEADLIFT: 'GxsLrTzyGUU',    // PureGym — Conventional Deadlift Correctly
+  HIPTHRUST: 'pF17m_CXfL0',   // Runna — Hip Thrust Tutorial
+  PLANK: 'A2b2EmIg0dA',       // E3 Rehab — How To Plank
+  CRUNCH: 'tnZNcIqhGb0',      // FITTR — Ab Crunches
+  BOXJUMP: 'G-bxQY57mKc',     // Runna — Box Jump Tutorial
+  PULLOVER: 'moKuOuFNBDM',    // BarBend — Dumbbell Pullover Guide
+  BEARCRAWL: 'U3Y58Kyw7Xw',   // Runna — Bear Crawl Tutorial
+  LUNGE: 'krXwDPKKiSM',       // Trainer Hub — How to do Lunges Properly
+  PUSHUP: 'ABbVpmubIGQ',      // Athlean-XX for Women — Pushups for Beginners
+  DEADBUG: 'bxn9FBrt4-A',     // NASM — Dead Bug
+  KICKBACK: 'm9me06UBPKc',    // Buff Dudes — Dumbbell Triceps Kickback
+  CALFRAISE: 'SVtg-1loH4c',   // Colossus Fitness — Standing Calf Raise
+  PRESS: 'nNMR9fRGRjQ',       // Barbell Logic — Overhead Press Form
+  PULLUP: 'MhokcbRLP5w',      // FitnessFAQs — Pull-Up CORRECTLY
+  WALLSIT: 'JaZNYM3zAP0',     // Well+Good — Wall Sit
+  LEGPRESS: 'K5n2vg3oZa4',    // Colossus Fitness — Leg Press
+  SEATEDROW: '7BkgqzC6WsM',   // Colossus Fitness — Seated Cable Row
+  CLEAN: 'lI35socHJ4k',       // Barbell Logic — Power Clean
+  CHINUP: 'e1YSApl-QcM',      // Simonster Strength — Perfect Chin-Ups
+  BIRDDOG: 'ZdAHe9_HeEw',     // NASM — Bird Dog
+  TOETOUCH: '9iEI95-eZWk',    // PureGym — Toe Touches
+  JUMPSQUAT: 'tZSYZdtbONc',   // NASM — Squat Jump
+  SITUP: 'iL06z9PWYs8',       // Combat Fit — Sit Ups
+  SNATCH: '3O7JjPr0_ok',      // J2FIT — How to Snatch
+  LEGCURL: 'lUH80pneL5w',     // NASM — Lying Leg Curl
+  SUPERMAN: 'UXUGfiNL1lI',    // Colossus Fitness — Superman Exercise
+  SIDEPLANK: 'iNbH7_edNI8',   // Runna — Side Plank Tutorial
+  SHRUG: 'YJ2q8RkOFVw',       // MuscleWiki — Standing Dumbbell Shrugs
+  BRIDGE: 'wPM8icPu6H8',      // Well+Good — Glute Bridge
+  ARMCURL: 'Jfp4b5Olc7A',     // Colossus Fitness — Dumbbell Curl
+  THRUSTER: 'z0PGxb8BSq8',    // Runna — Thruster Tutorial
+  BACKSQUAT: '8PMjqgR8Wa8',   // Barbell Rehab — Barbell Back Squat
+  FLYES: 'ul7j4OkNRq4',       // Colossus Fitness — Dumbbell Chest Fly
+  STEPUP: 'vOiHvzj5XhA',      // Runna — Step Up Tutorial
+  BENTROW: 'rqTOAM8WoeM',     // Runna — Barbell Bent Over Row
+  LEGRAISE: 'S_AK2Qv8_q8',    // Colossus Fitness — Leg Raises
+  PUSHPRESS: 'Hqxjk5Z35SM',   // Runna — Push Press Tutorial
+};
+
 export const ANSWERS: Answer[] = [
   /* ── cycle 1 ── */
   {
@@ -738,8 +794,24 @@ export function musclesOf(e: Exercise): Set<MuscleRegion> {
   return new Set([...e.primary, ...e.secondary]);
 }
 
+/** Curated video for an exercise, or null if none is pinned. */
+export function formVideoId(name: string): string | null {
+  return FORM_VIDEO[name.toUpperCase()] ?? null;
+}
+
+/** Direct link to the curated video, falling back to a search that cannot 404. */
 export function formVideoUrl(a: Answer): string {
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(a.videoQuery)}`;
+  const id = formVideoId(a.name);
+  return id ? `https://www.youtube.com/watch?v=${id}` : searchVideoUrl(a.videoQuery);
+}
+
+export function searchVideoUrl(query: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+}
+
+/** Thumbnail served straight from YouTube's CDN — no API key, no embed. */
+export function videoThumbnailUrl(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 }
 
 export const MAX_GUESSES = 6;

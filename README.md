@@ -8,7 +8,7 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
-npm test                 # 59 unit tests
+npm test                 # 67 unit tests
 npm run typecheck
 npm run lint
 npm run build            # web build
@@ -44,6 +44,15 @@ muscle group, guess 5 the equipment.
 **Names are letters only** — no spaces or hyphens, singular. Pull-ups is
 `PULLUP`, Farmer's carry is `FARMERS`. All 70 names are one tap away behind the
 list icon; you are not expected to know them by heart.
+
+**Practice mode** gives you unlimited random puzzles. They are never written to
+storage, so there is no path from a practice round to a streak — replaying until
+you win buys nothing.
+
+**Form videos.** Every one of the 40 answers links to a real, curated coaching
+video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
+too, not just losses — the coaching is the point of the game, and hiding it
+behind a loss punishes the players who engaged most.
 
 ---
 
@@ -187,6 +196,47 @@ reveal.
 Colours are the spec values exactly: `#22c55e` / `#eab308` / `#4b5563`, asserted
 against `getComputedStyle` in a real browser.
 
+### Three-column layout, and why the rails are the same width
+
+Desktop is `menu | board | figure`. The side rails are deliberately **equal
+width**, and both appear at `xl` or not at all.
+
+This is not cosmetic. An asymmetric layout pushes the board off the viewport
+centre while the header and keyboard stay centred on it, and that mismatch is
+what reads as broken alignment — it was a real bug in the previous version,
+where the board lived in a `flex-1` column beside a fixed-width figure and
+centred itself within that column instead of the page. Equal rails make the
+board's centre exactly the viewport's centre at every width; a test asserts
+`boardCentre === keyboardCentre === viewportCentre` across five viewports.
+
+### Account & backup, instead of a sign-in button
+
+There is no account system, and the UI does not pretend otherwise. A "Sign in"
+button that does nothing — or worse, a fake one that looks like it worked — is a
+lie the player discovers when their streak is gone. The Account panel states
+where progress lives and hands over a backup code, which solves the actual
+problem someone signing in would be trying to solve: getting their streak onto
+another device.
+
+The code is a device-transfer convenience, **not** a trust boundary. A crafted
+code is exactly as powerful as editing localStorage, which the threat model
+already treats as out of scope. Import still enforces the full digest and
+coherence checks, so an imported save cannot be internally impossible.
+
+### Form videos
+
+`FORM_VIDEO` in [exercises.ts](src/data/exercises.ts) pins one video per answer.
+Every ID was resolved from a real search and then checked against YouTube's
+oEmbed endpoint, which returns the live title and channel — 40/40 came back
+valid, so none are guessed and none were dead at the time of writing. The
+verified title sits beside each ID as a comment.
+
+Videos still rot, so `formVideoUrl` prefers the pinned link while
+`searchVideoUrl` is always available as a fallback that cannot 404, and the UI
+offers both. Thumbnails come straight from YouTube's CDN with an `onError` that
+drops the image rather than showing a broken frame. No iframe: MV3's CSP would
+block an embedded player in the extension popup anyway.
+
 ### Board sizing
 
 Tiles are `aspect-square`, so the board is width-driven — but its available
@@ -212,7 +262,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 59 tests over the things that must not silently break:
+`npm test` — 67 tests over the things that must not silently break:
 
 - **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each
@@ -224,6 +274,13 @@ derived with `useMemo` in the component instead.
 - **security / persistence** — digest avalanche and collisions, replay blocking,
   clock-rollback detection, streak continuity, stats coherence, and a save round
   trip at every answer length.
+- **videos** — every answer has a pinned video, ids are well-formed, no two
+  exercises share one, and the search fallback is always present.
+
+Browser passes (Playwright, not part of `npm test`): the full game flow, the
+layout at 5 and 9 columns across five viewports, every figure region checked
+against the data model, and a feature pass covering practice-mode isolation,
+the backup-code round trip, forged-code rejection and the video links.
 
 That last one is a regression test. `isCoherent` originally hardcoded
 `/^[A-Z]{5}$/`; once answers became variable-length, every save on a 6–9 letter
