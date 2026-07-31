@@ -25,7 +25,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-void/80 p-3 backdrop-blur-md sm:items-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
           aria-label={title}
         >
           <motion.div
-            className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl shadow-black/60"
+            className="panel max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] p-5 shadow-2xl shadow-black/70"
             initial={{ opacity: 0, y: 32, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.98 }}

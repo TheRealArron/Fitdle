@@ -2,6 +2,7 @@
 
 import { CATEGORY_HINT_AT, EQUIPMENT_HINT_AT, MAX_GUESSES, CATALOGUE } from '@/data/exercises';
 import type { LetterState } from '@/lib/evaluate';
+import { MuscleLegend } from './MuscleLegend';
 import { Modal } from './Modal';
 
 interface HelpModalProps {
@@ -34,15 +35,6 @@ function MiniRow({ word, highlight, state }: { word: string; highlight: number; 
   );
 }
 
-function Swatch({ className, label }: { className: string; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`h-3.5 w-3.5 shrink-0 rounded-sm ${className}`} aria-hidden />
-      <span className="text-xs text-slate-400">{label}</span>
-    </div>
-  );
-}
-
 export function HelpModal({ open, onClose }: HelpModalProps) {
   return (
     <Modal open={open} onClose={onClose} title="How to play">
@@ -52,8 +44,8 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
           letters it has — that changes daily.
         </p>
 
-        <section className="rounded-lg bg-white/5 p-3">
-          <h3 className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        <section className="panel-raised rounded-xl p-3">
+          <h3 className="label mb-1.5">
             Typing the names
           </h3>
           <p className="text-xs">
@@ -65,7 +57,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
         </section>
 
         <div className="flex flex-col gap-3 border-y border-white/10 py-5">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+          <h3 className="label">
             1. Letter feedback
           </h3>
           <div className="flex flex-col gap-1.5">
@@ -89,7 +81,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
         </div>
 
         <section className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+          <h3 className="label">
             2. Muscle feedback
           </h3>
           <p className="text-xs">
@@ -97,10 +89,8 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             DEADLIFT and the glutes light green while the quads go red — you have learned the
             answer is a posterior-chain movement without a single letter helping you.
           </p>
-          <div className="mt-1 flex flex-col gap-1.5">
-            <Swatch className="bg-state-correct" label="Your guess and the answer both work it" />
-            <Swatch className="bg-[#7f1d3a]" label="Your guess works it, the answer does not" />
-            <Swatch className="bg-tile-empty" label="Not probed yet — tells you nothing" />
+          <div className="panel-raised mt-1 rounded-xl p-3">
+            <MuscleLegend detailed />
           </div>
           <p className="text-xs text-slate-500">
             Muscles the answer works are never lit until one of your guesses touches them. The
@@ -109,20 +99,34 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+          <h3 className="label">
             3. Hints unlock as you go
           </h3>
           <p className="text-xs">
-            Guess {CATEGORY_HINT_AT} reveals the muscle group. Guess {EQUIPMENT_HINT_AT} reveals
-            the equipment. The first two guesses are yours alone — that is where the deduction
-            lives.
+            Guess {CATEGORY_HINT_AT} reveals the muscle group — as a chip under the board, and as
+            a <strong className="text-yellow-300">dashed amber outline</strong> around that group
+            on the figure. The outline says <em>where</em> the answer lives, not which muscles it
+            works, so an outlined muscle can still be unlit.
+          </p>
+          <p className="text-xs">
+            Guess {EQUIPMENT_HINT_AT} reveals the equipment: bodyweight, barbell, dumbbell,
+            kettlebell or machine. The first two guesses are yours alone — that is where the
+            deduction lives.
           </p>
         </section>
 
-        <p className="text-xs text-slate-500">
-          A new exercise unlocks at midnight UTC and it is the same one for everybody. Solve it to
-          extend your streak — miss a day and the streak resets.
-        </p>
+        <section className="flex flex-col gap-2">
+          <h3 className="label">4. After the daily</h3>
+          <p className="text-xs">
+            One puzzle a day, the same one for everybody, unlocking at midnight UTC. Solve it to
+            extend your streak — miss a day and it resets.
+          </p>
+          <p className="text-xs">
+            When you are done, <strong className="text-white">practice mode</strong> gives you
+            unlimited random puzzles. Practice rounds are never recorded, so nothing you do there
+            can help or hurt your streak.
+          </p>
+        </section>
       </div>
     </Modal>
   );

@@ -14,7 +14,8 @@ export function HintBar() {
   const hints = useGameStore(useShallow(selectHints));
   const wordLength = useGameStore((s) => s.wordLength);
 
-  const chip = 'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold';
+  const chip =
+    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset';
 
   return (
     <div
@@ -22,8 +23,8 @@ export function HintBar() {
       role="group"
       aria-label="Clues"
     >
-      <span className={`${chip} bg-white/5 text-slate-300 ring-1 ring-inset ring-white/10`}>
-        <span className="font-game tabular-nums">{wordLength}</span> letters
+      <span className={`${chip} bg-surface-2 text-slate-300 ring-white/10`}>
+        <span className="numeric">{wordLength}</span> letters
       </span>
 
       <AnimatePresence mode="popLayout" initial={false}>
@@ -32,7 +33,7 @@ export function HintBar() {
             key="category"
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`${chip} bg-state-present/15 text-yellow-300 ring-1 ring-inset ring-state-present/30`}
+            className={`${chip} bg-state-present/15 text-yellow-300 ring-state-present/35`}
           >
             <Target className="h-3.5 w-3.5" aria-hidden />
             {hints.category}
@@ -43,7 +44,7 @@ export function HintBar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`${chip} bg-white/5 text-slate-500 ring-1 ring-inset ring-white/10`}
+            className={`${chip} bg-surface-2 text-slate-500 ring-white/10`}
           >
             <Lock className="h-3 w-3" aria-hidden />
             Muscle group in {hints.nextHintIn}
@@ -57,7 +58,7 @@ export function HintBar() {
             key="equipment"
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
-            className={`${chip} bg-sky-500/15 text-sky-300 ring-1 ring-inset ring-sky-500/30`}
+            className={`${chip} bg-sky-500/15 text-sky-300 ring-sky-500/35`}
           >
             <Dumbbell className="h-3.5 w-3.5" aria-hidden />
             {hints.equipment}

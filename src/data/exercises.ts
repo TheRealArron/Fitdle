@@ -17,9 +17,14 @@ import type { Equipment, MuscleGroup, MuscleRegion } from './muscles';
  * spaces, no hyphens, singular. Pull-ups -> PULLUP. Farmer's carry -> FARMERS.
  *
  * ANSWERS ORDER IS PROTOCOL. The daily answer is `ANSWERS[seed % ANSWERS.length]`.
- * Reordering or inserting rewrites every past and future puzzle. The order
- * cycles 5,6,7,8,9 letters so consecutive days differ in grid width. A test
- * pins both the order and the cycle.
+ * The order cycles 5,6,7,8,9 letters so consecutive days differ in grid width.
+ * A test pins the cycle.
+ *
+ * CAVEAT, stated plainly: because the index is a modulus, changing
+ * `ANSWERS.length` reshuffles the whole calendar — not just future days. Adding
+ * entries is therefore only safe BEFORE launch. Once real players have history,
+ * either freeze the pool size or move to a pinned schedule (a static
+ * date -> answer table) instead of a modulus. Reordering is never safe.
  */
 
 export interface Exercise {
@@ -96,6 +101,26 @@ const FORM_VIDEO: Record<string, string> = {
   BENTROW: 'rqTOAM8WoeM',     // Runna — Barbell Bent Over Row
   LEGRAISE: 'S_AK2Qv8_q8',    // Colossus Fitness — Leg Raises
   PUSHPRESS: 'Hqxjk5Z35SM',   // Runna — Push Press Tutorial
+  RAISE: 'nnH63icHYXY',       // FIT.nl — Dumbbell Lateral Raise
+  SPRINT: '6m_fjNhRhkY',      // Outperform — Proper Sprinting Form In 3 Steps
+  FARMERS: 'lLAw6fUccKA',     // Runna — Farmer's Carry Tutorial
+  SKIPROPE: 'nMHfZ-yrFjA',    // Kyle Easter — How To Jump Rope For Beginners
+  HANGCLEAN: 'HZOR7y9LcoA',   // Volt Athletics — BB Hang Clean Technique Breakdown
+  TWIST: 'IJDOoVyVjhc',       // Runna — Russian Twist Tutorial
+  SKATER: '9_jLW6VkU8A',      // BuiltLean — Speed Skaters (Skater Hops)
+  JUMPING: 'uLVt6u15L98',     // NASM — Jumping Jack
+  FACEPULL: 'eTCBSFlCJ_s',    // NASM — Face Pull
+  HANDSTAND: 'sdnSvETgPbU',   // Don't You Dare! — Handstand, Easy Wall Method
+  SWING: 'bDCeXbMJVNs',       // Zack Henderson — How To Kettlebell Swing
+  ROWING: '4zWu1yuJ0_g',      // Concept2 — Correct Rowing Machine Technique
+  LATPULL: 'CAwf7n6Luuc',     // ScottHermanFitness — Lat Pulldown, 3 Golden Rules
+  PUSHDOWN: '_w-HpW70nSQ',    // ScottHermanFitness — Cable Triceps Pushdown
+  KNEERAISE: 'l7OroezzX9k',   // Runna — Hanging Knee Raise Tutorial
+  HINGE: 'Dn3GexXx228',       // Dr. Carl Baird — How to Hip Hinge (for Beginners)
+  HOLLOW: '014nAtTPTFo',      // JTM_FIT — Master The Hollow Body Hold
+  PISTOLS: 'hHxm3VbuS-w',     // School of Calisthenics — Pistol Squat Progressions
+  INCHWORM: 'aFkv2m9FTGs',    // PureGym — How To Do Inch Worm Exercise
+  ARMCIRCLE: 'tYo5ghpLksg',   // AJ Channels Fitness — Big Arm Circles
 };
 
 export const ANSWERS: Answer[] = [
@@ -714,6 +739,314 @@ export const ANSWERS: Answer[] = [
     ],
     videoQuery: 'barbell push press proper form',
   },
+
+  /* ── cycle 9 ── */
+  {
+    name: 'RAISE',
+    display: 'Lateral Raise',
+    group: 'Shoulders',
+    primary: ['shoulders'],
+    secondary: ['traps'],
+    equipment: 'Dumbbell',
+    difficulty: 'Easy',
+    howTo: [
+      'Stand tall with a slight fixed bend in the elbows, dumbbells at your sides.',
+      'Lift out to the sides until the arms are level with the shoulders, leading with the elbows.',
+      'Lower over three seconds. If you have to swing to get them up, go lighter.',
+    ],
+    videoQuery: 'dumbbell lateral raise proper form',
+  },
+  {
+    name: 'SPRINT',
+    display: 'Sprint',
+    group: 'Legs',
+    primary: ['hamstrings', 'quads', 'glutes'],
+    secondary: ['calves', 'abs'],
+    equipment: 'Bodyweight',
+    difficulty: 'Hard',
+    howTo: [
+      'Drive the knee up and put the foot down underneath you, not out in front.',
+      'Torso tall, arms swinging hip to cheek with the elbows at 90 degrees.',
+      'Build to full speed over 20–30 metres rather than exploding from cold.',
+    ],
+    videoQuery: 'proper sprinting form technique',
+  },
+  {
+    name: 'FARMERS',
+    display: "Farmer's Carry",
+    group: 'Full',
+    primary: ['forearms', 'traps'],
+    secondary: ['abs', 'obliques', 'glutes'],
+    equipment: 'Dumbbell',
+    difficulty: 'Medium',
+    howTo: [
+      'Pick the weights up with a deadlift, not a bend-and-grab.',
+      'Stand tall, shoulders back, ribs down, and walk with short controlled steps.',
+      'Stop when your posture breaks, not when your grip does.',
+    ],
+    videoQuery: "farmer's carry proper form",
+  },
+  {
+    name: 'SKIPROPE',
+    display: 'Jump Rope',
+    group: 'Full',
+    primary: ['calves'],
+    secondary: ['quads', 'shoulders', 'forearms'],
+    equipment: 'Bodyweight',
+    difficulty: 'Medium',
+    howTo: [
+      'Rope length: stand on the middle and the handles should reach your armpits.',
+      'Turn the rope with the wrists, not the shoulders. Elbows stay close to the ribs.',
+      'Jump an inch off the floor and land on the balls of the feet — heels never touch.',
+    ],
+    videoQuery: 'jump rope technique beginners',
+  },
+  {
+    name: 'HANGCLEAN',
+    display: 'Hang Clean',
+    group: 'Full',
+    primary: ['traps', 'glutes', 'hamstrings'],
+    secondary: ['quads', 'forearms', 'shoulders'],
+    equipment: 'Barbell',
+    difficulty: 'Hard',
+    howTo: [
+      'Start standing with the bar at mid-thigh, shoulders slightly over it.',
+      'Hinge to just above the knee, then explode — hips, knees and ankles together.',
+      'Pull under and catch on the front delts with the elbows whipping through fast.',
+    ],
+    videoQuery: 'barbell hang clean technique',
+  },
+
+  /* ── cycle 10 ── */
+  {
+    name: 'TWIST',
+    display: 'Russian Twist',
+    group: 'Core',
+    primary: ['obliques'],
+    secondary: ['abs'],
+    equipment: 'Bodyweight',
+    difficulty: 'Easy',
+    howTo: [
+      'Sit with knees bent and heels light on the floor, chest tall, leaning back about 45 degrees.',
+      'Rotate the whole ribcage until your hands pass your hip — not just the arms.',
+      'Move slowly. Speed here turns it into arm-waving.',
+    ],
+    videoQuery: 'russian twist proper form',
+  },
+  {
+    name: 'SKATER',
+    display: 'Skater Jump',
+    group: 'Legs',
+    primary: ['glutes', 'quads'],
+    secondary: ['calves', 'obliques'],
+    equipment: 'Bodyweight',
+    difficulty: 'Medium',
+    howTo: [
+      'Bound sideways off one leg and land softly on the other, trailing foot behind.',
+      'Land on the whole foot with the knee tracking over the toes.',
+      'Pause a beat on each landing before bounding back the other way.',
+    ],
+    videoQuery: 'skater jump exercise proper form',
+  },
+  {
+    name: 'JUMPING',
+    display: 'Jumping Jack',
+    group: 'Full',
+    primary: ['calves', 'shoulders'],
+    secondary: ['quads', 'glutes'],
+    equipment: 'Bodyweight',
+    difficulty: 'Easy',
+    howTo: [
+      'Start with feet together and arms at your sides.',
+      'Jump the feet wide while the arms sweep overhead, landing on the balls of the feet.',
+      'Stay light and quiet — loud landings mean you are collapsing through the ankles.',
+    ],
+    videoQuery: 'jumping jacks proper form',
+  },
+  {
+    name: 'FACEPULL',
+    display: 'Face Pull',
+    group: 'Back',
+    primary: ['traps', 'shoulders'],
+    secondary: ['lats', 'biceps'],
+    equipment: 'Machine',
+    difficulty: 'Easy',
+    howTo: [
+      'Set the cable at upper-chest height with a rope, palms facing in.',
+      'Pull toward your forehead, splitting the rope and driving the elbows high and back.',
+      'Finish with the hands beside your ears. Light weight, high reps, every session.',
+    ],
+    videoQuery: 'face pull proper form',
+  },
+  {
+    name: 'HANDSTAND',
+    display: 'Handstand Hold',
+    group: 'Shoulders',
+    primary: ['shoulders'],
+    secondary: ['triceps', 'abs', 'forearms'],
+    equipment: 'Bodyweight',
+    difficulty: 'Hard',
+    howTo: [
+      'Start chest-to-wall: walk your feet up until the body is one straight line.',
+      'Push the floor away, stack shoulders over wrists, squeeze the ribs down.',
+      'Come down before your alignment breaks, not after it.',
+    ],
+    videoQuery: 'handstand hold wall beginner tutorial',
+  },
+
+  /* ── cycle 11 ── */
+  {
+    name: 'SWING',
+    display: 'Kettlebell Swing',
+    group: 'Full',
+    primary: ['glutes', 'hamstrings'],
+    secondary: ['abs', 'lowerBack', 'forearms', 'shoulders'],
+    equipment: 'Kettlebell',
+    difficulty: 'Medium',
+    howTo: [
+      'Hinge at the hips with a flat back and hike the bell behind you like a snap pass.',
+      'Snap the hips forward hard — the bell floats up, you never lift it with the arms.',
+      'Let it fall and absorb with another hinge. This is a hinge, not a squat.',
+    ],
+    videoQuery: 'kettlebell swing proper form',
+  },
+  {
+    name: 'ROWING',
+    display: 'Rowing Machine',
+    group: 'Full',
+    primary: ['lats', 'quads'],
+    secondary: ['biceps', 'lowerBack', 'traps', 'glutes'],
+    equipment: 'Machine',
+    difficulty: 'Medium',
+    howTo: [
+      'Drive: legs, then body, then arms. Recovery: arms, then body, then legs.',
+      'Push with the legs first — the stroke is roughly 60% legs, 30% hips, 10% arms.',
+      'Pull the handle to the bottom of the ribs and never round the lower back.',
+    ],
+    videoQuery: 'rowing machine proper technique',
+  },
+  {
+    name: 'LATPULL',
+    display: 'Lat Pulldown',
+    group: 'Back',
+    primary: ['lats'],
+    secondary: ['biceps', 'traps', 'forearms'],
+    equipment: 'Machine',
+    difficulty: 'Easy',
+    howTo: [
+      'Thighs locked under the pads, grip just outside shoulder width.',
+      'Lean back slightly, pull the shoulder blades down first, then the elbows to the ribs.',
+      'Bring the bar to the collarbone. Never behind the neck.',
+    ],
+    videoQuery: 'lat pulldown proper form',
+  },
+  {
+    name: 'PUSHDOWN',
+    display: 'Triceps Pushdown',
+    group: 'Arms',
+    primary: ['triceps'],
+    secondary: ['forearms'],
+    equipment: 'Machine',
+    difficulty: 'Easy',
+    howTo: [
+      'Elbows pinned at your sides — they do not travel forward at any point.',
+      'Push down until the arms lock, then spread the rope apart at the bottom.',
+      'Come back up only until the forearms reach parallel, then go again.',
+    ],
+    videoQuery: 'cable triceps pushdown proper form',
+  },
+  {
+    name: 'KNEERAISE',
+    display: 'Hanging Knee Raise',
+    group: 'Core',
+    primary: ['abs'],
+    secondary: ['obliques', 'forearms', 'quads'],
+    equipment: 'Bodyweight',
+    difficulty: 'Medium',
+    howTo: [
+      'Hang from a bar with the shoulders pulled down away from your ears.',
+      'Curl the knees up by tilting the pelvis, not just folding at the hip.',
+      'Lower slowly and kill the swing completely before the next rep.',
+    ],
+    videoQuery: 'hanging knee raise proper form',
+  },
+
+  /* ── cycle 12 ── */
+  {
+    name: 'HINGE',
+    display: 'Hip Hinge',
+    group: 'Legs',
+    primary: ['hamstrings', 'glutes'],
+    secondary: ['lowerBack', 'abs'],
+    equipment: 'Bodyweight',
+    difficulty: 'Easy',
+    howTo: [
+      'Feet hip-width, knees soft, hands resting on the crease of your hips.',
+      'Push the hips straight back and let the chest fall forward with a flat back.',
+      'Stop when the hamstrings tighten, then drive the hips forward to stand tall.',
+    ],
+    videoQuery: 'hip hinge proper form beginners',
+  },
+  {
+    name: 'HOLLOW',
+    display: 'Hollow Body Hold',
+    group: 'Core',
+    primary: ['abs'],
+    secondary: ['obliques', 'quads'],
+    equipment: 'Bodyweight',
+    difficulty: 'Hard',
+    howTo: [
+      'On your back, press the lower back flat into the floor. That never changes.',
+      'Lift the shoulder blades and the legs a few inches, arms reaching overhead.',
+      'Lower the legs only as far as you can hold the back down. Bend the knees to regress.',
+    ],
+    videoQuery: 'hollow body hold proper form',
+  },
+  {
+    name: 'PISTOLS',
+    display: 'Pistol Squat',
+    group: 'Legs',
+    primary: ['quads', 'glutes'],
+    secondary: ['hamstrings', 'abs', 'calves'],
+    equipment: 'Bodyweight',
+    difficulty: 'Hard',
+    howTo: [
+      'Stand on one leg with the other extended in front, arms forward as a counterweight.',
+      'Sit back and down slowly, keeping the standing heel planted.',
+      'Regress to a box or hold a support until you can control the whole descent.',
+    ],
+    videoQuery: 'pistol squat progression tutorial',
+  },
+  {
+    name: 'INCHWORM',
+    display: 'Inchworm',
+    group: 'Full',
+    primary: ['abs', 'shoulders'],
+    secondary: ['chest', 'hamstrings', 'triceps'],
+    equipment: 'Bodyweight',
+    difficulty: 'Easy',
+    howTo: [
+      'Stand tall, hinge and place your hands on the floor, bending the knees as needed.',
+      'Walk the hands out to a plank without letting the hips sag.',
+      'Walk them back in, stand up, repeat. Core braced the whole way.',
+    ],
+    videoQuery: 'inchworm exercise proper form',
+  },
+  {
+    name: 'ARMCIRCLE',
+    display: 'Arm Circle',
+    group: 'Shoulders',
+    primary: ['shoulders'],
+    secondary: ['traps'],
+    equipment: 'Bodyweight',
+    difficulty: 'Easy',
+    howTo: [
+      'Stand with the arms straight out to the sides so the body forms a T.',
+      'Draw small circles forward, growing them gradually, then reverse direction.',
+      'This is a warm-up, not a strength move — keep it light and controlled.',
+    ],
+    videoQuery: 'arm circles warm up proper form',
+  },
 ];
 
 /**
@@ -723,40 +1056,52 @@ export const ANSWERS: Answer[] = [
  */
 const GUESS_ONLY: Exercise[] = [
   // 5
-  { name: 'RAISE', display: 'Lateral Raise', group: 'Shoulders', primary: ['shoulders'], secondary: ['traps'], equipment: 'Dumbbell', difficulty: 'Easy' },
-  { name: 'HINGE', display: 'Hip Hinge', group: 'Legs', primary: ['hamstrings', 'glutes'], secondary: ['lowerBack'], equipment: 'Bodyweight', difficulty: 'Easy' },
   { name: 'CARRY', display: 'Loaded Carry', group: 'Full', primary: ['forearms', 'traps'], secondary: ['abs', 'obliques', 'glutes'], equipment: 'Dumbbell', difficulty: 'Medium' },
-  { name: 'TWIST', display: 'Russian Twist', group: 'Core', primary: ['obliques'], secondary: ['abs'], equipment: 'Bodyweight', difficulty: 'Easy' },
   { name: 'PULSE', display: 'Squat Pulse', group: 'Legs', primary: ['quads'], secondary: ['glutes'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'CURLS', display: 'Biceps Curl', group: 'Arms', primary: ['biceps'], secondary: ['forearms'], equipment: 'Dumbbell', difficulty: 'Easy' },
+  { name: 'JERKS', display: 'Push Jerk', group: 'Shoulders', primary: ['shoulders', 'triceps'], secondary: ['quads', 'glutes', 'abs'], equipment: 'Barbell', difficulty: 'Hard' },
+  { name: 'MARCH', display: 'High March', group: 'Legs', primary: ['quads'], secondary: ['abs', 'calves'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'CRAWL', display: 'Crawl', group: 'Full', primary: ['shoulders', 'abs'], secondary: ['quads', 'triceps'], equipment: 'Bodyweight', difficulty: 'Medium' },
+  { name: 'SPLIT', display: 'Split Squat', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs'], equipment: 'Bodyweight', difficulty: 'Medium' },
   // 6
-  { name: 'SPRINT', display: 'Sprint', group: 'Legs', primary: ['hamstrings', 'quads', 'glutes'], secondary: ['calves', 'abs'], equipment: 'Bodyweight', difficulty: 'Hard' },
-  { name: 'SKATER', display: 'Skater Jump', group: 'Legs', primary: ['glutes', 'quads'], secondary: ['calves', 'obliques'], equipment: 'Bodyweight', difficulty: 'Medium' },
-  { name: 'ROWING', display: 'Rowing Machine', group: 'Full', primary: ['lats', 'quads'], secondary: ['biceps', 'lowerBack', 'traps'], equipment: 'Machine', difficulty: 'Medium' },
   { name: 'TOETAP', display: 'Toe Tap', group: 'Core', primary: ['abs'], secondary: ['quads'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'GOBLET', display: 'Goblet Squat', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['abs', 'forearms'], equipment: 'Dumbbell', difficulty: 'Easy' },
+  { name: 'PISTOL', display: 'Pistol Squat', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs', 'calves'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  { name: 'VSITUP', display: 'V-Sit Up', group: 'Core', primary: ['abs'], secondary: ['obliques', 'quads'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  // Plurals of answers. Never answers themselves, but accepting them means a
+  // player who types the natural plural is not punished for a guess that was
+  // conceptually right — and the day's fixed width keeps it unambiguous.
+  { name: 'SITUPS', display: 'Sit-Ups', group: 'Core', primary: ['abs'], secondary: ['obliques', 'quads'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'SQUATS', display: 'Squats', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'abs'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'LUNGES', display: 'Lunges', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'calves'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'PLANKS', display: 'Planks', group: 'Core', primary: ['abs'], secondary: ['obliques', 'shoulders'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'SHRUGS', display: 'Shrugs', group: 'Back', primary: ['traps'], secondary: ['forearms'], equipment: 'Dumbbell', difficulty: 'Easy' },
   // 7
-  { name: 'FARMERS', display: "Farmer's Carry", group: 'Full', primary: ['forearms', 'traps'], secondary: ['abs', 'obliques', 'glutes'], equipment: 'Dumbbell', difficulty: 'Medium' },
-  { name: 'JUMPING', display: 'Jumping Jack', group: 'Full', primary: ['calves', 'shoulders'], secondary: ['quads', 'glutes'], equipment: 'Bodyweight', difficulty: 'Easy' },
-  { name: 'LATPULL', display: 'Lat Pulldown', group: 'Back', primary: ['lats'], secondary: ['biceps', 'traps', 'forearms'], equipment: 'Machine', difficulty: 'Easy' },
+  { name: 'BURPEES', display: 'Burpees', group: 'Full', primary: ['quads', 'chest', 'shoulders'], secondary: ['abs', 'triceps', 'glutes'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  { name: 'PUSHUPS', display: 'Push-Ups', group: 'Chest', primary: ['chest', 'triceps'], secondary: ['shoulders', 'abs'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'PULLUPS', display: 'Pull-Ups', group: 'Back', primary: ['lats'], secondary: ['biceps', 'forearms', 'traps'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  { name: 'CHINUPS', display: 'Chin-Ups', group: 'Back', primary: ['lats', 'biceps'], secondary: ['forearms', 'abs'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  { name: 'PLANKUP', display: 'Plank Up-Down', group: 'Core', primary: ['abs', 'triceps'], secondary: ['shoulders', 'chest'], equipment: 'Bodyweight', difficulty: 'Medium' },
+  { name: 'KBSWING', display: 'Kettlebell Swing', group: 'Full', primary: ['glutes', 'hamstrings'], secondary: ['abs', 'lowerBack', 'forearms'], equipment: 'Kettlebell', difficulty: 'Medium' },
   // 8
-  { name: 'SKIPROPE', display: 'Jump Rope', group: 'Full', primary: ['calves'], secondary: ['quads', 'shoulders', 'forearms'], equipment: 'Bodyweight', difficulty: 'Medium' },
   { name: 'CRABWALK', display: 'Crab Walk', group: 'Full', primary: ['triceps', 'glutes'], secondary: ['shoulders', 'abs', 'hamstrings'], equipment: 'Bodyweight', difficulty: 'Medium' },
   { name: 'SIDEBEND', display: 'Side Bend', group: 'Core', primary: ['obliques'], secondary: ['abs', 'lowerBack'], equipment: 'Dumbbell', difficulty: 'Easy' },
   { name: 'HIPRAISE', display: 'Hip Raise', group: 'Legs', primary: ['glutes'], secondary: ['hamstrings', 'lowerBack'], equipment: 'Bodyweight', difficulty: 'Easy' },
   { name: 'SLEDPUSH', display: 'Sled Push', group: 'Full', primary: ['quads', 'glutes'], secondary: ['calves', 'chest', 'shoulders'], equipment: 'Machine', difficulty: 'Hard' },
-  { name: 'INCHWORM', display: 'Inchworm', group: 'Full', primary: ['abs', 'shoulders'], secondary: ['chest', 'hamstrings'], equipment: 'Bodyweight', difficulty: 'Easy' },
   { name: 'TUCKJUMP', display: 'Tuck Jump', group: 'Legs', primary: ['quads'], secondary: ['calves', 'abs', 'glutes'], equipment: 'Bodyweight', difficulty: 'Hard' },
-  { name: 'FACEPULL', display: 'Face Pull', group: 'Back', primary: ['traps', 'shoulders'], secondary: ['lats', 'biceps'], equipment: 'Machine', difficulty: 'Easy' },
-  { name: 'PUSHDOWN', display: 'Triceps Pushdown', group: 'Arms', primary: ['triceps'], secondary: ['forearms'], equipment: 'Machine', difficulty: 'Easy' },
   { name: 'CHESTFLY', display: 'Cable Chest Fly', group: 'Chest', primary: ['chest'], secondary: ['shoulders'], equipment: 'Machine', difficulty: 'Easy' },
   { name: 'FROGJUMP', display: 'Frog Jump', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['calves'], equipment: 'Bodyweight', difficulty: 'Medium' },
   { name: 'SIDEKICK', display: 'Side Kick', group: 'Legs', primary: ['glutes'], secondary: ['obliques', 'quads'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'CRUNCHES', display: 'Crunches', group: 'Core', primary: ['abs'], secondary: ['obliques'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'LATRAISE', display: 'Lateral Raise', group: 'Shoulders', primary: ['shoulders'], secondary: ['traps'], equipment: 'Dumbbell', difficulty: 'Easy' },
+  { name: 'SIDESTEP', display: 'Lateral Step', group: 'Legs', primary: ['glutes', 'quads'], secondary: ['calves'], equipment: 'Bodyweight', difficulty: 'Easy' },
   // 9
-  { name: 'ARMCIRCLE', display: 'Arm Circle', group: 'Shoulders', primary: ['shoulders'], secondary: ['traps'], equipment: 'Bodyweight', difficulty: 'Easy' },
-  { name: 'HANGCLEAN', display: 'Hang Clean', group: 'Full', primary: ['traps', 'glutes', 'hamstrings'], secondary: ['quads', 'forearms', 'shoulders'], equipment: 'Barbell', difficulty: 'Hard' },
-  { name: 'HANDSTAND', display: 'Handstand Hold', group: 'Shoulders', primary: ['shoulders'], secondary: ['triceps', 'abs', 'forearms'], equipment: 'Bodyweight', difficulty: 'Hard' },
-  { name: 'KNEERAISE', display: 'Hanging Knee Raise', group: 'Core', primary: ['abs'], secondary: ['obliques', 'forearms', 'quads'], equipment: 'Bodyweight', difficulty: 'Medium' },
   { name: 'HEELTOUCH', display: 'Heel Touch', group: 'Core', primary: ['obliques'], secondary: ['abs'], equipment: 'Bodyweight', difficulty: 'Easy' },
   { name: 'HIPBRIDGE', display: 'Single-Leg Bridge', group: 'Legs', primary: ['glutes'], secondary: ['hamstrings', 'abs'], equipment: 'Bodyweight', difficulty: 'Medium' },
+  { name: 'DEADLIFTS', display: 'Deadlifts', group: 'Legs', primary: ['hamstrings', 'glutes', 'lowerBack'], secondary: ['traps', 'forearms', 'lats'], equipment: 'Barbell', difficulty: 'Hard' },
+  { name: 'SPLITJUMP', display: 'Split Jump', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['calves', 'hamstrings'], equipment: 'Bodyweight', difficulty: 'Hard' },
+  { name: 'BOXSTEPUP', display: 'Box Step-Up', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'calves'], equipment: 'Bodyweight', difficulty: 'Easy' },
+  { name: 'SIDELUNGE', display: 'Side Lunge', group: 'Legs', primary: ['quads', 'glutes'], secondary: ['hamstrings', 'obliques'], equipment: 'Bodyweight', difficulty: 'Medium' },
 ];
 
 /** Everything typeable. Answers first, so lookups prefer the richer record. */

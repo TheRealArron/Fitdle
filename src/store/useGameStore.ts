@@ -82,12 +82,24 @@ export interface GameState {
 
 let toastSeq = 0;
 
-const initialTarget = ANSWERS[getDailyIndex()];
+/**
+ * The initial state must NOT depend on the current date.
+ *
+ * This page is prerendered — at build time for the static export, at request
+ * time otherwise — so anything seeded from `new Date()` here gets baked into
+ * the HTML and then disagrees with the client on any later day, which React
+ * reports as a hydration mismatch and recovers from by throwing the tree away.
+ *
+ * So the store boots from a fixed placeholder and `initGame` (client-only,
+ * called from an effect) installs the real puzzle. Nothing is visible before
+ * that: the board is rendered at opacity 0 until `hydrated` flips.
+ */
+const PLACEHOLDER = ANSWERS[0];
 
 export const useGameStore = create<GameState>()((set, get) => ({
-  seed: getDailySeed(),
-  target: initialTarget,
-  wordLength: initialTarget.name.length,
+  seed: 0,
+  target: PLACEHOLDER,
+  wordLength: PLACEHOLDER.name.length,
   guesses: [],
   evaluations: [],
   currentGuess: '',
@@ -228,6 +240,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }
 
     writeSave(nextSave);
+
+    // Fire-and-forget push so a finished daily lands on the other devices.
+    // Deliberately not awaited: a slow or failed network must never delay the
+    // tile flip, and local storage already holds the authoritative copy.
+    if (newStatus !== 'playing') {
+      void import('@/store/useAuthStore').then((m) => m.syncAfterGame());
+    }
 
     set({
       guesses: newGuesses,

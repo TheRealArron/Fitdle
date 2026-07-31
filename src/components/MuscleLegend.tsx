@@ -1,21 +1,85 @@
 'use client';
 
-const ROWS: Array<{ swatch: string; label: string }> = [
-  { swatch: 'bg-state-correct', label: 'Both work it' },
-  { swatch: 'bg-[#7f1d3a]', label: 'Only your guess' },
-  { swatch: 'bg-tile-empty ring-1 ring-inset ring-tile-border', label: 'Not probed yet' },
+import { CATEGORY_HINT_AT } from '@/data/exercises';
+
+/**
+ * Colour key for the body figure.
+ *
+ * Every visual state the figure can show is listed here, including the dashed
+ * amber outline — that one is easy to miss because it appears mid-game rather
+ * than at the start, and an unexplained marker on an anatomy diagram reads as
+ * decoration instead of information.
+ */
+
+interface Row {
+  swatch: string;
+  title: string;
+  detail: string;
+}
+
+const ROWS: Row[] = [
+  {
+    swatch: 'bg-state-correct',
+    title: 'Shared',
+    detail: 'Your guess and the answer both work this muscle.',
+  },
+  {
+    swatch: 'bg-state-excluded',
+    title: 'Ruled out',
+    detail: 'Your guess works it, the answer does not.',
+  },
+  {
+    swatch: 'bg-tile-empty ring-1 ring-inset ring-tile-border',
+    title: 'Unknown',
+    detail: 'No guess has touched it yet, so it tells you nothing.',
+  },
 ];
 
-/** Colour key for the body figure. Without it the figure is just decoration. */
-export function MuscleLegend({ className = '' }: { className?: string }) {
+export function MuscleLegend({
+  className = '',
+  detailed = false,
+}: {
+  className?: string;
+  /** Show the one-line explanation under each state, not just the label. */
+  detailed?: boolean;
+}) {
   return (
-    <ul className={`flex flex-col gap-1.5 ${className}`}>
+    <ul className={`flex flex-col ${detailed ? 'gap-3' : 'gap-1.5'} ${className}`}>
       {ROWS.map((r) => (
-        <li key={r.label} className="flex items-center gap-2">
-          <span className={`h-3 w-3 shrink-0 rounded-sm ${r.swatch}`} aria-hidden />
-          <span className="text-[11px] leading-tight text-slate-400">{r.label}</span>
+        <li key={r.title} className="flex items-start gap-2.5">
+          <span
+            className={`mt-0.5 h-3 w-3 shrink-0 rounded-sm ${r.swatch}`}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <span className="text-[11px] font-semibold leading-tight text-slate-300">
+              {r.title}
+            </span>
+            {detailed && (
+              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{r.detail}</p>
+            )}
+          </div>
         </li>
       ))}
+
+      {/* The dashed outline is a different channel from the fills — it marks the
+          answer's muscle group, which is a hint, not a scored result. */}
+      <li className="flex items-start gap-2.5">
+        <span
+          className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-dashed border-state-present"
+          aria-hidden
+        />
+        <div className="min-w-0">
+          <span className="text-[11px] font-semibold leading-tight text-slate-300">
+            Target area
+          </span>
+          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+            {detailed
+              ? `The dashed amber outline appears at guess ${CATEGORY_HINT_AT} and rings the answer's muscle group. It is a hint, not a result — outlined muscles are not necessarily worked.`
+              : `Outlined at guess ${CATEGORY_HINT_AT}`}
+          </p>
+        </div>
+      </li>
     </ul>
   );
 }

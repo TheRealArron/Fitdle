@@ -59,14 +59,26 @@ test('countdown lands on the next UTC midnight', () => {
 /* ── answer pool integrity ────────────────────────────────────────────────── */
 
 test('ANSWERS order is load-bearing and must stay pinned', () => {
-  // Reordering silently rewrites every past and future puzzle.
-  assert.equal(ANSWERS.length, 40);
+  // Reordering silently rewrites every past and future puzzle. So does changing
+  // the pool size, since the index is a modulus — see the caveat in exercises.ts.
+  assert.equal(ANSWERS.length, 60);
   assert.equal(ANSWERS[0].name, 'SQUAT');
-  assert.equal(ANSWERS[39].name, 'PUSHPRESS');
+  assert.equal(ANSWERS[59].name, 'ARMCIRCLE');
   assert.equal(
     ANSWERS.slice(0, 5).map((a) => a.name).join(','),
     'SQUAT,BURPEE,CLIMBER,DEADLIFT,HIPTHRUST',
   );
+});
+
+test('the pool divides evenly into the length cycle', () => {
+  // A pool that is not a multiple of 5 would break the 5,6,7,8,9 rotation at
+  // the wrap-around, giving two same-width days in a row.
+  assert.equal(ANSWERS.length % 5, 0);
+  const perLength = new Map<number, number>();
+  for (const a of ANSWERS) {
+    perLength.set(a.name.length, (perLength.get(a.name.length) ?? 0) + 1);
+  }
+  assert.deepEqual([...perLength.entries()].sort(), [[5, 12], [6, 12], [7, 12], [8, 12], [9, 12]]);
 });
 
 test('answer lengths cycle 5,6,7,8,9 so consecutive days differ in grid width', () => {

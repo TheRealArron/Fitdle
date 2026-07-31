@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useGameStore, selectHints, revealedCount } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
@@ -17,6 +18,7 @@ import { HelpModal } from './HelpModal';
 import { HintBar } from './HintBar';
 import { Keyboard } from './Keyboard';
 import { MuscleLegend } from './MuscleLegend';
+import { PostGamePanel, PracticeBar } from './PostGamePanel';
 import { ResultModal } from './ResultModal';
 import { Sidebar } from './Sidebar';
 import { StatsModal } from './StatsModal';
@@ -48,7 +50,19 @@ export function Game() {
   const revealingRow = useGameStore((s) => s.revealingRow);
   const target = useGameStore((s) => s.target);
   const wordLength = useGameStore((s) => s.wordLength);
+  const gameStatus = useGameStore((s) => s.status);
+  const mode = useGameStore((s) => s.mode);
+  const modalOpen = useGameStore((s) => s.modalOpen);
+  const setModalOpen = useGameStore((s) => s.setModalOpen);
   const hints = useGameStore(useShallow(selectHints));
+
+  /*
+   * The daily is over AND the player has dismissed the result. Practice is
+   * excluded: it has its own between-rounds bar, and the daily post-game panel
+   * would wrongly imply the round counted for something.
+   */
+  const showPostGame =
+    mode === 'daily' && gameStatus !== 'playing' && !modalOpen && revealingRow === null;
 
   const [statsOpen, setStatsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -56,9 +70,14 @@ export function Game() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const initAuth = useAuthStore((s) => s.init);
+
   useEffect(() => {
     initGame();
-  }, [initGame]);
+    // Restores a Supabase session if one exists and pulls the cloud save. A
+    // no-op when the project has no keys.
+    initAuth();
+  }, [initGame, initAuth]);
 
   // A tab left open across midnight UTC would keep serving yesterday's word.
   useEffect(() => {
@@ -135,26 +154,47 @@ export function Game() {
               className="h-[21vh] max-h-52 w-auto shrink-0 [@media(max-height:700px)]:h-[14vh] xl:hidden"
             />
 
-            {/* Size container — see .board-area in globals.css. */}
+            {/*
+              Size container — see .board-area in globals.css. The hint chips
+              live inside the centred group rather than after it, so they stay
+              attached to the board instead of drifting to the bottom of a tall
+              viewport. The 3.5rem term reserves their row in the height budget.
+            */}
             <div className="board-area flex min-h-0 w-full flex-1 items-center justify-center">
-              <div
-                style={{
-                  // 0.94 absorbs the inter-tile gaps, which the ratio ignores.
-                  width: `min(100cqw, calc(100cqh * ${wordLength} / 6 * 0.94))`,
-                  // Upper bound so tiles stay a sane size on very tall screens
-                  // rather than the board ballooning to fill the rail height.
-                  maxWidth: '38rem',
-                }}
-              >
-                <Grid />
+              <div className="flex w-full flex-col items-center gap-4">
+                <div
+                  className="w-full"
+                  style={{
+                    // 0.94 absorbs the inter-tile gaps, which the ratio ignores.
+                    width: `min(100cqw, calc((100cqh - 3.5rem) * ${wordLength} / 6 * 0.94))`,
+                    // Upper bound so tiles stay a sane size on very tall screens
+                    // rather than the board ballooning to fill the rail height.
+                    maxWidth: '38rem',
+                  }}
+                >
+                  <Grid />
+                </div>
+                {showPostGame ? null : <HintBar />}
               </div>
             </div>
-
-            <HintBar />
           </div>
 
-          <div className="flex w-full shrink-0 justify-center pb-3 pt-1">
-            <Keyboard />
+          {/*
+            Once the day is done the keyboard is dead weight, so it is replaced
+            by the thing a finished player actually wants next. In practice mode
+            the board stays live between rounds, so only a compact bar appears.
+          */}
+          <div className="flex w-full shrink-0 justify-center px-3 pb-3 pt-1">
+            {showPostGame ? (
+              <PostGamePanel
+                onOpenStats={() => setStatsOpen(true)}
+                onReopenResult={() => setModalOpen(true)}
+              />
+            ) : mode === 'practice' && gameStatus !== 'playing' ? (
+              <PracticeBar />
+            ) : (
+              <Keyboard />
+            )}
           </div>
         </main>
 
@@ -164,7 +204,7 @@ export function Game() {
         >
           {/* No width cap — the figure should use the whole rail. */}
           <div className="w-full">{figure}</div>
-          <MuscleLegend className="w-full max-w-[12rem]" />
+          <MuscleLegend className="w-full max-w-[13rem]" detailed />
         </aside>
       </div>
 

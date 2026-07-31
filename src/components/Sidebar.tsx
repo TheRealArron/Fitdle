@@ -14,6 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { CATALOGUE, getExercise } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
+import { useAuthStore } from '@/store/useAuthStore';
 import { useGameStore, selectWinRate } from '@/store/useGameStore';
 import { Countdown } from './Countdown';
 import { MuscleLegend } from './MuscleLegend';
@@ -47,21 +48,21 @@ function NavItem({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
     >
-      <Icon className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-state-correct" />
+      <Icon className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-accent" />
       <span className="flex-1">{label}</span>
-      {hint && <span className="font-game text-[11px] text-slate-600">{hint}</span>}
+      {hint && <span className="numeric text-[11px] text-slate-600">{hint}</span>}
     </button>
   );
 }
 
 function Stat({ icon: Icon, value, label }: { icon: LucideIcon; value: number | string; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-lg bg-white/5 py-2">
+    <div className="panel-raised flex flex-col items-center gap-0.5 rounded-xl py-2.5">
       <Icon className="h-3.5 w-3.5 text-slate-500" aria-hidden />
-      <span className="font-game text-lg font-bold leading-none text-white tabular-nums">{value}</span>
-      <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="numeric text-lg font-bold leading-none text-white">{value}</span>
+      <span className="label text-[9px]">{label}</span>
     </div>
   );
 }
@@ -84,6 +85,8 @@ export function Sidebar({
   const revealingRow = useGameStore((s) => s.revealingRow);
   const startPractice = useGameStore((s) => s.startPractice);
   const exitPractice = useGameStore((s) => s.exitPractice);
+  const authUser = useAuthStore((s) => s.user);
+  const cloudAvailable = useAuthStore((s) => s.cloudAvailable);
 
   // Hide the row still mid-flip so the history cannot spoil the reveal.
   const shown = revealingRow === null ? guesses : guesses.slice(0, revealingRow);
@@ -96,11 +99,14 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
       <section>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-          {mode === 'practice' ? 'Practice' : 'Today'}
-        </p>
-        <p className="font-game text-lg font-bold text-white">
-          {mode === 'practice' ? 'Free play' : `Puzzle #${getPuzzleNumber(seed)}`}
+        <p className="label">{mode === 'practice' ? 'Practice' : 'Today'}</p>
+        <p className="numeric text-lg font-bold text-white">
+          {mode === 'practice'
+            ? 'Free play'
+            : /* Date-derived: blank until the client has read the real clock. */
+              hydrated
+              ? `Puzzle #${getPuzzleNumber(seed)}`
+              : '—'}
         </p>
         {mode === 'daily' && <Countdown />}
       </section>
@@ -159,7 +165,12 @@ export function Sidebar({
             onClick={go(startPractice)}
           />
         )}
-        <NavItem icon={CircleUser} label="Account & backup" onClick={go(onOpenAccount)} />
+        <NavItem
+          icon={CircleUser}
+          label={authUser ? 'Account' : cloudAvailable ? 'Sign in' : 'Account & backup'}
+          hint={authUser ? 'synced' : undefined}
+          onClick={go(onOpenAccount)}
+        />
       </nav>
 
       {/*
@@ -168,20 +179,18 @@ export function Sidebar({
       */}
       {shown.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-            Your guesses
-          </h3>
+          <h3 className="label">Your guesses</h3>
           <ol className="flex flex-col gap-1">
             {shown.map((name, i) => {
               const e = getExercise(name);
               return (
                 <li
                   key={name}
-                  className="flex items-baseline gap-2 rounded-md bg-white/5 px-2 py-1.5"
+                  className="panel-raised flex items-baseline gap-2 rounded-lg px-2.5 py-1.5"
                 >
-                  <span className="font-game text-[10px] text-slate-600">{i + 1}</span>
+                  <span className="numeric text-[10px] text-slate-600">{i + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-game text-xs font-bold tracking-wider text-white">
+                    <p className="truncate font-game text-xs font-bold tracking-wide text-white">
                       {name}
                     </p>
                     <p className="truncate text-[10px] text-slate-500">
@@ -197,7 +206,7 @@ export function Sidebar({
 
       {showLegend && (
         <section className="mt-auto flex flex-col gap-2 border-t border-white/10 pt-4">
-          <h3 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <h3 className="label flex items-center gap-1.5">
             <Dumbbell className="h-3 w-3" aria-hidden />
             Muscle key
           </h3>
