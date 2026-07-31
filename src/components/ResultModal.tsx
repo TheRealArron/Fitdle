@@ -1,6 +1,6 @@
 'use client';
 
-import { Dumbbell, Flame, Share2, Target, Trophy } from 'lucide-react';
+import { Dumbbell, Flame, Share2, Shuffle, Target, Trophy } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { MAX_GUESSES, musclesOf } from '@/data/exercises';
 import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles';
@@ -32,6 +32,9 @@ export function ResultModal() {
   const streak = useGameStore((s) => s.streak);
   const seed = useGameStore((s) => s.seed);
   const setToast = useGameStore((s) => s.setToast);
+  const mode = useGameStore((s) => s.mode);
+  const startPractice = useGameStore((s) => s.startPractice);
+  const isPractice = mode === 'practice';
 
   const [sharing, setSharing] = useState(false);
   const won = status === 'won';
@@ -49,6 +52,10 @@ export function ResultModal() {
   );
 
   const onShare = async () => {
+    // Belt and braces: the button is hidden in practice, but `seed` is still
+    // the daily's, so a stray call would publish today's puzzle number against
+    // a practice grid.
+    if (isPractice) return;
     setSharing(true);
     const text = buildShareText(seed, evaluations, won, streak);
     const outcome = await shareResult(text);
@@ -66,7 +73,7 @@ export function ResultModal() {
     <Modal
       open={open && status !== 'playing'}
       onClose={() => setModalOpen(false)}
-      title={won ? 'Rep completed' : 'Set failed'}
+      title={isPractice ? (won ? 'Practice: solved' : 'Practice: missed') : won ? 'Rep completed' : 'Set failed'}
     >
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3">
@@ -105,7 +112,7 @@ export function ResultModal() {
           <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-white/10">
             {won ? `${guesses.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`}
           </span>
-          {streak > 0 && (
+          {!isPractice && streak > 0 && (
             <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300 ring-1 ring-inset ring-orange-500/30">
               <Flame className="h-3.5 w-3.5" />
               {streak}
@@ -113,8 +120,8 @@ export function ResultModal() {
           )}
         </div>
 
-        <section className="rounded-xl bg-black/20 p-3">
-          <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-slate-500">
+        <section className="rounded-xl bg-black/25 p-3">
+          <h3 className="label mb-1">
             What it actually works
           </h3>
           <BodyFigure
@@ -135,12 +142,13 @@ export function ResultModal() {
 
         {!won && (
           <p className="text-sm leading-relaxed text-slate-300">
-            Today&apos;s exercise was <strong className="text-white">{target.display}</strong>.
+            {isPractice ? 'The answer was ' : "Today's exercise was "}
+            <strong className="text-white">{target.display}</strong>.
           </p>
         )}
 
         <section>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+          <h3 className="label mb-2">
             How to do it
           </h3>
           <ol className="mb-3 flex flex-col gap-2">
@@ -159,16 +167,38 @@ export function ResultModal() {
         </section>
 
         <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
-          <Countdown />
-          <button
-            type="button"
-            onClick={onShare}
-            disabled={sharing}
-            className="flex items-center justify-center gap-2 rounded-xl bg-state-correct px-4 py-3 font-game text-sm font-bold uppercase tracking-wider text-white transition-colors hover:brightness-110 disabled:opacity-60"
-          >
-            <Share2 className="h-4 w-4" />
-            {sharing ? 'Sharing…' : 'Share result'}
-          </button>
+          {isPractice ? (
+            <>
+              <p className="text-center text-xs text-slate-500">
+                Practice rounds are not recorded and have no puzzle number, so there is nothing
+                to share.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalOpen(false);
+                  startPractice();
+                }}
+                className="btn btn-primary w-full"
+              >
+                <Shuffle className="h-4 w-4" />
+                Another round
+              </button>
+            </>
+          ) : (
+            <>
+              <Countdown />
+              <button
+                type="button"
+                onClick={onShare}
+                disabled={sharing}
+                className="btn btn-primary w-full"
+              >
+                <Share2 className="h-4 w-4" />
+                {sharing ? 'Sharing…' : 'Share result'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </Modal>

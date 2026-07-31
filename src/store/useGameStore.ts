@@ -308,6 +308,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
     clearSave();
     const fresh = defaultSave();
     writeSave(fresh);
+
+    // A merge cannot express a deletion (every counter takes the max), so the
+    // cleared save has to be pushed over the cloud copy. Without this, reset
+    // looks like it worked and then the next sync puts everything back.
+    void import('@/store/useAuthStore').then((m) =>
+      m.useAuthStore.getState().overwriteCloud(fresh),
+    );
     set({
       guesses: [],
       evaluations: [],

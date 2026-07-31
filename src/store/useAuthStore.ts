@@ -2,8 +2,8 @@
 
 import { create } from 'zustand';
 import { friendlyAuthError, getSupabase, isCloudConfigured } from '@/lib/supabase';
-import { syncSave } from '@/lib/cloudSync';
-import { loadSave, writeSave } from '@/lib/secureStorage';
+import { pushCloudSave, syncSave } from '@/lib/cloudSync';
+import { clearSave, defaultSave, loadSave, writeSave, type SaveData } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
 
 export interface AuthUser {
@@ -31,6 +31,8 @@ export interface AuthState {
   signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   syncNow: () => Promise<void>;
+  /** Push `save` over the cloud copy without merging. Used by reset. */
+  overwriteCloud: (save: SaveData) => Promise<void>;
   clearError: () => void;
 }
 
@@ -124,12 +126,48 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const supabase = getSupabase();
     if (!supabase) return;
     set({ busy: true });
-    // Push whatever is local before dropping the session, so the last game of
-    // the session is not stranded on this device.
+
     const { user } = get();
+    // Push first, so the last game of the session is not stranded here.
     if (user) await syncSave(user.id, loadSave().save);
     await supabase.auth.signOut();
+
+    /*
+     * Then wipe the local save.
+     *
+     * Sign-in deliberately MERGES local progress into the account, so that
+     * someone who played anonymously keeps their streak when they sign up.
+     * That is only correct if the local save belongs to the person signing in.
+     * Leaving it behind means the next account on this device inherits the
+     * previous one's stats — so signing out has to clear it. Nothing is lost:
+     * it was just pushed to the cloud and comes back on the next sign-in.
+     */
+    clearSave();
+    const fresh = defaultSave();
+    writeSave(fresh);
+    useGameStore.getState().initGame();
+
     set({ busy: false, user: null, syncState: 'idle', lastSyncedAt: null });
+  },
+
+  /**
+   * Replaces the cloud copy outright instead of merging into it.
+   *
+   * Merging cannot express a deletion — every counter takes the max, so a
+   * cleared save merged with the old cloud row restores it in full. "Reset
+   * statistics" therefore has to overwrite, or it silently does nothing for
+   * signed-in players.
+   */
+  overwriteCloud: async (save) => {
+    const { user, cloudAvailable } = get();
+    if (!cloudAvailable || !user) return;
+    set({ syncState: 'syncing' });
+    const result = await pushCloudSave(user.id, save);
+    set(
+      result.ok
+        ? { syncState: 'synced', lastSyncedAt: Date.now() }
+        : { syncState: 'error', error: result.error },
+    );
   },
 
   /**
