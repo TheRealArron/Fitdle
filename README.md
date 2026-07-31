@@ -233,11 +233,12 @@ board's centre exactly the viewport's centre at every width; a test asserts
 Real accounts via Supabase: email/password sign-up and sign-in, sessions that
 survive reloads, and a streak that follows you between devices.
 
+**Setup: [docs/supabase-setup.md](docs/supabase-setup.md)** — five minutes, free
+tier, with troubleshooting.
+
 **It works without keys.** A fresh clone and the extension build have no
 backend, so the account panel says so plainly and falls back to a backup code
-rather than showing a sign-in form that cannot reach a server. Add a project URL
-and anon key to `.env.local` (see [.env.example](.env.example)) and run
-[supabase/schema.sql](supabase/schema.sql) to turn it on.
+rather than showing a sign-in form that cannot reach a server.
 
 **`npm run cloud:check` before you trust it.** The cloud path cannot be
 exercised without real credentials, so it ships untested by construction.

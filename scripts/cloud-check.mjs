@@ -131,13 +131,42 @@ const write = await supabase
   .from('fitdle_progress')
   .insert({ user_id: '00000000-0000-0000-0000-000000000000', save: {} });
 
+/*
+ * Read the error code, do not just check that one occurred.
+ *
+ * `user_id` is a foreign key to auth.users, and the probe UUID does not exist
+ * there — so a naive "did it error?" test passes on a foreign-key violation
+ * even when RLS is wide open. That would be a false pass on the one check that
+ * actually matters, so the codes are distinguished:
+ *
+ *   42501 insufficient_privilege  -> RLS refused it. Genuine pass.
+ *   23503 foreign_key_violation   -> the row got PAST RLS and was stopped by
+ *                                    the constraint instead. RLS is not doing
+ *                                    its job.
+ *   no error                      -> nothing stopped it at all.
+ */
+const code = write.error?.code;
+
 if (!write.error) {
   fail(
-    'an anonymous INSERT succeeded — the insert policy is missing or too broad',
-    'Re-run supabase/schema.sql',
+    'an anonymous INSERT succeeded — the table is writable by anyone',
+    'Re-run supabase/schema.sql; it enables RLS and adds the owner-only insert policy',
+  );
+} else if (code === '42501' || /row-level security/i.test(write.error.message)) {
+  pass('anonymous writes refused by RLS', '42501 insufficient_privilege');
+} else if (code === '23503') {
+  fail(
+    'anonymous INSERT reached the foreign key — RLS did not block it',
+    'The insert policy is missing or too permissive. Re-run supabase/schema.sql',
   );
 } else {
-  pass('anonymous writes refused', write.error.code || write.error.message.slice(0, 40));
+  // Something else refused it. Not a pass, but not proof of a hole either.
+  console.log(
+    `${c.warn('?')} anonymous write was refused, but not by RLS ${c.dim(
+      `(${code ?? 'no code'}: ${write.error.message.slice(0, 60)})`,
+    )}`,
+  );
+  console.log(`  ${c.warn('→')} Confirm RLS is enabled on public.fitdle_progress in the dashboard`);
 }
 
 console.log();
