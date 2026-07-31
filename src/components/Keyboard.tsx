@@ -16,7 +16,7 @@ const ROWS = [
 const KEY_CLASS: Record<LetterState, string> = {
   correct: 'bg-state-correct text-white shadow-[0_2px_10px_-2px_rgba(34,197,94,0.6)]',
   // Same dark-on-yellow pairing as the tiles; white on #eab308 fails contrast.
-  present: 'bg-state-present text-[#231a00] shadow-[0_2px_10px_-2px_rgba(234,179,8,0.5)]',
+  present: 'on-present bg-state-present text-[#231a00] shadow-[0_2px_10px_-2px_rgba(234,179,8,0.5)]',
   // Eliminated keys recede rather than shout — they are the least useful thing
   // on screen once known, so they lose contrast instead of gaining a colour.
   absent: 'bg-state-absent/45 text-white/35',

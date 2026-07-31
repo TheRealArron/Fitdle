@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { MAX_GUESSES } from '@/data/exercises';
 import { buildShareText, shareResult } from '@/lib/share';
 import { useGameStore } from '@/store/useGameStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { Countdown } from './Countdown';
 
 interface PostGamePanelProps {
@@ -30,13 +31,14 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
   const seed = useGameStore((s) => s.seed);
   const startPractice = useGameStore((s) => s.startPractice);
   const setToast = useGameStore((s) => s.setToast);
+  const colourblind = useSettingsStore((s) => s.colourblind);
   const [sharing, setSharing] = useState(false);
 
   const won = status === 'won';
 
   const onShare = async () => {
     setSharing(true);
-    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak));
+    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind));
     setSharing(false);
     setToast(
       outcome === 'shared'

@@ -7,9 +7,10 @@ export function buildShareText(
   evaluations: LetterState[][],
   won: boolean,
   streak: number,
+  colourblind = false,
 ): string {
   const score = won ? `${evaluations.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`;
-  const grid = evaluations.map(evaluationToEmoji).join('\n');
+  const grid = evaluations.map((e) => evaluationToEmoji(e, colourblind)).join('\n');
   const streakLine = streak > 1 ? `\n🔥 ${streak} day streak` : '';
   return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}`;
 }

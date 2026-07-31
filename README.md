@@ -8,7 +8,8 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
-npm test                 # 75 unit tests
+npm test                 # 84 unit tests
+npm run cloud:check      # verify Supabase keys, schema and RLS
 npm run typecheck
 npm run lint
 npm run build            # web build
@@ -50,6 +51,17 @@ panel offering the thing you actually want next: another round. Practice mode
 gives you unlimited random puzzles. They are never written to
 storage, so there is no path from a practice round to a streak — replaying until
 you win buys nothing.
+
+**Today's shortlist** unlocks after guess 2 — a collapsible panel listing every
+answer of today's length. A second tab narrows it to only those matching every
+clue on your board. That one is a solver and says so: with 12 answers per length
+it will often leave a single word, which is why the plain list is the default
+and narrowing is a deliberate click.
+
+**Colourblind mode** swaps green/yellow for blue/orange across tiles, keyboard,
+figure, legend and the share grid. The game runs two colour channels
+(green/yellow on the board, green/wine on the figure) and red-green deficiency
+breaks both at once, so all of them move together.
 
 **Form videos.** Every one of the 60 answers links to a real, curated coaching
 video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
@@ -227,6 +239,14 @@ rather than showing a sign-in form that cannot reach a server. Add a project URL
 and anon key to `.env.local` (see [.env.example](.env.example)) and run
 [supabase/schema.sql](supabase/schema.sql) to turn it on.
 
+**`npm run cloud:check` before you trust it.** The cloud path cannot be
+exercised without real credentials, so it ships untested by construction.
+[cloud-check.mjs](scripts/cloud-check.mjs) walks the whole chain — keys present,
+project reachable, table exists, RLS actually enforced, anonymous writes refused
+— and names the exact fix for whatever is missing. The RLS checks matter most:
+the anon key is public and ships in the bundle, so those policies are the only
+thing between one player and everyone else's rows.
+
 **Merge, not last-write-wins.** Two devices can both play offline and both be
 legitimate, and there is no timestamp we can trust because the clock belongs to
 the player. So [cloudSync.ts](src/lib/cloudSync.ts) merges on the data itself:
@@ -300,7 +320,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 75 tests over the things that must not silently break:
+`npm test` — 84 tests over the things that must not silently break:
 
 - **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

@@ -27,7 +27,7 @@ const FACE_CLASS: Record<LetterState, string> = {
   // uses near-black text because yellow at full saturation cannot hold white
   // legibly — that pairing is the one place the palette needs a dark foreground.
   correct: 'bg-state-correct border-state-correct text-white tile-glow-correct',
-  present: 'bg-state-present border-state-present text-[#231a00] tile-glow-present',
+  present: 'on-present bg-state-present border-state-present text-[#231a00] tile-glow-present',
   absent: 'bg-state-absent border-state-absent text-white/85 tile-glow-absent',
 };
 

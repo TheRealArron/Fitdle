@@ -9,7 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node --import ./tests/loader.mjs --test tests/*.test.ts",
-    "build:extension": "node scripts/build-extension.mjs"
+    "build:extension": "node scripts/build-extension.mjs",
+    "cloud:check": "node scripts/cloud-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

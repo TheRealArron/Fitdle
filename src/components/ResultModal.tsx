@@ -7,6 +7,7 @@ import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { buildShareText, shareResult } from '@/lib/share';
 import { useGameStore } from '@/store/useGameStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { BodyFigure } from './BodyFigure';
 import { Countdown } from './Countdown';
 import { FormVideo } from './FormVideo';
@@ -36,6 +37,7 @@ export function ResultModal() {
   const startPractice = useGameStore((s) => s.startPractice);
   const isPractice = mode === 'practice';
 
+  const colourblind = useSettingsStore((s) => s.colourblind);
   const [sharing, setSharing] = useState(false);
   const won = status === 'won';
 
@@ -57,7 +59,7 @@ export function ResultModal() {
     // a practice grid.
     if (isPractice) return;
     setSharing(true);
-    const text = buildShareText(seed, evaluations, won, streak);
+    const text = buildShareText(seed, evaluations, won, streak, colourblind);
     const outcome = await shareResult(text);
     setSharing(false);
     setToast(

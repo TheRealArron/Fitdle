@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Flame,
   List,
+  Settings,
   Shuffle,
   Trophy,
   Undo2,
@@ -16,6 +17,7 @@ import { CATALOGUE, getExercise } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useGameStore, selectWinRate } from '@/store/useGameStore';
+import { CandidatePanel } from './CandidatePanel';
 import { Countdown } from './Countdown';
 import { MuscleLegend } from './MuscleLegend';
 
@@ -24,6 +26,7 @@ export interface SidebarActions {
   onOpenIndex: () => void;
   onOpenStats: () => void;
   onOpenAccount: () => void;
+  onOpenSettings: () => void;
   /** Fired after any navigation, so the mobile drawer can close itself. */
   onNavigate?: () => void;
   /**
@@ -72,6 +75,7 @@ export function Sidebar({
   onOpenIndex,
   onOpenStats,
   onOpenAccount,
+  onOpenSettings,
   onNavigate,
   showLegend = false,
 }: SidebarActions) {
@@ -165,6 +169,7 @@ export function Sidebar({
             onClick={go(startPractice)}
           />
         )}
+        <NavItem icon={Settings} label="Settings" onClick={go(onOpenSettings)} />
         <NavItem
           icon={CircleUser}
           label={authUser ? 'Account' : cloudAvailable ? 'Sign in' : 'Account & backup'}
@@ -172,6 +177,8 @@ export function Sidebar({
           onClick={go(onOpenAccount)}
         />
       </nav>
+
+      <CandidatePanel onOpenIndex={go(onOpenIndex)} />
 
       {/*
         Guess history with real names. Doubles as the teaching payoff: you type

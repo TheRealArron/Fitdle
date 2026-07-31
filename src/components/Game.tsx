@@ -8,6 +8,7 @@ import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { useGameStore, selectHints, revealedCount } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
@@ -20,6 +21,7 @@ import { Keyboard } from './Keyboard';
 import { MuscleLegend } from './MuscleLegend';
 import { PostGamePanel, PracticeBar } from './PostGamePanel';
 import { ResultModal } from './ResultModal';
+import { SettingsModal } from './SettingsModal';
 import { Sidebar } from './Sidebar';
 import { StatsModal } from './StatsModal';
 import { Toast } from './Toast';
@@ -69,15 +71,19 @@ export function Game() {
   const [indexOpen, setIndexOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const initAuth = useAuthStore((s) => s.init);
+  const loadSettings = useSettingsStore((s) => s.load);
 
   useEffect(() => {
     initGame();
     // Restores a Supabase session if one exists and pulls the cloud save. A
     // no-op when the project has no keys.
     initAuth();
-  }, [initGame, initAuth]);
+    // Client-only: reads localStorage and stamps <html> attributes.
+    loadSettings();
+  }, [initGame, initAuth, loadSettings]);
 
   // A tab left open across midnight UTC would keep serving yesterday's word.
   useEffect(() => {
@@ -112,6 +118,7 @@ export function Game() {
     onOpenIndex: () => setIndexOpen(true),
     onOpenStats: () => setStatsOpen(true),
     onOpenAccount: () => setAccountOpen(true),
+    onOpenSettings: () => setSettingsOpen(true),
   };
 
   const figure = (
@@ -256,6 +263,7 @@ export function Game() {
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExerciseIndex open={indexOpen} onClose={() => setIndexOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

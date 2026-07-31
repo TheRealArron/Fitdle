@@ -62,6 +62,14 @@ const EMOJI: Record<LetterState, string> = {
   absent: '⬛',
 };
 
-export function evaluationToEmoji(evaluation: LetterState[]): string {
-  return evaluation.map((s) => EMOJI[s]).join('');
+/** Colourblind palette. Emoji cannot inherit CSS, so it swaps explicitly. */
+const EMOJI_CB: Record<LetterState, string> = {
+  correct: '🟦',
+  present: '🟧',
+  absent: '⬛',
+};
+
+export function evaluationToEmoji(evaluation: LetterState[], colourblind = false): string {
+  const map = colourblind ? EMOJI_CB : EMOJI;
+  return evaluation.map((s) => map[s]).join('');
 }
