@@ -15,7 +15,7 @@ export function Header({ onOpenMenu, onOpenStats }: HeaderProps) {
   const mode = useGameStore((s) => s.mode);
 
   return (
-    <header className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-3">
+    <header className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-white/[0.07] bg-surface/40 px-3 py-3 backdrop-blur-sm">
       <div className="flex flex-1 items-center gap-1">
         {/* On xl the sidebar is always on screen, so the trigger disappears. */}
         <button
@@ -29,8 +29,8 @@ export function Header({ onOpenMenu, onOpenStats }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Dumbbell className="h-5 w-5 text-state-correct" aria-hidden />
-        <h1 className="font-game text-xl font-bold uppercase tracking-[0.2em] text-white">
+        <Dumbbell className="h-5 w-5 text-accent drop-shadow-[0_0_8px_rgba(52,211,153,0.55)]" aria-hidden />
+        <h1 className="font-game text-xl font-bold uppercase tracking-[0.28em] text-white">
           Fitdle
         </h1>
         {mode === 'practice' && (

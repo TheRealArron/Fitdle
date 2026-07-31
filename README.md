@@ -8,7 +8,7 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
-npm test                 # 67 unit tests
+npm test                 # 75 unit tests
 npm run typecheck
 npm run lint
 npm run build            # web build
@@ -42,14 +42,16 @@ the answer.
 muscle group, guess 5 the equipment.
 
 **Names are letters only** — no spaces or hyphens, singular. Pull-ups is
-`PULLUP`, Farmer's carry is `FARMERS`. All 70 names are one tap away behind the
+`PULLUP`, Farmer's carry is `FARMERS`. All 99 names are one tap away behind the
 list icon; you are not expected to know them by heart.
 
-**Practice mode** gives you unlimited random puzzles. They are never written to
+**When the daily is done** the keyboard — now dead weight — is replaced by a
+panel offering the thing you actually want next: another round. Practice mode
+gives you unlimited random puzzles. They are never written to
 storage, so there is no path from a practice round to a streak — replaying until
 you win buys nothing.
 
-**Form videos.** Every one of the 40 answers links to a real, curated coaching
+**Form videos.** Every one of the 60 answers links to a real, curated coaching
 video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
 too, not just losses — the coaching is the point of the game, and hiding it
 behind a loss punishes the players who engaged most.
@@ -71,8 +73,13 @@ that is not a word — and no amount of curating the list fixes it while the gri
 is five wide.
 
 Answers now run **5–9 letters at their natural spelling**, and the grid width
-changes daily, which is itself a strong clue. The pool is 40 answers (8 per
-length) inside a 70-exercise catalogue.
+changes daily, which is itself a strong clue. The pool is 60 answers (12 per
+length) inside a 99-exercise catalogue.
+
+One caveat stated plainly in the source: the daily index is `seed % ANSWERS.length`,
+so **changing the pool size reshuffles the whole calendar**, not just future
+days. Growing the pool is safe before launch and not after — at that point
+either freeze the size or move to a pinned date→answer schedule.
 
 ### 2. "What do I even guess?" needed an answer inside the product
 
@@ -209,19 +216,50 @@ centred itself within that column instead of the page. Equal rails make the
 board's centre exactly the viewport's centre at every width; a test asserts
 `boardCentre === keyboardCentre === viewportCentre` across five viewports.
 
-### Account & backup, instead of a sign-in button
+### Accounts and cloud sync
 
-There is no account system, and the UI does not pretend otherwise. A "Sign in"
-button that does nothing — or worse, a fake one that looks like it worked — is a
-lie the player discovers when their streak is gone. The Account panel states
-where progress lives and hands over a backup code, which solves the actual
-problem someone signing in would be trying to solve: getting their streak onto
-another device.
+Real accounts via Supabase: email/password sign-up and sign-in, sessions that
+survive reloads, and a streak that follows you between devices.
 
-The code is a device-transfer convenience, **not** a trust boundary. A crafted
-code is exactly as powerful as editing localStorage, which the threat model
-already treats as out of scope. Import still enforces the full digest and
-coherence checks, so an imported save cannot be internally impossible.
+**It works without keys.** A fresh clone and the extension build have no
+backend, so the account panel says so plainly and falls back to a backup code
+rather than showing a sign-in form that cannot reach a server. Add a project URL
+and anon key to `.env.local` (see [.env.example](.env.example)) and run
+[supabase/schema.sql](supabase/schema.sql) to turn it on.
+
+**Merge, not last-write-wins.** Two devices can both play offline and both be
+legitimate, and there is no timestamp we can trust because the clock belongs to
+the player. So [cloudSync.ts](src/lib/cloudSync.ts) merges on the data itself:
+monotonic counters take the max (you cannot un-play a game), `highSeed` takes
+the max so clock-rollback protection cannot be laundered away by syncing from a
+tampered device, and the *streak* comes from whichever save played most recently
+— taking the larger streak would let a stale device resurrect a broken one. The
+merge is order-independent and its result always satisfies the same coherence
+invariants `isCoherent` enforces, so a sync can never produce a save that the
+next load rejects.
+
+The schema is honest about its limit too: the client computes its own streak, so
+a determined user can upload any number. Making streaks authoritative means
+moving the answer and the scoring server-side, which is a product decision, not
+a policy tweak.
+
+### Design
+
+One rule drives the palette: **the three tile states are the only saturated
+colours in the product**. Every surface, border and label is a cool neutral ramp
+on a single hue, so nothing competes with the board and the muscle figure.
+Borders are white at low alpha rather than another grey, which means one value
+sits correctly on every surface in the ramp.
+
+Two typefaces, each with a job. Inter carries the interface — its tall x-height
+keeps the 10–12px rail labels legible where a monospace turns to mush. Geist
+Mono carries anything read as *data*: tiles, timers, streaks, exercise names,
+backup codes. Fixed advance width means a ticking countdown never reflows its
+neighbours.
+
+Scored tiles get a bloom in their own colour, which is what makes the board read
+as lit rather than painted — and because it only ever appears on the three
+result states, it reinforces the same one-saturated-colour rule.
 
 ### Form videos
 
@@ -262,7 +300,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 67 tests over the things that must not silently break:
+`npm test` — 75 tests over the things that must not silently break:
 
 - **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

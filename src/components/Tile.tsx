@@ -23,9 +23,12 @@ interface TileProps {
 }
 
 const FACE_CLASS: Record<LetterState, string> = {
-  correct: 'bg-state-correct border-state-correct text-white',
-  present: 'bg-state-present border-state-present text-white',
-  absent: 'bg-state-absent border-state-absent text-white',
+  // Scored faces carry a bloom in their own colour (see globals.css). Present
+  // uses near-black text because yellow at full saturation cannot hold white
+  // legibly — that pairing is the one place the palette needs a dark foreground.
+  correct: 'bg-state-correct border-state-correct text-white tile-glow-correct',
+  present: 'bg-state-present border-state-present text-[#231a00] tile-glow-present',
+  absent: 'bg-state-absent border-state-absent text-white/85 tile-glow-absent',
 };
 
 function TileImpl({
@@ -78,10 +81,11 @@ function TileImpl({
             'tile-face absolute inset-0 flex items-center justify-center',
             // Font scales off the tile's own width (see .tile-perspective in
             // globals.css) so a 9-wide grid stays legible without a media query.
-            'rounded-md border-2 font-game text-[52cqw] leading-none font-bold uppercase',
+            'rounded-lg border-2 font-game text-[52cqw] leading-none font-bold uppercase',
+            'transition-colors duration-150',
             filled
-              ? 'border-tile-filled bg-tile-empty text-white'
-              : 'border-tile-border bg-transparent text-white',
+              ? 'border-tile-filled bg-tile-empty text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]'
+              : 'border-tile-border bg-tile-empty/40 text-white',
           ].join(' ')}
           // Pop on letter entry.
           animate={filled && !showBack ? { scale: [1, 1.08, 1] } : { scale: 1 }}
