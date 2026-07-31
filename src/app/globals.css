@@ -1,26 +1,304 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DESIGN SYSTEM
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Built around one decision: the three tile states are the only saturated
+ * colours in the product. Everything else — surfaces, text, borders, chrome —
+ * is a cool neutral ramp, so the eye goes straight to the board and the muscle
+ * figure and nothing competes with them.
+ *
+ * The surface ramp is a single hue (222deg, cool blue) at descending lightness.
+ * Using one hue rather than mixing greys keeps the whole UI feeling like one
+ * material under one light, which is what reads as "designed" rather than
+ * "assembled". Borders are white at low alpha instead of another grey, so they
+ * sit correctly on every surface in the ramp without a second variable.
+ */
+
+@theme {
+  /* ── surfaces: one hue, descending lightness ── */
+  --color-void: #05070d;       /* page backdrop, behind everything */
+  --color-app-bg: #0a0e18;     /* app shell */
+  --color-surface: #101725;    /* rails, cards */
+  --color-surface-2: #161f31;  /* raised: inputs, chips */
+  --color-tile-empty: #131c2c; /* unfilled tile face */
+  --color-tile-border: #23304a;
+  --color-tile-filled: #3c4d6e;
+
+  /* ── the only saturated colours in the product ── */
+  --color-state-correct: #22c55e;
+  --color-state-present: #eab308;
+  --color-state-absent: #4b5563;
+  /* Muscle worked by your guess but not the answer. Deliberately a desaturated
+     wine rather than a true red: it must read as "ruled out", not "error". */
+  --color-state-excluded: #7f1d3a;
+
+  /* ── accent: used for focus, links and the brand mark only ── */
+  --color-accent: #34d399;
+  --color-accent-dim: #0f3d31;
+
+  /* ── keyboard ── */
+  --color-key-idle: #2b374d;
+  --color-key-hover: #38465f;
+
+  /* ── type ── */
+  --font-game: var(--font-geist-mono), ui-monospace, monospace;
+  --font-ui: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* ── motion ── */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-app-bg);
+  color: #e8edf7;
+  font-family: var(--font-ui);
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * A single very large, very dim radial wash behind the board. It gives the
+ * page a light source so flat panels read as surfaces rather than blocks —
+ * the cheapest way to make a dark UI feel deliberate. Fixed and non-scrolling,
+ * so it costs one paint.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(52, 211, 153, 0.07), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(56, 130, 246, 0.05), transparent 60%);
+}
+
+body > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── typography helpers ─────────────────────────────────────────────────── */
+
+/*
+ * Section labels. Small, wide-tracked, low-contrast — the standard way to make
+ * a label recede so the value beside it can carry the hierarchy. Applied via a
+ * class because it is used in a dozen places and must stay identical.
+ */
+.label {
+  font-family: var(--font-ui);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Numerals that must not shift width as they tick (timers, streaks, scores). */
+.numeric {
+  font-family: var(--font-game);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ── focus ──────────────────────────────────────────────────────────────── */
+
+:where(button, a, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+/* ── board ──────────────────────────────────────────────────────────────── */
+
+/*
+ * The board is width-driven (tiles are aspect-square) but its available space
+ * is height-constrained, and the column count changes daily. Making this a size
+ * container lets the board compute its own width from the height it actually
+ * has, in CSS, with no JS measurement and no per-breakpoint magic numbers:
+ *
+ *   width: min(100cqw, 100cqh * columns / 6)
+ */
+.board-area {
+  container-type: size;
+}
+
+.tile-perspective {
+  perspective: 1000px;
+  /* Makes the tile its own container so letters can size in `cqw`. Grid width
+     varies 5–9 by day, so tiles must scale their own type. */
+  container-type: inline-size;
+}
+
+.tile-3d {
+  transform-style: preserve-3d;
+}
+
+.tile-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.tile-face-back {
+  transform: rotateX(180deg);
+}
+
+/*
+ * Scored tiles get a soft bloom in their own colour. It is what makes the
+ * board read as lit rather than painted, and it only ever appears on the three
+ * result states so it reinforces the one saturated-colour rule.
+ */
+.tile-glow-correct {
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.5), 0 4px 20px -4px rgba(34, 197, 94, 0.45);
+}
+
+.tile-glow-present {
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.5), 0 4px 20px -4px rgba(234, 179, 8, 0.4);
+}
+
+.tile-glow-absent {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── surfaces ───────────────────────────────────────────────────────────── */
+
+/*
+ * One hairline of light along the top edge. Real materials catch light on their
+ * upper surface; this single inset highlight is what separates a "card" from a
+ * "rectangle" and costs nothing.
+ */
+.panel {
+  background-color: var(--color-surface);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.panel-raised {
+  background-color: var(--color-surface-2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* ── buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  transition:
+    background-color 160ms var(--ease-out-quart),
+    box-shadow 160ms var(--ease-out-quart),
+    transform 80ms var(--ease-out-quart);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  color: #04140c;
+  background-image: linear-gradient(180deg, #4ade80, #22c55e);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 18px -6px rgba(34, 197, 94, 0.65);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, #6ee79b, #29d268);
+}
+
+.btn-ghost {
+  color: #e8edf7;
+  background-color: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.09);
+}
+
+.btn-danger {
+  color: #fff;
+  background-color: #9f1239;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #be123c;
+}
+
+/* ── inputs ─────────────────────────────────────────────────────────────── */
+
+.field {
+  width: 100%;
+  border-radius: 0.625rem;
+  background-color: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  color: #e8edf7;
+  outline: none;
+  transition: box-shadow 160ms var(--ease-out-quart);
+}
+
+.field::placeholder {
+  color: #55627a;
+}
+
+.field:focus {
+  box-shadow:
+    inset 0 0 0 1px rgba(52, 211, 153, 0.55),
+    0 0 0 3px rgba(52, 211, 153, 0.12);
+}
+
+/* ── motion preferences ─────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-3d,
+  .tile-3d * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── scrollbars ─────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-tile-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #33415c;
 }
