@@ -51,6 +51,78 @@
 }
 
 /*
+ * Themes.
+ *
+ * Surfaces and accent only — the three result colours are deliberately absent
+ * from every block below. A screenshot has to mean the same thing whichever
+ * theme took it, and the shared emoji grid has to keep matching the board.
+ *
+ * Each theme is one hue held across the whole surface ramp, exactly as the
+ * default is, so they stay internally consistent rather than becoming a pile of
+ * unrelated greys.
+ */
+:root[data-theme='graphite'] {
+  --color-void: #08090b;
+  --color-app-bg: #0e1013;
+  --color-surface: #16181d;
+  --color-surface-2: #1e2127;
+  --color-tile-empty: #191c21;
+  --color-tile-border: #2c3038;
+  --color-tile-filled: #4a505c;
+  --color-key-idle: #343941;
+  --color-key-hover: #424852;
+  --color-accent: #a3e635;
+  --color-accent-dim: #2c3a12;
+}
+
+:root[data-theme='abyss'] {
+  --color-void: #01080c;
+  --color-app-bg: #04121a;
+  --color-surface: #071c27;
+  --color-surface-2: #0b2634;
+  --color-tile-empty: #08202c;
+  --color-tile-border: #133849;
+  --color-tile-filled: #2b6076;
+  --color-key-idle: #17475c;
+  --color-key-hover: #1e5871;
+  --color-accent: #22d3ee;
+  --color-accent-dim: #0b3b45;
+}
+
+:root[data-theme='plum'] {
+  --color-void: #0a050f;
+  --color-app-bg: #120a1b;
+  --color-surface: #1b1027;
+  --color-surface-2: #241634;
+  --color-tile-empty: #1d1129;
+  --color-tile-border: #372348;
+  --color-tile-filled: #614080;
+  --color-key-idle: #3d2954;
+  --color-key-hover: #4b3366;
+  --color-accent: #c084fc;
+  --color-accent-dim: #33184a;
+}
+
+/* The ambient wash follows the accent so the light source stays coherent. */
+:root[data-theme='graphite'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(163, 230, 53, 0.05), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(255, 255, 255, 0.03), transparent 60%);
+}
+
+:root[data-theme='abyss'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(14, 116, 144, 0.06), transparent 60%);
+}
+
+:root[data-theme='plum'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(192, 132, 252, 0.08), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(129, 60, 200, 0.05), transparent 60%);
+}
+
+/*
  * Colourblind-safe palette.
  *
  * The whole game is two colour channels — green/yellow on the tiles and

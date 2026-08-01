@@ -3,6 +3,7 @@
 import {
   ChartColumn,
   CircleHelp,
+  CloudCheck,
   CircleUser,
   Dumbbell,
   Flame,
@@ -170,12 +171,33 @@ export function Sidebar({
           />
         )}
         <NavItem icon={Settings} label="Settings" onClick={go(onOpenSettings)} />
-        <NavItem
-          icon={CircleUser}
-          label={authUser ? 'Account' : cloudAvailable ? 'Sign in' : 'Account & backup'}
-          hint={authUser ? 'synced' : undefined}
-          onClick={go(onOpenAccount)}
-        />
+        {authUser ? (
+          /* Signed in: show who, not what. The sync state is the useful detail. */
+          <button
+            type="button"
+            onClick={go(onOpenAccount)}
+            className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.06]"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-dim font-game text-[10px] font-bold uppercase text-accent">
+              {authUser.username.slice(0, 2)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-white">
+                {authUser.username}
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-slate-500">
+                <CloudCheck className="h-3 w-3" aria-hidden />
+                Synced
+              </span>
+            </span>
+          </button>
+        ) : (
+          <NavItem
+            icon={CircleUser}
+            label={cloudAvailable ? 'Sign in' : 'Account & backup'}
+            onClick={go(onOpenAccount)}
+          />
+        )}
       </nav>
 
       <CandidatePanel onOpenIndex={go(onOpenIndex)} />

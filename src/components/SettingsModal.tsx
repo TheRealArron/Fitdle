@@ -2,7 +2,12 @@
 
 import { Eye, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useSettingsStore } from '@/store/useSettingsStore';
+import {
+  THEMES,
+  THEME_LABEL,
+  useSettingsStore,
+  type Theme,
+} from '@/store/useSettingsStore';
 import { Modal } from './Modal';
 
 function Toggle({
@@ -48,14 +53,64 @@ function Toggle({
   );
 }
 
+/** Two-swatch preview: page surface plus that theme's accent. */
+const THEME_SWATCH: Record<Theme, [string, string]> = {
+  midnight: ['#0a0e18', '#34d399'],
+  graphite: ['#0e1013', '#a3e635'],
+  abyss: ['#04121a', '#22d3ee'],
+  plum: ['#120a1b', '#c084fc'],
+};
+
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const colourblind = useSettingsStore((s) => s.colourblind);
   const reduceMotion = useSettingsStore((s) => s.reduceMotion);
+  const theme = useSettingsStore((s) => s.theme);
   const setSetting = useSettingsStore((s) => s.set);
 
   return (
     <Modal open={open} onClose={onClose} title="Settings">
       <div className="flex flex-col gap-3">
+        <section className="flex flex-col gap-2">
+          <h3 className="label px-1">Theme</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {THEMES.map((t) => {
+              const [bg, accent] = THEME_SWATCH[t];
+              const active = theme === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSetting('theme', t)}
+                  className={[
+                    'flex items-center gap-2.5 rounded-xl p-2.5 text-left transition-colors',
+                    active
+                      ? 'bg-white/[0.09] ring-1 ring-inset ring-white/20'
+                      : 'panel-raised hover:bg-white/[0.06]',
+                  ].join(' ')}
+                >
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-white/10"
+                    style={{ backgroundColor: bg }}
+                    aria-hidden
+                  >
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: accent }}
+                    />
+                  </span>
+                  <span className="text-sm font-medium text-white">{THEME_LABEL[t]}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="px-1 text-[11px] leading-snug text-slate-500">
+            Themes change the surfaces only. Green, yellow and grey always mean the same thing,
+            so a screenshot reads identically whichever theme took it.
+          </p>
+        </section>
+
+        <div className="my-1 border-t border-white/[0.07]" />
         <Toggle
           icon={Eye}
           title="Colourblind-safe colours"

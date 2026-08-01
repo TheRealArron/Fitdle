@@ -54,6 +54,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
   const [tab, setTab] = useState<Tab>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
 
   const [showBackup, setShowBackup] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -68,7 +69,8 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = tab === 'signin' ? await signIn(email, password) : await signUp(email, password);
+    const ok =
+      tab === 'signin' ? await signIn(email, password) : await signUp(email, password, username);
     if (ok) setPassword('');
   };
 
@@ -104,11 +106,12 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
             <section className="panel-raised flex items-center gap-3 rounded-xl p-3.5">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-dim text-accent">
                 <span className="font-game text-sm font-bold uppercase">
-                  {user.email.slice(0, 2)}
+                  {user.username.slice(0, 2)}
                 </span>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{user.email}</p>
+                <p className="truncate text-sm font-semibold text-white">{user.username}</p>
+                <p className="truncate text-[11px] text-slate-500">{user.email}</p>
                 <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
                   {syncState === 'syncing' ? (
                     <>
@@ -190,11 +193,30 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
             </div>
 
             <p className="text-xs leading-relaxed text-slate-400">
-              An account keeps your streak on every device you play on. Nothing else is
-              collected — no name, no tracking, just an email and your progress.
+              An account keeps your streak on every device you play on. That is all it
+              stores: a username, an email, and your progress. No tracking, no leaderboard,
+              nothing shared with anyone.
             </p>
 
             <form onSubmit={submit} className="flex flex-col gap-3">
+              {tab === 'signup' && (
+                <label className="flex flex-col gap-1.5">
+                  <span className="label">Username</span>
+                  <input
+                    type="text"
+                    required
+                    maxLength={20}
+                    autoComplete="nickname"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="How you want to be known"
+                    className="field"
+                  />
+                  <span className="text-[11px] text-slate-500">
+                    Shown in the menu. Nobody else sees it — there is no leaderboard.
+                  </span>
+                </label>
+              )}
               <label className="flex flex-col gap-1.5">
                 <span className="label">Email</span>
                 <input

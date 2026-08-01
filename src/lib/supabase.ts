@@ -45,7 +45,21 @@ export function getSupabase(): SupabaseClient | null {
 /** Turns Supabase's error strings into something a player should actually read. */
 export function friendlyAuthError(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'That email and password do not match.';
+  /*
+   * Deliberately the SAME message for "no such account" and "wrong password".
+   *
+   * Supabase returns one error for both, on purpose. Splitting them would turn
+   * the sign-in form into a user-enumeration oracle: anyone could type an email
+   * and learn from the wording whether that person has an account here. That
+   * leaks real information about real people, and it is why every serious auth
+   * provider collapses the two.
+   *
+   * So instead of guessing which one it was, the copy covers both cases and
+   * points at the fix for the one the player can act on.
+   */
+  if (m.includes('invalid login credentials')) {
+    return 'No account matches that email and password. If you have not signed up yet, use Create account.';
+  }
   if (m.includes('user already registered')) return 'An account with that email already exists.';
   if (m.includes('password should be at least')) {
     return 'Password needs to be at least 6 characters.';

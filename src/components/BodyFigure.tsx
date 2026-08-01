@@ -20,6 +20,37 @@ type Shape =
   | { t: 'rect'; x: number; y: number; w: number; h: number; r: number }
   | { t: 'path'; d: string };
 
+/**
+ * Which way the figure is facing.
+ *
+ * Two identical silhouettes with FRONT and BACK captions under them force the
+ * player to read a label to know which chest they are looking at — and the
+ * whole point of the figure is to be understood at a glance. A face on one and
+ * the back of a head on the other makes the orientation pre-attentive: you know
+ * before you have read anything.
+ */
+const FACE_DETAIL: Record<'front' | 'back', Shape[]> = {
+  front: [
+    { t: 'ellipse', cx: 45.5, cy: 16, rx: 1.7, ry: 2.1 }, // left eye
+    { t: 'ellipse', cx: 54.5, cy: 16, rx: 1.7, ry: 2.1 }, // right eye
+    { t: 'path', d: 'M46 24 Q50 26.5 54 24' }, // mouth
+  ],
+  back: [
+    /*
+     * A filled crown, not stroked arcs. Concentric lines across the skull read
+     * as a swim cap; a solid mass covering the top two-thirds reads as the back
+     * of a head, which is the whole job of this shape.
+     */
+    { t: 'path', d: 'M38.4 20 A 12 14 0 0 1 61.6 20 Q 50 25 38.4 20 Z' },
+  ],
+};
+
+/** Ears sit on both views; they frame the head without implying a direction. */
+const EARS: Shape[] = [
+  { t: 'ellipse', cx: 37.5, cy: 18, rx: 2.2, ry: 3.4 },
+  { t: 'ellipse', cx: 62.5, cy: 18, rx: 2.2, ry: 3.4 },
+];
+
 /** Neutral scaffolding — never highlighted, just makes the blobs read as a body. */
 const BASE: Shape[] = [
   { t: 'ellipse', cx: 50, cy: 18, rx: 12, ry: 14 }, // head
@@ -144,11 +175,36 @@ function BodyFigureImpl({ shared, missed, category, className }: BodyFigureProps
     map: Partial<Record<MuscleRegion, Shape[]>>,
     dx: number,
     label: string,
+    facing: 'front' | 'back',
   ) => (
     <g transform={`translate(${dx} 0)`}>
       {/* Neutral body scaffolding. */}
       <g fill="var(--color-tile-border)" opacity={0.45}>
         {BASE.map((s, i) => renderShape(s, `b${i}`, {}))}
+        {EARS.map((s, i) => renderShape(s, `e${i}`, {}))}
+      </g>
+
+      {/*
+        Orientation cue. Slightly brighter than the scaffolding so it reads as
+        detail rather than another muscle — it must never be mistaken for a
+        scored region, so it deliberately uses neither state colour.
+      */}
+      <g fill="var(--color-tile-filled)" opacity={0.85}>
+        {FACE_DETAIL[facing].map((s, i) =>
+          renderShape(
+            s,
+            `f${i}`,
+            // The mouth is the one stroked shape; everything else is filled.
+            facing === 'front' && s.t === 'path'
+              ? {
+                  fill: 'none',
+                  stroke: 'var(--color-tile-filled)',
+                  strokeWidth: 1.4,
+                  strokeLinecap: 'round',
+                }
+              : {},
+          ),
+        )}
       </g>
 
       {/* Muscle regions. */}
@@ -201,8 +257,8 @@ function BodyFigureImpl({ shared, missed, category, className }: BodyFigureProps
       role="img"
       aria-label="Muscle map showing which muscles your guesses share with the answer"
     >
-      {view(FRONT, 0, 'Front')}
-      {view(BACK, 110, 'Back')}
+      {view(FRONT, 0, 'Front', 'front')}
+      {view(BACK, 110, 'Back', 'back')}
     </svg>
   );
 }

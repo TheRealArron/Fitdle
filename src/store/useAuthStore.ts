@@ -9,6 +9,22 @@ import { useGameStore } from '@/store/useGameStore';
 export interface AuthUser {
   id: string;
   email: string;
+  /** Chosen at sign-up. Falls back to the email's local part for older accounts. */
+  username: string;
+}
+
+/**
+ * Stored in Supabase's `user_metadata`, not a table of our own.
+ *
+ * A display name is not relational data — nothing joins on it, and it belongs to
+ * the identity rather than to progress. Keeping it on the auth user means no
+ * extra table, no extra RLS policy, and it arrives with the session instead of
+ * needing a second round trip before the sidebar can render.
+ */
+function toUser(u: { id: string; email?: string; user_metadata?: Record<string, unknown> }): AuthUser {
+  const email = u.email ?? '';
+  const meta = typeof u.user_metadata?.username === 'string' ? u.user_metadata.username : '';
+  return { id: u.id, email, username: meta.trim() || email.split('@')[0] || 'Player' };
 }
 
 export type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
@@ -27,7 +43,7 @@ export interface AuthState {
   lastSyncedAt: number | null;
 
   init: () => void;
-  signUp: (email: string, password: string) => Promise<boolean>;
+  signUp: (email: string, password: string, username: string) => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   syncNow: () => Promise<void>;
@@ -57,30 +73,29 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     supabase.auth.getSession().then(({ data }) => {
       const s = data.session;
-      set({
-        user: s?.user ? { id: s.user.id, email: s.user.email ?? '' } : null,
-        loading: false,
-      });
+      set({ user: s?.user ? toUser(s.user) : null, loading: false });
       if (s?.user) void get().syncNow();
     });
 
     // Keeps multiple tabs and token refreshes in agreement.
     if (!unsubscribe) {
       const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-        set({
-          user: session?.user ? { id: session.user.id, email: session.user.email ?? '' } : null,
-        });
+        set({ user: session?.user ? toUser(session.user) : null });
       });
       unsubscribe = () => data.subscription.unsubscribe();
     }
   },
 
-  signUp: async (email, password) => {
+  signUp: async (email, password, username) => {
     const supabase = getSupabase();
     if (!supabase) return false;
     set({ busy: true, error: null, notice: null });
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username: username.trim() } },
+    });
     if (error) {
       set({ busy: false, error: friendlyAuthError(error.message) });
       return false;
@@ -95,10 +110,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return true;
     }
 
-    set({
-      busy: false,
-      user: data.user ? { id: data.user.id, email: data.user.email ?? '' } : null,
-    });
+    set({ busy: false, user: data.user ? toUser(data.user) : null });
     await get().syncNow();
     return true;
   },
@@ -114,10 +126,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return false;
     }
 
-    set({
-      busy: false,
-      user: data.user ? { id: data.user.id, email: data.user.email ?? '' } : null,
-    });
+    set({ busy: false, user: data.user ? toUser(data.user) : null });
     await get().syncNow();
     return true;
   },
