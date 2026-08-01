@@ -63,6 +63,30 @@ export interface SaveData {
   highSeed: number;
   /** In-progress (or finished) board for a single day. */
   day: DayRecord | null;
+
+  /*
+   * Workout tracking — a second, independent streak for actually doing the
+   * movement. Optional on purpose: these were added after people already had
+   * saves, and bumping SAVE_VERSION would have failed every existing record's
+   * coherence check and wiped real streaks. `normalise()` fills them in on load
+   * instead, so an old save upgrades silently rather than being rejected.
+   */
+  workoutStreak?: number;
+  maxWorkoutStreak?: number;
+  workoutsDone?: number;
+  /** Seed of the last day the challenge was marked complete. Anti-replay. */
+  lastWorkoutSeed?: number | null;
+}
+
+/** Fills in fields added after this save format shipped. */
+export function normalise(save: SaveData): SaveData {
+  return {
+    ...save,
+    workoutStreak: save.workoutStreak ?? 0,
+    maxWorkoutStreak: save.maxWorkoutStreak ?? 0,
+    workoutsDone: save.workoutsDone ?? 0,
+    lastWorkoutSeed: save.lastWorkoutSeed ?? null,
+  };
 }
 
 export function defaultSave(): SaveData {
@@ -77,6 +101,10 @@ export function defaultSave(): SaveData {
     lastResult: null,
     highSeed: 0,
     day: null,
+    workoutStreak: 0,
+    maxWorkoutStreak: 0,
+    workoutsDone: 0,
+    lastWorkoutSeed: null,
   };
 }
 
@@ -202,6 +230,16 @@ function isCoherent(d: unknown): d is SaveData {
   if (s.maxStreak < s.streak) return false;
   if ((s.distribution as number[]).reduce((a, b) => a + b, 0) !== s.wins) return false;
 
+  for (const k of ['workoutStreak', 'maxWorkoutStreak', 'workoutsDone'] as const) {
+    if (s[k] !== undefined && !isInt(s[k])) return false;
+  }
+  if (s.lastWorkoutSeed !== undefined && s.lastWorkoutSeed !== null && !isInt(s.lastWorkoutSeed)) {
+    return false;
+  }
+  if (isInt(s.workoutStreak) && isInt(s.workoutsDone) && s.workoutStreak > s.workoutsDone) {
+    return false;
+  }
+
   if (s.lastSeed !== null && !isInt(s.lastSeed)) return false;
   if (s.lastResult !== null && s.lastResult !== 'won' && s.lastResult !== 'lost') return false;
 
@@ -253,7 +291,7 @@ export function loadSave(): LoadResult {
     if (!isCoherent(parsed)) {
       return { save: defaultSave(), tampered: true };
     }
-    return { save: parsed, tampered: false };
+    return { save: normalise(parsed), tampered: false };
   } catch {
     return { save: defaultSave(), tampered: true };
   }
@@ -420,6 +458,11 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
     }
   }
 
+  if (save.lastWorkoutSeed != null) {
+    const gap = daysBetweenSeeds(save.lastWorkoutSeed, todaySeed);
+    if (gap > 1 && (save.workoutStreak ?? 0) > 0) save.workoutStreak = 0;
+  }
+
   const sameDay = save.day !== null && save.day.seed === todaySeed;
   const day: DayRecord = sameDay
     ? { ...save.day!, guesses: [...save.day!.guesses] }
@@ -434,6 +477,22 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
     clockRollback,
     streakBroken,
   };
+}
+
+/**
+ * Marks today's mini-challenge complete. Idempotent by seed, exactly like
+ * `commitResult` — you can only bank one workout per day, so spamming the
+ * button cannot inflate the workout streak.
+ */
+export function commitWorkout(input: SaveData, seed: number): SaveData {
+  if (input.lastWorkoutSeed === seed) return input;
+
+  const save = normalise({ ...input, distribution: [...input.distribution] });
+  save.workoutsDone = (save.workoutsDone ?? 0) + 1;
+  save.workoutStreak = (save.workoutStreak ?? 0) + 1;
+  save.maxWorkoutStreak = Math.max(save.maxWorkoutStreak ?? 0, save.workoutStreak);
+  save.lastWorkoutSeed = seed;
+  return save;
 }
 
 /**

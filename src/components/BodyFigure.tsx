@@ -147,8 +147,10 @@ export type RegionState = 'shared' | 'missed' | 'idle';
 const FILL: Record<RegionState, string> = {
   // Your guess and the answer both work this muscle.
   shared: 'var(--color-state-correct)',
-  // Your guess works it; the answer does not.
-  missed: '#7f1d3a',
+  // Your guess works it; the answer does not. Must be the variable, not the
+  // literal — the legend reads the variable, so a hardcoded hex here meant
+  // colourblind mode recoloured the key while leaving the figure unchanged.
+  missed: 'var(--color-state-excluded)',
   idle: 'var(--color-tile-empty)',
 };
 
@@ -165,9 +167,19 @@ interface BodyFigureProps {
   /** Regions of the answer's muscle group. Empty until the category unlocks. */
   category: ReadonlySet<MuscleRegion>;
   className?: string;
+  /** Makes regions tappable. Omit for a purely decorative figure. */
+  onSelectRegion?: (region: MuscleRegion) => void;
+  selected?: MuscleRegion | null;
 }
 
-function BodyFigureImpl({ shared, missed, category, className }: BodyFigureProps) {
+function BodyFigureImpl({
+  shared,
+  missed,
+  category,
+  className,
+  onSelectRegion,
+  selected,
+}: BodyFigureProps) {
   const stateOf = (r: MuscleRegion): RegionState =>
     shared.has(r) ? 'shared' : missed.has(r) ? 'missed' : 'idle';
 
@@ -216,6 +228,23 @@ function BodyFigureImpl({ shared, missed, category, className }: BodyFigureProps
             initial={false}
             animate={{ opacity: OPACITY[state] }}
             transition={{ duration: 0.35 }}
+            // Tappable only when a handler is supplied, so the decorative
+            // instances in modals do not advertise interactivity they lack.
+            role={onSelectRegion ? 'button' : undefined}
+            tabIndex={onSelectRegion ? 0 : undefined}
+            aria-label={onSelectRegion ? `${MUSCLE_LABEL[region]} — show details` : undefined}
+            style={onSelectRegion ? { cursor: 'pointer' } : undefined}
+            onClick={onSelectRegion ? () => onSelectRegion(region) : undefined}
+            onKeyDown={
+              onSelectRegion
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectRegion(region);
+                    }
+                  }
+                : undefined
+            }
           >
             <title>{`${MUSCLE_LABEL[region]} — ${
               state === 'shared'
@@ -227,10 +256,17 @@ function BodyFigureImpl({ shared, missed, category, className }: BodyFigureProps
             {map[region]!.map((s, i) =>
               renderShape(s, `${region}${i}`, {
                 fill: FILL[state],
-                stroke: category.has(region) ? 'var(--color-state-present)' : 'none',
-                strokeWidth: category.has(region) ? 2 : 0,
-                // Dashes distinguish the category hint from a scored region.
-                strokeDasharray: category.has(region) ? '3 2' : undefined,
+                // A solid white ring marks the selected region. It must not be
+                // confusable with the dashed amber category hint, so selection
+                // uses a different colour AND a solid stroke.
+                stroke: selected === region
+                  ? '#ffffff'
+                  : category.has(region)
+                    ? 'var(--color-state-present)'
+                    : 'none',
+                strokeWidth: selected === region ? 2 : category.has(region) ? 2 : 0,
+                strokeDasharray:
+                  selected !== region && category.has(region) ? '3 2' : undefined,
                 style: { transition: 'fill 350ms ease' },
               }),
             )}

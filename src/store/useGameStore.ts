@@ -20,6 +20,7 @@ import {
   defaultSave,
   reconcile,
   commitResult,
+  commitWorkout,
   type SaveData,
   type GameStatus,
 } from '@/lib/secureStorage';
@@ -78,6 +79,8 @@ export interface GameState {
   startPractice: () => void;
   /** Return to today's puzzle, restoring the saved board. */
   exitPractice: () => void;
+  /** Mark today's mini-challenge done. Daily-only, idempotent by seed. */
+  markWorkoutDone: () => void;
 }
 
 let toastSeq = 0;
@@ -303,6 +306,28 @@ export const useGameStore = create<GameState>()((set, get) => ({
   // Re-runs the daily reconciliation, which restores the saved board. Practice
   // state was never written anywhere, so there is nothing to clean up.
   exitPractice: () => get().initGame(),
+
+  markWorkoutDone: () => {
+    const { mode, save, seed } = get();
+    // Practice has no date of its own, so it can have no workout streak either.
+    if (mode !== 'daily') return;
+    if (save.lastWorkoutSeed === seed) return;
+
+    const next = commitWorkout(save, seed);
+    writeSave(next);
+    void import('@/store/useAuthStore').then((m) => m.syncAfterGame());
+
+    set({
+      save: next,
+      toast: {
+        id: ++toastSeq,
+        message:
+          (next.workoutStreak ?? 0) > 1
+            ? `Logged — ${next.workoutStreak} day workout streak`
+            : 'Workout logged',
+      },
+    });
+  },
 
   resetProgress: () => {
     clearSave();

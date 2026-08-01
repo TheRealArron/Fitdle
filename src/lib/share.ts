@@ -2,6 +2,13 @@ import { MAX_GUESSES } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
 import { evaluationToEmoji, type LetterState } from '@/lib/evaluate';
 
+/**
+ * Where the share text points people. Override with NEXT_PUBLIC_SITE_URL once
+ * the real domain is live — the link is the whole growth mechanism, so it must
+ * not silently point at nothing.
+ */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://fitdle.app';
+
 export function buildShareText(
   seed: number,
   evaluations: LetterState[][],
@@ -12,7 +19,7 @@ export function buildShareText(
   const score = won ? `${evaluations.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`;
   const grid = evaluations.map((e) => evaluationToEmoji(e, colourblind)).join('\n');
   const streakLine = streak > 1 ? `\n🔥 ${streak} day streak` : '';
-  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}`;
+  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}\n\n${SITE_URL}`;
 }
 
 export type ShareOutcome = 'shared' | 'copied' | 'failed';

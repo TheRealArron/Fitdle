@@ -63,6 +63,16 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     lastResult: recent.lastResult,
     highSeed: Math.max(a.highSeed, b.highSeed),
     day: (recent.day?.seed ?? -1) >= (other.day?.seed ?? -1) ? recent.day : other.day,
+
+    // Same rules as the puzzle streak: counters take the max, the streak itself
+    // comes from whichever device logged a workout most recently.
+    workoutsDone: Math.max(a.workoutsDone ?? 0, b.workoutsDone ?? 0),
+    maxWorkoutStreak: Math.max(a.maxWorkoutStreak ?? 0, b.maxWorkoutStreak ?? 0),
+    workoutStreak: Math.min(
+      ((a.lastWorkoutSeed ?? -1) >= (b.lastWorkoutSeed ?? -1) ? a : b).workoutStreak ?? 0,
+      Math.max(a.workoutsDone ?? 0, b.workoutsDone ?? 0),
+    ),
+    lastWorkoutSeed: Math.max(a.lastWorkoutSeed ?? -1, b.lastWorkoutSeed ?? -1) || null,
   };
 }
 

@@ -45,6 +45,15 @@ export interface Exercise {
 export interface Answer extends Exercise {
   howTo: string[];
   videoQuery: string;
+  /**
+   * The day's mini-challenge — a real prescription, not a generic "3 × 15".
+   *
+   * Sets × reps for anything countable, sets × time for holds, sets × distance
+   * for carries and conditioning. Volume is scaled to the movement: five triples
+   * for a power clean, four sets of twenty for calf raises. A single number
+   * across sixty exercises would be advice nobody should follow.
+   */
+  challenge: string;
 }
 
 /**
@@ -139,6 +148,7 @@ export const ANSWERS: Answer[] = [
       'Descend until the hip crease passes the knee, then stand without letting the knees cave.',
     ],
     videoQuery: 'bodyweight squat proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'BURPEE',
@@ -154,6 +164,7 @@ export const ANSWERS: Answer[] = [
       'Explode into a vertical jump and land softly on bent knees.',
     ],
     videoQuery: 'burpee proper form',
+    challenge: '4 × 8',
   },
   {
     name: 'CLIMBER',
@@ -169,6 +180,7 @@ export const ANSWERS: Answer[] = [
       'Alternate legs quickly, keeping the shoulders stacked over the wrists.',
     ],
     videoQuery: 'mountain climber exercise proper form',
+    challenge: '3 × 30 seconds',
   },
   {
     name: 'DEADLIFT',
@@ -184,6 +196,7 @@ export const ANSWERS: Answer[] = [
       'Push the floor away — hips and shoulders rise together. Lock out with glutes, not by leaning back.',
     ],
     videoQuery: 'conventional deadlift proper form',
+    challenge: '3 × 5',
   },
   {
     name: 'HIPTHRUST',
@@ -199,6 +212,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze the glutes hard for a second — do not arch the lower back to get higher.',
     ],
     videoQuery: 'barbell hip thrust proper form',
+    challenge: '3 × 12',
   },
 
   /* ── cycle 2 ── */
@@ -216,6 +230,7 @@ export const ANSWERS: Answer[] = [
       'Hold a straight line from ear to heel — no sagging hips, no piking. Quality beats duration.',
     ],
     videoQuery: 'plank exercise proper form',
+    challenge: '3 × 45 seconds',
   },
   {
     name: 'CRUNCH',
@@ -231,6 +246,7 @@ export const ANSWERS: Answer[] = [
       'Leave a fist of space under the chin; never pull on the neck.',
     ],
     videoQuery: 'abdominal crunch proper form',
+    challenge: '3 × 20',
   },
   {
     name: 'BOXJUMP',
@@ -246,6 +262,7 @@ export const ANSWERS: Answer[] = [
       'Step down, never jump down — that is where Achilles injuries come from.',
     ],
     videoQuery: 'box jump proper form',
+    challenge: '4 × 6',
   },
   {
     name: 'PULLOVER',
@@ -261,6 +278,7 @@ export const ANSWERS: Answer[] = [
       'Pull it back over the chest with the lats, keeping the ribs down throughout.',
     ],
     videoQuery: 'dumbbell pullover proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'BEARCRAWL',
@@ -276,6 +294,7 @@ export const ANSWERS: Answer[] = [
       'Hips stay level — if they rock side to side, shorten your steps.',
     ],
     videoQuery: 'bear crawl exercise proper form',
+    challenge: '3 × 20 metres',
   },
 
   /* ── cycle 3 ── */
@@ -293,6 +312,7 @@ export const ANSWERS: Answer[] = [
       'Lower until the back knee hovers just above the floor, then push through the front heel.',
     ],
     videoQuery: 'forward lunge proper form',
+    challenge: '3 × 10 each leg',
   },
   {
     name: 'PUSHUP',
@@ -308,6 +328,7 @@ export const ANSWERS: Answer[] = [
       'Press away and keep the glutes squeezed so the hips never sag.',
     ],
     videoQuery: 'push up proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'DEADBUG',
@@ -323,6 +344,7 @@ export const ANSWERS: Answer[] = [
       'Slowly extend the opposite arm and leg, return, then switch. Stop when the back lifts.',
     ],
     videoQuery: 'dead bug core exercise proper form',
+    challenge: '3 × 8 each side',
   },
   {
     name: 'KICKBACK',
@@ -338,6 +360,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze at lockout, then lower slowly. The upper arm must not move.',
     ],
     videoQuery: 'dumbbell triceps kickback proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'CALFRAISE',
@@ -353,6 +376,7 @@ export const ANSWERS: Answer[] = [
       'Pause at the top for a second. Speed here is wasted effort.',
     ],
     videoQuery: 'standing calf raise proper form',
+    challenge: '4 × 20',
   },
 
   /* ── cycle 4 ── */
@@ -370,6 +394,7 @@ export const ANSWERS: Answer[] = [
       'Press up and move the head back out of the way, finishing with the bar over mid-foot.',
     ],
     videoQuery: 'standing overhead press proper form',
+    challenge: '3 × 8',
   },
   {
     name: 'PULLUP',
@@ -385,6 +410,7 @@ export const ANSWERS: Answer[] = [
       'Chin clears the bar, then lower all the way to a dead hang. No kipping.',
     ],
     videoQuery: 'pull up proper form',
+    challenge: '3 × 5',
   },
   {
     name: 'WALLSIT',
@@ -400,6 +426,7 @@ export const ANSWERS: Answer[] = [
       'Hold. Breathe normally — holding your breath makes it much harder than it needs to be.',
     ],
     videoQuery: 'wall sit exercise proper form',
+    challenge: '3 × 45 seconds',
   },
   {
     name: 'LEGPRESS',
@@ -415,6 +442,7 @@ export const ANSWERS: Answer[] = [
       'Press back without snapping the knees into a hard lockout.',
     ],
     videoQuery: 'leg press machine proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'SEATEDROW',
@@ -430,6 +458,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze the shoulder blades together, then let the arms extend fully under control.',
     ],
     videoQuery: 'seated cable row proper form',
+    challenge: '3 × 12',
   },
 
   /* ── cycle 5 ── */
@@ -447,6 +476,7 @@ export const ANSWERS: Answer[] = [
       'Pull under the bar and catch it on the front delts with the elbows whipping through fast.',
     ],
     videoQuery: 'power clean proper form',
+    challenge: '5 × 3',
   },
   {
     name: 'CHINUP',
@@ -462,6 +492,7 @@ export const ANSWERS: Answer[] = [
       'The supinated grip gives the biceps more leverage — expect a few more reps than pull-ups.',
     ],
     videoQuery: 'chin up proper form',
+    challenge: '3 × 6',
   },
   {
     name: 'BIRDDOG',
@@ -477,6 +508,7 @@ export const ANSWERS: Answer[] = [
       'Do not let the hips rotate — balance a glass of water on your lower back.',
     ],
     videoQuery: 'bird dog exercise proper form',
+    challenge: '3 × 10 each side',
   },
   {
     name: 'TOETOUCH',
@@ -492,6 +524,7 @@ export const ANSWERS: Answer[] = [
       'It is a crunch, not a sit-up — the lower back stays down the whole time.',
     ],
     videoQuery: 'toe touch crunch abs proper form',
+    challenge: '3 × 20',
   },
   {
     name: 'JUMPSQUAT',
@@ -507,6 +540,7 @@ export const ANSWERS: Answer[] = [
       'Stop the set the moment your landings start getting loud — that is fatigue, not effort.',
     ],
     videoQuery: 'jump squat proper form',
+    challenge: '4 × 10',
   },
 
   /* ── cycle 6 ── */
@@ -524,6 +558,7 @@ export const ANSWERS: Answer[] = [
       'Lower with the same control. Hooking the feet under something turns it into a hip flexor exercise.',
     ],
     videoQuery: 'sit up proper form',
+    challenge: '3 × 20',
   },
   {
     name: 'SNATCH',
@@ -539,6 +574,7 @@ export const ANSWERS: Answer[] = [
       'Punch overhead and catch in a deep squat with locked elbows. Coach this one, do not self-teach it.',
     ],
     videoQuery: 'barbell snatch proper form',
+    challenge: '5 × 2',
   },
   {
     name: 'LEGCURL',
@@ -554,6 +590,7 @@ export const ANSWERS: Answer[] = [
       'Lower over three seconds — hamstrings respond well to a slow negative.',
     ],
     videoQuery: 'lying leg curl machine proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'SUPERMAN',
@@ -569,6 +606,7 @@ export const ANSWERS: Answer[] = [
       'Look at the floor, not forward. Hold two seconds and lower with control.',
     ],
     videoQuery: 'superman back extension exercise proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'SIDEPLANK',
@@ -584,6 +622,7 @@ export const ANSWERS: Answer[] = [
       'Push the floor away and do not let the bottom shoulder sink into the joint.',
     ],
     videoQuery: 'side plank proper form',
+    challenge: '3 × 30 seconds each side',
   },
 
   /* ── cycle 7 ── */
@@ -601,6 +640,7 @@ export const ANSWERS: Answer[] = [
       'Pause at the top, then lower all the way for a full stretch.',
     ],
     videoQuery: 'dumbbell shrug proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'BRIDGE',
@@ -616,6 +656,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze the glutes at the top. If you feel it in the hamstrings, walk the feet closer in.',
     ],
     videoQuery: 'glute bridge proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'ARMCURL',
@@ -631,6 +672,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze at the top, then lower over 2–3 seconds. The negative builds the arm.',
     ],
     videoQuery: 'dumbbell biceps curl proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'THRUSTER',
@@ -646,6 +688,7 @@ export const ANSWERS: Answer[] = [
       'It is one movement, not a squat then a press. Catch the bar back on the shoulders and continue.',
     ],
     videoQuery: 'barbell thruster proper form',
+    challenge: '4 × 8',
   },
   {
     name: 'BACKSQUAT',
@@ -661,6 +704,7 @@ export const ANSWERS: Answer[] = [
       'Drive the whole foot through the floor and keep the bar over mid-foot the entire time.',
     ],
     videoQuery: 'barbell back squat proper form',
+    challenge: '4 × 6',
   },
 
   /* ── cycle 8 ── */
@@ -678,6 +722,7 @@ export const ANSWERS: Answer[] = [
       'Hug the weights back together. Go lighter than you think; this is a stretch exercise.',
     ],
     videoQuery: 'dumbbell chest fly proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'STEPUP',
@@ -693,6 +738,7 @@ export const ANSWERS: Answer[] = [
       'Do not push off the trailing foot. Lower over 2–3 seconds — that is the hard part.',
     ],
     videoQuery: 'box step up proper form',
+    challenge: '3 × 10 each leg',
   },
   {
     name: 'BENTROW',
@@ -708,6 +754,7 @@ export const ANSWERS: Answer[] = [
       'Squeeze the shoulder blades, then lower fully. No heaving with the torso.',
     ],
     videoQuery: 'barbell bent over row proper form',
+    challenge: '3 × 10',
   },
   {
     name: 'LEGRAISE',
@@ -723,6 +770,7 @@ export const ANSWERS: Answer[] = [
       'Lower straight legs only as far as you can hold that position, then lift back up.',
     ],
     videoQuery: 'lying leg raise proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'PUSHPRESS',
@@ -738,6 +786,7 @@ export const ANSWERS: Answer[] = [
       'Drive the legs explosively and let that momentum carry the bar past the sticking point.',
     ],
     videoQuery: 'barbell push press proper form',
+    challenge: '4 × 5',
   },
 
   /* ── cycle 9 ── */
@@ -755,6 +804,7 @@ export const ANSWERS: Answer[] = [
       'Lower over three seconds. If you have to swing to get them up, go lighter.',
     ],
     videoQuery: 'dumbbell lateral raise proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'SPRINT',
@@ -770,6 +820,7 @@ export const ANSWERS: Answer[] = [
       'Build to full speed over 20–30 metres rather than exploding from cold.',
     ],
     videoQuery: 'proper sprinting form technique',
+    challenge: '6 × 40 metres',
   },
   {
     name: 'FARMERS',
@@ -785,6 +836,7 @@ export const ANSWERS: Answer[] = [
       'Stop when your posture breaks, not when your grip does.',
     ],
     videoQuery: "farmer's carry proper form",
+    challenge: '3 × 30 metres',
   },
   {
     name: 'SKIPROPE',
@@ -800,6 +852,7 @@ export const ANSWERS: Answer[] = [
       'Jump an inch off the floor and land on the balls of the feet — heels never touch.',
     ],
     videoQuery: 'jump rope technique beginners',
+    challenge: '5 × 60 seconds',
   },
   {
     name: 'HANGCLEAN',
@@ -815,6 +868,7 @@ export const ANSWERS: Answer[] = [
       'Pull under and catch on the front delts with the elbows whipping through fast.',
     ],
     videoQuery: 'barbell hang clean technique',
+    challenge: '5 × 3',
   },
 
   /* ── cycle 10 ── */
@@ -832,6 +886,7 @@ export const ANSWERS: Answer[] = [
       'Move slowly. Speed here turns it into arm-waving.',
     ],
     videoQuery: 'russian twist proper form',
+    challenge: '3 × 20 total',
   },
   {
     name: 'SKATER',
@@ -847,6 +902,7 @@ export const ANSWERS: Answer[] = [
       'Pause a beat on each landing before bounding back the other way.',
     ],
     videoQuery: 'skater jump exercise proper form',
+    challenge: '3 × 12 each side',
   },
   {
     name: 'JUMPING',
@@ -862,6 +918,7 @@ export const ANSWERS: Answer[] = [
       'Stay light and quiet — loud landings mean you are collapsing through the ankles.',
     ],
     videoQuery: 'jumping jacks proper form',
+    challenge: '3 × 40',
   },
   {
     name: 'FACEPULL',
@@ -877,6 +934,7 @@ export const ANSWERS: Answer[] = [
       'Finish with the hands beside your ears. Light weight, high reps, every session.',
     ],
     videoQuery: 'face pull proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'HANDSTAND',
@@ -892,6 +950,7 @@ export const ANSWERS: Answer[] = [
       'Come down before your alignment breaks, not after it.',
     ],
     videoQuery: 'handstand hold wall beginner tutorial',
+    challenge: '4 × 20 seconds',
   },
 
   /* ── cycle 11 ── */
@@ -909,6 +968,7 @@ export const ANSWERS: Answer[] = [
       'Let it fall and absorb with another hinge. This is a hinge, not a squat.',
     ],
     videoQuery: 'kettlebell swing proper form',
+    challenge: '4 × 15',
   },
   {
     name: 'ROWING',
@@ -924,6 +984,7 @@ export const ANSWERS: Answer[] = [
       'Pull the handle to the bottom of the ribs and never round the lower back.',
     ],
     videoQuery: 'rowing machine proper technique',
+    challenge: '4 × 250 metres',
   },
   {
     name: 'LATPULL',
@@ -939,6 +1000,7 @@ export const ANSWERS: Answer[] = [
       'Bring the bar to the collarbone. Never behind the neck.',
     ],
     videoQuery: 'lat pulldown proper form',
+    challenge: '3 × 12',
   },
   {
     name: 'PUSHDOWN',
@@ -954,6 +1016,7 @@ export const ANSWERS: Answer[] = [
       'Come back up only until the forearms reach parallel, then go again.',
     ],
     videoQuery: 'cable triceps pushdown proper form',
+    challenge: '3 × 15',
   },
   {
     name: 'KNEERAISE',
@@ -969,6 +1032,7 @@ export const ANSWERS: Answer[] = [
       'Lower slowly and kill the swing completely before the next rep.',
     ],
     videoQuery: 'hanging knee raise proper form',
+    challenge: '3 × 10',
   },
 
   /* ── cycle 12 ── */
@@ -986,6 +1050,7 @@ export const ANSWERS: Answer[] = [
       'Stop when the hamstrings tighten, then drive the hips forward to stand tall.',
     ],
     videoQuery: 'hip hinge proper form beginners',
+    challenge: '3 × 12',
   },
   {
     name: 'HOLLOW',
@@ -1001,6 +1066,7 @@ export const ANSWERS: Answer[] = [
       'Lower the legs only as far as you can hold the back down. Bend the knees to regress.',
     ],
     videoQuery: 'hollow body hold proper form',
+    challenge: '3 × 20 seconds',
   },
   {
     name: 'PISTOLS',
@@ -1016,6 +1082,7 @@ export const ANSWERS: Answer[] = [
       'Regress to a box or hold a support until you can control the whole descent.',
     ],
     videoQuery: 'pistol squat progression tutorial',
+    challenge: '3 × 5 each leg',
   },
   {
     name: 'INCHWORM',
@@ -1031,6 +1098,7 @@ export const ANSWERS: Answer[] = [
       'Walk them back in, stand up, repeat. Core braced the whole way.',
     ],
     videoQuery: 'inchworm exercise proper form',
+    challenge: '3 × 8',
   },
   {
     name: 'ARMCIRCLE',
@@ -1046,6 +1114,7 @@ export const ANSWERS: Answer[] = [
       'This is a warm-up, not a strength move — keep it light and controlled.',
     ],
     videoQuery: 'arm circles warm up proper form',
+    challenge: '2 × 20 each way',
   },
 ];
 

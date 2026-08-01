@@ -2,6 +2,7 @@
 
 import { Dumbbell, Flame, Share2, Shuffle, Target, Trophy } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import type { MuscleRegion } from '@/data/muscles';
 import { MAX_GUESSES, musclesOf } from '@/data/exercises';
 import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
@@ -10,6 +11,8 @@ import { useGameStore } from '@/store/useGameStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { BodyFigure } from './BodyFigure';
 import { Countdown } from './Countdown';
+import { DailyChallenge } from './DailyChallenge';
+import { MuscleDetail } from './MuscleDetail';
 import { FormVideo } from './FormVideo';
 import { Modal } from './Modal';
 
@@ -39,6 +42,7 @@ export function ResultModal() {
 
   const colourblind = useSettingsStore((s) => s.colourblind);
   const [sharing, setSharing] = useState(false);
+  const [region, setRegion] = useState<MuscleRegion | null>(null);
   const won = status === 'won';
 
   // On the result screen the full answer is public, so the figure switches
@@ -131,6 +135,15 @@ export function ResultModal() {
             missed={probed}
             category={categoryRegions}
             className="mx-auto h-44 w-auto"
+            onSelectRegion={(r) => setRegion((cur) => (cur === r ? null : r))}
+            selected={region}
+          />
+          {/* The modal only exists after the round, so the answer is public. */}
+          <MuscleDetail
+            region={region}
+            answer={target}
+            revealed
+            onClose={() => setRegion(null)}
           />
           <p className="mt-1 text-center text-xs leading-relaxed text-slate-400">
             <span className="font-semibold text-state-correct">
@@ -141,6 +154,8 @@ export function ResultModal() {
             )}
           </p>
         </section>
+
+        <DailyChallenge />
 
         {!won && (
           <p className="text-sm leading-relaxed text-slate-300">

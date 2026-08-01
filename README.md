@@ -8,7 +8,7 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
-npm test                 # 84 unit tests
+npm test                 # 94 unit tests
 npm run cloud:check      # verify Supabase keys, schema and RLS
 npm run typecheck
 npm run lint
@@ -62,6 +62,19 @@ and narrowing is a deliberate click.
 figure, legend and the share grid. The game runs two colour channels
 (green/yellow on the board, green/wine on the figure) and red-green deficiency
 breaks both at once, so all of them move together.
+
+**Today's challenge** turns the answer into a prescription — `4 × 8 Burpee`,
+`3 × 45 seconds Plank` — with its own streak, tracked separately from the puzzle
+streak. Getting the word is not the same achievement as doing the work, and
+conflating them would let one paper over the other. Marking it done is the
+honour system, deliberately: a browser cannot verify a set of squats, and
+pretending otherwise would be worse than trusting the player.
+
+**Tap any muscle** on the figure to see what else trains it. Mid-game that is a
+strategic aid — knowing three other exercises that hit the lats tells you what to
+probe. After the round it names whether the answer worked that muscle and how.
+The answer is excluded from those lists at all times, so the panel can never
+become an oracle.
 
 **Form videos.** Every one of the 60 answers links to a real, curated coaching
 video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
@@ -321,7 +334,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 84 tests over the things that must not silently break:
+`npm test` — 94 tests over the things that must not silently break:
 
 - **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

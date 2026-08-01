@@ -18,6 +18,7 @@ import { Header } from './Header';
 import { HelpModal } from './HelpModal';
 import { HintBar } from './HintBar';
 import { Keyboard } from './Keyboard';
+import { MuscleDetail } from './MuscleDetail';
 import { MuscleLegend } from './MuscleLegend';
 import { PostGamePanel, PracticeBar } from './PostGamePanel';
 import { ResultModal } from './ResultModal';
@@ -72,6 +73,7 @@ export function Game() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [region, setRegion] = useState<MuscleRegion | null>(null);
 
   const initAuth = useAuthStore((s) => s.init);
   const loadSettings = useSettingsStore((s) => s.load);
@@ -127,8 +129,17 @@ export function Game() {
       missed={feedback.missed}
       category={categoryRegions}
       className="h-auto w-full"
+      onSelectRegion={(r) => setRegion((cur) => (cur === r ? null : r))}
+      selected={region}
     />
   );
+
+  /*
+   * The answer is only safe to describe once the round is over. While it is
+   * live, MuscleDetail gets `null` so it can list other exercises without
+   * becoming an oracle for today's word.
+   */
+  const answerRevealed = gameStatus !== 'playing';
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -211,6 +222,17 @@ export function Game() {
         >
           {/* No width cap — the figure should use the whole rail. */}
           <div className="w-full">{figure}</div>
+          <MuscleDetail
+            region={region}
+            answer={target}
+            revealed={answerRevealed}
+            onClose={() => setRegion(null)}
+          />
+          {!region && (
+            <p className="text-center text-[11px] leading-snug text-slate-500">
+              Tap a muscle to see what else trains it.
+            </p>
+          )}
           <MuscleLegend className="w-full max-w-[13rem]" detailed />
         </aside>
       </div>
