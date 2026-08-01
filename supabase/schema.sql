@@ -70,6 +70,28 @@ create trigger fitdle_progress_touch
   execute function public.fitdle_touch_updated_at();
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Trusted clock.
+--
+-- The client must not decide which day it is, or winding the system clock
+-- forward plays tomorrow's puzzle early. The obvious fix — read the `Date`
+-- response header from any Supabase call — does not work: `Date` is not a
+-- CORS-safelisted response header, so cross-origin JavaScript reads null even
+-- though the header is on the wire.
+--
+-- So the time comes back in the BODY instead. `stable` rather than `volatile`
+-- so PostgREST will expose it over GET, and execute is granted to anon because
+-- knowing the current time is not a secret.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.fitdle_server_time()
+returns timestamptz
+language sql
+stable
+as $$ select now() $$;
+
+grant execute on function public.fitdle_server_time() to anon, authenticated;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- A note on trust.
 --
 -- The client computes and uploads its own streak, so a determined user can

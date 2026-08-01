@@ -1,4 +1,5 @@
 import { ANSWERS, type Answer } from '@/data/exercises';
+import { trustedNow } from '@/lib/trustedTime';
 
 /**
  * Deterministic daily word.
@@ -22,7 +23,7 @@ import { ANSWERS, type Answer } from '@/data/exercises';
  * jumps by 70), so the answer index hops at month boundaries rather than
  * advancing by one. That is the specified behaviour and is preserved.
  */
-export function getDailySeed(date: Date = new Date()): number {
+export function getDailySeed(date: Date = trustedNow()): number {
   return (
     date.getUTCFullYear() * 10000 +
     (date.getUTCMonth() + 1) * 100 +
@@ -30,16 +31,16 @@ export function getDailySeed(date: Date = new Date()): number {
   );
 }
 
-export function getDailyIndex(date: Date = new Date()): number {
+export function getDailyIndex(date: Date = trustedNow()): number {
   return getDailySeed(date) % ANSWERS.length;
 }
 
-export function getDailyExercise(date: Date = new Date()): Answer {
+export function getDailyExercise(date: Date = trustedNow()): Answer {
   return ANSWERS[getDailyIndex(date)];
 }
 
 /** Grid width for a given day. Varies 5–9 and is itself a clue. */
-export function getDailyWordLength(date: Date = new Date()): number {
+export function getDailyWordLength(date: Date = trustedNow()): number {
   return getDailyExercise(date).name.length;
 }
 
@@ -73,7 +74,7 @@ export function getPuzzleNumber(seed: number): number {
 }
 
 /** Milliseconds until the next UTC midnight, for the countdown timer. */
-export function msUntilNextPuzzle(now: Date = new Date()): number {
+export function msUntilNextPuzzle(now: Date = trustedNow()): number {
   const next = Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),

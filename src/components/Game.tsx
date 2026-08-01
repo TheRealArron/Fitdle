@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
+import { syncTrustedTime } from '@/lib/trustedTime';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
@@ -85,6 +86,16 @@ export function Game() {
     initAuth();
     // Client-only: reads localStorage and stamps <html> attributes.
     loadSettings();
+
+    /*
+     * Correct the clock against the server, then re-init if that changed which
+     * day it is. Deliberately after the first initGame: the board renders
+     * immediately on the local clock rather than waiting on a network round
+     * trip, and snaps to the true day a moment later if they disagree.
+     */
+    void syncTrustedTime().then((ok) => {
+      if (ok && useGameStore.getState().seed !== getDailySeed()) initGame();
+    });
   }, [initGame, initAuth, loadSettings]);
 
   // A tab left open across midnight UTC would keep serving yesterday's word.

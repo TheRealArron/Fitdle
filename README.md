@@ -241,6 +241,35 @@ centred itself within that column instead of the page. Equal rails make the
 board's centre exactly the viewport's centre at every width; a test asserts
 `boardCentre === keyboardCentre === viewportCentre` across five viewports.
 
+### Security posture
+
+| Control | State |
+|---|---|
+| Row-level security | Enabled, four owner-only policies, **verified live** by `cloud:check` returning `42501` on an anonymous write |
+| Clock rewind (replay old puzzles) | Blocked by the monotonic `highSeed` high-water mark |
+| Clock *forward* skip (play tomorrow early) | Blocked once `fitdle_server_time()` exists — the daily seed comes from the server, not the browser |
+| Token exfiltration after an XSS | Blocked by `connect-src` pinned to self + your one Supabase project |
+| Clickjacking an authenticated session | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
+| Plugin / base-tag escalation | Blocked by `object-src 'none'`, `base-uri 'self'` |
+| Inline script injection | **Not** blocked — see the CSP note in [next.config.ts](next.config.ts) |
+| Answer list in the bundle | **Not** protected. A determined user can read every future answer |
+| Streak authenticity | **Not** protected. The client computes and uploads its own streak |
+
+The last two need a server that owns the answer and the scoring. Everything
+above them is done and tested.
+
+#### The trusted clock, and a trap worth knowing about
+
+`highSeed` stops someone winding the clock *back* to farm old puzzles, but not
+*forward* to play tomorrow early — that just looks like time passing.
+
+The obvious fix is to read the `Date` response header off any Supabase call.
+**It does not work, and it fails silently.** `Date` is not a CORS-safelisted
+response header, so cross-origin JavaScript reads `null` even though `curl` sees
+the header perfectly. It was built that way first, and the clock-skew test
+caught it. The time now comes back in the response *body*, from a small `stable`
+SQL function in [schema.sql](supabase/schema.sql).
+
 ### Accounts and cloud sync
 
 Real accounts via Supabase: email/password sign-up and sign-in, sessions that

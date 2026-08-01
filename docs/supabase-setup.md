@@ -63,6 +63,11 @@ That creates `public.fitdle_progress` (one row per user), enables row-level
 security, and adds four owner-only policies so a signed-in user can only touch
 their own row.
 
+> **Re-run this file if you set the project up before the trusted-clock function
+> existed.** `npm run cloud:check` will tell you if it is missing. Until it is
+> there, the daily puzzle follows the player's own system clock and winding it
+> forward plays tomorrow early.
+
 ## 5. Verify
 
 ```bash
@@ -75,6 +80,7 @@ npm run cloud:check
 ✓ table public.fitdle_progress exists
 ✓ RLS enforced  anonymous reads return nothing, as they should
 ✓ anonymous writes refused by RLS  42501 insufficient_privilege
+✓ trusted clock available  server time readable, local drift 0s
 
 Cloud sync is ready.
 ```
