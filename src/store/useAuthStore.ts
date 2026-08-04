@@ -205,6 +205,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   clearError: () => set({ error: null, notice: null }),
 }));
 
+/**
+ * Replaces the cloud copy outright. Used by "reset statistics", where merging
+ * would restore exactly what the player asked to delete.
+ */
+export async function overwriteCloudIfSignedIn(save: SaveData): Promise<void> {
+  const { user, cloudAvailable } = useAuthStore.getState();
+  if (!cloudAvailable || !user) return;
+  await useAuthStore.getState().overwriteCloud(save);
+}
+
 /** Pushes local progress to the cloud after a completed daily, if signed in. */
 export async function syncAfterGame(): Promise<void> {
   const { user, cloudAvailable } = useAuthStore.getState();

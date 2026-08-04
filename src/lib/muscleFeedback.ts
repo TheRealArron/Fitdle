@@ -1,4 +1,4 @@
-import { getExercise, musclesOf, type Exercise } from '@/data/exercises';
+import { getExercise, musclesOf } from '@/data/exercises';
 import type { MuscleRegion } from '@/data/muscles';
 
 export interface MuscleFeedback {
@@ -21,7 +21,9 @@ export interface MuscleFeedback {
  */
 export function accumulateMuscleFeedback(
   guesses: string[],
-  target: Exercise,
+  // Structural, not nominal: the daily target arrives from the API as a plain
+  // reveal payload, not a catalogue Exercise, and only the muscles matter here.
+  target: { primary: MuscleRegion[]; secondary: MuscleRegion[] },
 ): MuscleFeedback {
   const targetMuscles = musclesOf(target);
   const shared = new Set<MuscleRegion>();
@@ -40,7 +42,10 @@ export function accumulateMuscleFeedback(
 }
 
 /** How much of the answer's muscle map you have uncovered, 0–1. */
-export function discoveryRatio(shared: ReadonlySet<MuscleRegion>, target: Exercise): number {
+export function discoveryRatio(
+  shared: ReadonlySet<MuscleRegion>,
+  target: { primary: MuscleRegion[]; secondary: MuscleRegion[] },
+): number {
   const total = musclesOf(target).size;
   return total === 0 ? 0 : shared.size / total;
 }

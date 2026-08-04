@@ -30,7 +30,7 @@ export function ResultModal() {
   const open = useGameStore((s) => s.modalOpen);
   const setModalOpen = useGameStore((s) => s.setModalOpen);
   const status = useGameStore((s) => s.status);
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const guesses = useGameStore((s) => s.guesses);
   const evaluations = useGameStore((s) => s.evaluations);
   const streak = useGameStore((s) => s.streak);
@@ -45,16 +45,26 @@ export function ResultModal() {
   const [region, setRegion] = useState<MuscleRegion | null>(null);
   const won = status === 'won';
 
+  /*
+   * `reveal` is null until the server discloses the answer, which it only does
+   * once the round is over. This modal cannot render before then — and that is
+   * the guarantee, not a formality: there is no client-side path to the answer.
+   */
+  const hasAnswer = target !== null;
+
   // On the result screen the full answer is public, so the figure switches
   // from "what you probed" to the complete muscle map — the teaching payoff.
-  const answerMuscles = useMemo(() => musclesOf(target), [target]);
+  const answerMuscles = useMemo(
+    () => (target ? musclesOf(target) : new Set<MuscleRegion>()),
+    [target],
+  );
   const probed = useMemo(
-    () => accumulateMuscleFeedback(guesses, target).missed,
+    () => (target ? accumulateMuscleFeedback(guesses, target).missed : new Set<MuscleRegion>()),
     [guesses, target],
   );
   const categoryRegions = useMemo(
-    () => new Set(REGIONS_IN_GROUP[target.group]),
-    [target.group],
+    () => (target ? new Set(REGIONS_IN_GROUP[target.group]) : new Set<MuscleRegion>()),
+    [target],
   );
 
   const onShare = async () => {
@@ -77,10 +87,11 @@ export function ResultModal() {
 
   return (
     <Modal
-      open={open && status !== 'playing'}
+      open={open && status !== 'playing' && hasAnswer}
       onClose={() => setModalOpen(false)}
       title={isPractice ? (won ? 'Practice: solved' : 'Practice: missed') : won ? 'Rep completed' : 'Set failed'}
     >
+      {!target ? null : (
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3">
           <div
@@ -142,7 +153,6 @@ export function ResultModal() {
           <MuscleDetail
             region={region}
             answer={target}
-            revealed
             onClose={() => setRegion(null)}
           />
           <p className="mt-1 text-center text-xs leading-relaxed text-slate-400">
@@ -218,6 +228,7 @@ export function ResultModal() {
           )}
         </div>
       </div>
+      )}
     </Modal>
   );
 }

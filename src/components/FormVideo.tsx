@@ -2,12 +2,8 @@
 
 import { CirclePlay, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
-import {
-  formVideoId,
-  searchVideoUrl,
-  videoThumbnailUrl,
-  type Answer,
-} from '@/data/exercises';
+import { searchVideoUrl, videoThumbnailUrl } from '@/data/exercises';
+import type { RevealedAnswer } from '@/lib/api';
 
 /**
  * Link to a curated form video, with a thumbnail pulled straight from YouTube's
@@ -18,9 +14,10 @@ import {
  * image is dropped and the row degrades to a plain link rather than showing a
  * broken frame. The search fallback below it can never 404.
  */
-export function FormVideo({ answer }: { answer: Answer }) {
+export function FormVideo({ answer }: { answer: RevealedAnswer }) {
   const [thumbFailed, setThumbFailed] = useState(false);
-  const id = formVideoId(answer.name);
+  // Curated id comes from the server with the reveal; practice has none.
+  const id = answer.videoId;
 
   if (!id) {
     return (

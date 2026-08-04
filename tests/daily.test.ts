@@ -1,15 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ANSWERS, CATALOGUE, exercisesOfLength, isValidGuess } from '@/data/exercises';
+import { CATALOGUE, exercisesOfLength, isValidGuess } from '@/data/exercises';
+import { ANSWER_ORDER } from '@/server/answers';
 import { GROUP_OF_REGION } from '@/data/muscles';
-import {
-  getDailySeed,
-  getDailyIndex,
-  getDailyExercise,
-  getDailyWordLength,
-  daysBetweenSeeds,
-  msUntilNextPuzzle,
-} from '@/lib/daily';
+import { getDailySeed, daysBetweenSeeds, msUntilNextPuzzle } from '@/lib/daily';
+import { answerFor } from '@/server/game';
 
 test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-07-30T12:00:00Z')), 20260730);
@@ -17,10 +12,10 @@ test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-12-31T23:59:59Z')), 20261231);
 });
 
-test('index is seed modulo the answer pool', () => {
-  const date = new Date('2026-07-30T12:00:00Z');
-  assert.equal(getDailyIndex(date), 20260730 % ANSWERS.length);
-  assert.equal(getDailyExercise(date), ANSWERS[20260730 % ANSWERS.length]);
+test('index is seed modulo the answer pool — on the SERVER', () => {
+  // The mapping lives in server/game.ts now. This is the whole point: the
+  // browser cannot compute it, so it cannot read tomorrow's answer.
+  assert.equal(answerFor(20260730).name, ANSWER_ORDER[20260730 % ANSWER_ORDER.length]);
 });
 
 test('every timezone gets the same word at the same instant', () => {
@@ -37,11 +32,12 @@ test('the answer only changes at UTC midnight', () => {
 });
 
 test('the answer is stable across an entire UTC day', () => {
-  const indices = new Set<number>();
+  const names = new Set<string>();
   for (let h = 0; h < 24; h++) {
-    indices.add(getDailyIndex(new Date(`2026-07-30T${String(h).padStart(2, '0')}:30:00Z`)));
+    const d = new Date(`2026-07-30T${String(h).padStart(2, '0')}:30:00Z`);
+    names.add(answerFor(getDailySeed(d)).name);
   }
-  assert.equal(indices.size, 1);
+  assert.equal(names.size, 1);
 });
 
 test('day arithmetic spans month and year boundaries', () => {
@@ -61,11 +57,11 @@ test('countdown lands on the next UTC midnight', () => {
 test('ANSWERS order is load-bearing and must stay pinned', () => {
   // Reordering silently rewrites every past and future puzzle. So does changing
   // the pool size, since the index is a modulus — see the caveat in exercises.ts.
-  assert.equal(ANSWERS.length, 60);
-  assert.equal(ANSWERS[0].name, 'SQUAT');
-  assert.equal(ANSWERS[59].name, 'ARMCIRCLE');
+  assert.equal(ANSWER_ORDER.length, 60);
+  assert.equal(ANSWER_ORDER[0], 'SQUAT');
+  assert.equal(ANSWER_ORDER[59], 'ARMCIRCLE');
   assert.equal(
-    ANSWERS.slice(0, 5).map((a) => a.name).join(','),
+    ANSWER_ORDER.slice(0, 5).join(','),
     'SQUAT,BURPEE,CLIMBER,DEADLIFT,HIPTHRUST',
   );
 });
@@ -73,19 +69,18 @@ test('ANSWERS order is load-bearing and must stay pinned', () => {
 test('the pool divides evenly into the length cycle', () => {
   // A pool that is not a multiple of 5 would break the 5,6,7,8,9 rotation at
   // the wrap-around, giving two same-width days in a row.
-  assert.equal(ANSWERS.length % 5, 0);
+  assert.equal(ANSWER_ORDER.length % 5, 0);
   const perLength = new Map<number, number>();
-  for (const a of ANSWERS) {
-    perLength.set(a.name.length, (perLength.get(a.name.length) ?? 0) + 1);
+  for (const name of ANSWER_ORDER) {
+    perLength.set(name.length, (perLength.get(name.length) ?? 0) + 1);
   }
   assert.deepEqual([...perLength.entries()].sort(), [[5, 12], [6, 12], [7, 12], [8, 12], [9, 12]]);
 });
 
 test('answer lengths cycle 5,6,7,8,9 so consecutive days differ in grid width', () => {
-  ANSWERS.forEach((a, i) => {
-    assert.equal(a.name.length, 5 + (i % 5), `${a.name} at index ${i} breaks the cycle`);
+  ANSWER_ORDER.forEach((name, i) => {
+    assert.equal(name.length, 5 + (i % 5), `${name} at index ${i} breaks the cycle`);
   });
-  assert.equal(getDailyWordLength(new Date('2026-07-30T00:00:00Z')), ANSWERS[20260730 % 40].name.length);
 });
 
 test('every catalogue name is alphabetic, uppercase and unique', () => {
@@ -97,15 +92,6 @@ test('every catalogue name is alphabetic, uppercase and unique', () => {
   }
 });
 
-test('every answer carries coaching content', () => {
-  // The spec's dictionary had mutilated words with nothing to teach. An answer
-  // without how-to text is a puzzle with no payoff.
-  for (const a of ANSWERS) {
-    assert.ok(a.howTo.length >= 3, `${a.name} has too few coaching cues`);
-    assert.ok(a.videoQuery.length > 0, `${a.name} has no video query`);
-    assert.ok(a.display.length > 0, `${a.name} has no display name`);
-  }
-});
 
 test('every answer length has enough guessable candidates to be a real puzzle', () => {
   // If a length had only a handful of options the answer would be brute-forceable.

@@ -24,7 +24,7 @@ interface PostGamePanelProps {
  */
 export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProps) {
   const status = useGameStore((s) => s.status);
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const guesses = useGameStore((s) => s.guesses);
   const evaluations = useGameStore((s) => s.evaluations);
   const streak = useGameStore((s) => s.streak);
@@ -35,6 +35,10 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
   const [sharing, setSharing] = useState(false);
 
   const won = status === 'won';
+
+  // Only rendered once the round is over, at which point the server has sent
+  // the answer. Guarded rather than asserted so a race cannot crash the page.
+  if (!target) return null;
 
   const onShare = async () => {
     setSharing(true);

@@ -1,4 +1,3 @@
-import { ANSWERS, type Answer } from '@/data/exercises';
 import { trustedNow } from '@/lib/trustedTime';
 
 /**
@@ -7,7 +6,6 @@ import { trustedNow } from '@/lib/trustedTime';
  * The seed arithmetic is byte-for-byte the specification's:
  *
  *     year * 10000 + (month + 1) * 100 + date      // => YYYYMMDD
- *     index = seed % ANSWERS.length
  *
  * The one deliberate deviation: the spec read *local* date parts, which means
  * a player in Auckland and a player in Los Angeles are on different puzzles for
@@ -15,9 +13,8 @@ import { trustedNow } from '@/lib/trustedTime';
  * word today, so the date parts are read in UTC. Everything downstream — the
  * modulus, the answer order, the resulting answer — is unchanged.
  *
- * The answer pool is `ANSWERS` (see data/exercises.ts), which replaced the
- * spec's 5-letter `DICTIONARY`. Its order is protocol for the same reason the
- * dictionary's was.
+ * This module knows the DATE but not the ANSWER. `seed -> answer` lives in
+ * server/game.ts, so the mapping never reaches the browser.
  *
  * Consequence worth knowing: YYYYMMDD is not contiguous (20260131 -> 20260201
  * jumps by 70), so the answer index hops at month boundaries rather than
@@ -29,19 +26,6 @@ export function getDailySeed(date: Date = trustedNow()): number {
     (date.getUTCMonth() + 1) * 100 +
     date.getUTCDate()
   );
-}
-
-export function getDailyIndex(date: Date = trustedNow()): number {
-  return getDailySeed(date) % ANSWERS.length;
-}
-
-export function getDailyExercise(date: Date = trustedNow()): Answer {
-  return ANSWERS[getDailyIndex(date)];
-}
-
-/** Grid width for a given day. Varies 5–9 and is itself a clue. */
-export function getDailyWordLength(date: Date = trustedNow()): number {
-  return getDailyExercise(date).name.length;
 }
 
 /** `20260730` -> `2026-07-30`. Display only. */

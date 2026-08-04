@@ -7,10 +7,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
 import { syncTrustedTime } from '@/lib/trustedTime';
-import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
-import { useGameStore, selectHints, revealedCount } from '@/store/useGameStore';
+import { useGameStore, selectHints } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
 import { ExerciseIndex } from './ExerciseIndex';
@@ -50,15 +49,25 @@ export function Game() {
   const hydrated = useGameStore((s) => s.hydrated);
   const clockRollback = useGameStore((s) => s.clockRollback);
 
-  const guesses = useGameStore((s) => s.guesses);
   const revealingRow = useGameStore((s) => s.revealingRow);
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const wordLength = useGameStore((s) => s.wordLength);
   const gameStatus = useGameStore((s) => s.status);
   const mode = useGameStore((s) => s.mode);
   const modalOpen = useGameStore((s) => s.modalOpen);
   const setModalOpen = useGameStore((s) => s.setModalOpen);
+  const muscles = useGameStore((s) => s.muscles);
   const hints = useGameStore(useShallow(selectHints));
+
+  /*
+   * The figure must not light up before the row finishes flipping. The server
+   * sends the new overlap with the guess response, so the previous value is
+   * kept and shown until the animation completes.
+   */
+  const [previousMuscles, setPreviousMuscles] = useState(muscles);
+  useEffect(() => {
+    if (revealingRow === null) setPreviousMuscles(muscles);
+  }, [revealingRow, muscles]);
 
   /*
    * The daily is over AND the player has dismissed the result. Practice is
@@ -108,18 +117,20 @@ export function Game() {
   }, [initGame]);
 
   /*
-   * Derived with useMemo rather than a store selector on purpose: this returns
-   * fresh Sets every call, and Zustand v5 compares snapshots by reference —
-   * a selector would re-render forever. `guesses` is a stable array reference.
+   * Muscle feedback is computed by the SERVER and arrives with each response —
+   * the client cannot derive it any more, because deriving it needs the answer.
+   *
+   * Still wrapped in useMemo: these are Sets built from arrays, so a bare
+   * selector would return a new reference every render and Zustand v5 compares
+   * by reference. Held back during a flip so the figure cannot outrun the tiles.
    */
-  const feedback = useMemo(
-    () =>
-      accumulateMuscleFeedback(
-        guesses.slice(0, revealedCount({ guesses, revealingRow })),
-        target,
-      ),
-    [guesses, revealingRow, target],
-  );
+  const feedback = useMemo(() => {
+    const settled = revealingRow === null;
+    return {
+      shared: new Set(settled ? muscles.shared : previousMuscles.shared),
+      missed: new Set(settled ? muscles.missed : previousMuscles.missed),
+    };
+  }, [muscles, previousMuscles, revealingRow]);
 
   const categoryRegions = useMemo(
     () => (hints.category ? new Set(REGIONS_IN_GROUP[hints.category]) : EMPTY),
@@ -144,13 +155,6 @@ export function Game() {
       selected={region}
     />
   );
-
-  /*
-   * The answer is only safe to describe once the round is over. While it is
-   * live, MuscleDetail gets `null` so it can list other exercises without
-   * becoming an oracle for today's word.
-   */
-  const answerRevealed = gameStatus !== 'playing';
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -233,12 +237,7 @@ export function Game() {
         >
           {/* No width cap — the figure should use the whole rail. */}
           <div className="w-full">{figure}</div>
-          <MuscleDetail
-            region={region}
-            answer={target}
-            revealed={answerRevealed}
-            onClose={() => setRegion(null)}
-          />
+          <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
           {!region && (
             <p className="text-center text-[11px] leading-snug text-slate-500">
               Tap a muscle to see what else trains it.

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ANSWERS } from '@/data/exercises';
+import { CATALOGUE } from '@/data/exercises';
+
+const ANSWERS = CATALOGUE.filter((e) => e.isAnswer);
 import { evaluateGuess } from '@/lib/evaluate';
 import { answersOfLength, possibleAnswers } from '@/lib/candidates';
 

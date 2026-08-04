@@ -18,6 +18,13 @@
  *   4. Drop the manifest and generated icons in beside it.
  *
  * Output: extension-dist/ — load it unpacked via chrome://extensions.
+ *
+ * The API routes are moved aside for the duration of the build. `output:
+ * 'export'` refuses to build at all if a route handler exists, and the
+ * extension has no server to host one on — it calls the deployed instance
+ * instead (NEXT_PUBLIC_API_URL). `pageExtensions` looked like a tidier filter
+ * but breaks Next's own module resolution, so this is the honest version:
+ * move, build, always move back.
  */
 
 import { createHash } from 'node:crypto';
@@ -35,13 +42,24 @@ const extDir = path.join(root, 'extension');
 const ASSET_DIR = 'next-assets';
 const INLINE_DIR = 'inline';
 
+const API_DIR = path.join(root, 'src', 'app', 'api');
+const API_PARKED = path.join(root, '.api-parked');
+
 function run() {
   console.log('› building static export…');
-  execFileSync('npx', ['next', 'build'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: { ...process.env, BUILD_TARGET: 'extension' },
-  });
+
+  const hadApi = fs.existsSync(API_DIR);
+  if (hadApi) fs.renameSync(API_DIR, API_PARKED);
+  try {
+    execFileSync('npx', ['next', 'build'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: { ...process.env, BUILD_TARGET: 'extension' },
+    });
+  } finally {
+    // finally, not after: a failed build must not leave the routes parked.
+    if (hadApi) fs.renameSync(API_PARKED, API_DIR);
+  }
 
   if (!fs.existsSync(outDir)) {
     throw new Error('next build did not produce out/ — is output:"export" active?');

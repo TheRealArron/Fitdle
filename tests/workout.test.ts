@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ANSWERS, CATALOGUE } from '@/data/exercises';
+import { CATALOGUE } from '@/data/exercises';
+import { ANSWER_ORDER, COACHING } from '@/server/answers';
+
+// Rejoin what the client/server split separated, for assertions only.
+const ANSWERS = ANSWER_ORDER.map((name) => ({
+  ...CATALOGUE.find((e) => e.name === name)!,
+  ...COACHING[name],
+}));
 import { mergeSaves } from '@/lib/cloudSync';
 import {
   commitWorkout,

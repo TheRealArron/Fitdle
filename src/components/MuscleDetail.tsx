@@ -3,18 +3,19 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useMemo } from 'react';
-import { CATALOGUE, type Exercise } from '@/data/exercises';
+import { CATALOGUE } from '@/data/exercises';
+import type { RevealedAnswer } from '@/lib/api';
 import { MUSCLE_LABEL, type MuscleRegion } from '@/data/muscles';
 
 interface MuscleDetailProps {
   region: MuscleRegion | null;
   /**
-   * Always supplied, even mid-game — it is needed to EXCLUDE the answer from
-   * the suggestion lists. Whether it may be described is `revealed`.
+   * Null while a daily round is live — the browser genuinely does not know the
+   * answer, because the server has not sent it. That is the safe state: there
+   * is nothing to exclude and nothing to leak. Non-null once revealed (or in
+   * practice, where the client scores locally).
    */
-  answer: Exercise;
-  /** True once the round is over and the answer is public. */
-  revealed: boolean;
+  answer: RevealedAnswer | null;
   onClose: () => void;
 }
 
@@ -29,31 +30,31 @@ interface MuscleDetailProps {
  * It never names the answer while the game is live. `worksIt` is null until the
  * round is over precisely so this panel cannot become an oracle.
  */
-export function MuscleDetail({ region, answer, revealed, onClose }: MuscleDetailProps) {
+export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
   /*
-   * The answer is filtered out of BOTH lists at all times, not just once it is
-   * revealed.
+   * When the answer IS known (post-game, or practice) it is excluded from both
+   * lists, so the panel never restates what the modal already says.
    *
-   * This was a real leak: today's answer was BURPEE, which works the abs as an
-   * assistor, so tapping "Abs" mid-game listed BURPEE under "also involves it".
-   * A player could tap around the figure and read the answer straight off the
-   * suggestions. Excluding it always costs nothing — the lists are capped
-   * anyway, so nobody can tell one entry is missing.
+   * When it is not known — a live daily — nothing needs excluding, because the
+   * client cannot identify which of these words is today's. This used to be a
+   * real leak: the answer was filtered only once revealed, so tapping "Abs"
+   * mid-game listed BURPEE outright. Moving the answer server-side removes the
+   * leak at the source rather than patching the symptom.
    */
   const others = useMemo(() => {
     if (!region) return [];
-    return CATALOGUE.filter((e) => e.primary.includes(region) && e.name !== answer.name).slice(0, 4);
+    return CATALOGUE.filter((e) => e.primary.includes(region) && e.name !== answer?.name).slice(0, 4);
   }, [region, answer]);
 
   const assists = useMemo(() => {
     if (!region) return [];
     return CATALOGUE.filter(
-      (e) => e.secondary.includes(region) && !e.primary.includes(region) && e.name !== answer.name,
+      (e) => e.secondary.includes(region) && !e.primary.includes(region) && e.name !== answer?.name,
     ).slice(0, 3);
   }, [region, answer]);
 
   const worksIt =
-    revealed && region
+    answer && region
       ? answer.primary.includes(region) || answer.secondary.includes(region)
       : null;
 
@@ -71,7 +72,7 @@ export function MuscleDetail({ region, answer, revealed, onClose }: MuscleDetail
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <h4 className="text-sm font-semibold text-white">{MUSCLE_LABEL[region]}</h4>
-                {worksIt !== null && (
+                {worksIt !== null && answer && (
                   <p
                     className={`text-[11px] leading-snug ${
                       worksIt ? 'text-state-correct' : 'text-slate-500'

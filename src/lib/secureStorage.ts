@@ -46,6 +46,13 @@ export interface DayRecord {
   seed: number;
   guesses: string[];
   status: GameStatus;
+  /**
+   * The server's signed session for this day, stored so a reload resumes the
+   * same game rather than starting a fresh one. Opaque and unforgeable — the
+   * server re-verifies its HMAC on every request, so persisting it here grants
+   * no authority it did not already have.
+   */
+  serverState?: string;
 }
 
 export interface SaveData {
@@ -258,6 +265,8 @@ function isCoherent(d: unknown): d is SaveData {
       if (!day.guesses.every((g) => (g as string).length === width)) return false;
     }
     if (day.status !== 'playing' && day.status !== 'won' && day.status !== 'lost') return false;
+    // Opaque to us; the server validates it. Only the shape is checked here.
+    if (day.serverState !== undefined && typeof day.serverState !== 'string') return false;
   }
 
   return true;

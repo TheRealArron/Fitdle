@@ -2,16 +2,20 @@
 
 import { create } from 'zustand';
 import {
-  ANSWERS,
-  CATEGORY_HINT_AT,
-  EQUIPMENT_HINT_AT,
+  CATALOGUE,
   MAX_GUESSES,
   getExercise,
   isValidGuess,
-  type Answer,
+  musclesOf,
+  type Exercise,
 } from '@/data/exercises';
-import type { Equipment, MuscleGroup } from '@/data/muscles';
-import { getDailySeed, getDailyIndex } from '@/lib/daily';
+import type { Equipment, MuscleGroup, MuscleRegion } from '@/data/muscles';
+import {
+  fetchToday,
+  isRejection,
+  submitGuess as submitGuessApi,
+  type RevealedAnswer,
+} from '@/lib/api';
 import { evaluateGuess, buildKeyStates, type LetterState } from '@/lib/evaluate';
 import {
   loadSave,
@@ -32,31 +36,42 @@ export interface Toast {
 
 export type GameMode = 'daily' | 'practice';
 
+/**
+ * What the client knows about the target.
+ *
+ * For the DAILY this is null until the server reveals it — the browser cannot
+ * see today's answer, by construction. For PRACTICE the client picks and scores
+ * locally, which is safe precisely because practice touches no streak: leaking
+ * a practice answer costs nothing, and requiring a round trip per practice
+ * guess would make the mode worse for no gain.
+ */
+export type Target = RevealedAnswer;
+
 export interface GameState {
-  /* ── board ── */
   seed: number;
-  target: Answer;
-  /** Today's grid width. Varies 5–9 with the answer. */
   wordLength: number;
   guesses: string[];
   evaluations: LetterState[][];
   currentGuess: string;
   status: GameStatus;
-  /**
-   * Practice rounds are pure play: no persistence, no streak, no stats. Keeping
-   * them entirely out of the save is what stops "practise until you win" from
-   * becoming a streak exploit.
-   */
   mode: GameMode;
 
-  /* ── persistence ── */
+  /** Server-computed for the daily; locally derived in practice. */
+  muscles: { shared: MuscleRegion[]; missed: MuscleRegion[] };
+  hints: { category: MuscleGroup | null; equipment: Equipment | null; nextHintIn: number | null };
+  /** Non-null only once the round is over. The only path to the answer. */
+  reveal: Target | null;
+
+  /** Opaque signed session from the server. Daily only. */
+  serverState: string | null;
+  /** True when the API could not be reached; the daily is unplayable offline. */
+  offline: boolean;
+
   save: SaveData;
-  /** Mirrors `save.streak`; kept top-level per the specification's interface. */
   streak: number;
 
-  /* ── ui ── */
   hydrated: boolean;
-  /** Row mid-flip. Blocks input and defers keyboard/figure/hint updates. */
+  loading: boolean;
   revealingRow: number | null;
   shakeRow: number | null;
   modalOpen: boolean;
@@ -64,55 +79,80 @@ export interface GameState {
   tampered: boolean;
   clockRollback: boolean;
 
-  /* ── actions ── */
-  initGame: () => void;
+  initGame: () => Promise<void>;
   addLetter: (char: string) => void;
   removeLetter: () => void;
-  submitGuess: () => void;
+  submitGuess: () => Promise<void>;
   finishReveal: (row: number) => void;
   setToast: (message: string) => void;
   clearToast: () => void;
   clearShake: () => void;
   setModalOpen: (open: boolean) => void;
   resetProgress: () => void;
-  /** Start a random puzzle that cannot affect stats or the streak. */
   startPractice: () => void;
-  /** Return to today's puzzle, restoring the saved board. */
-  exitPractice: () => void;
-  /** Mark today's mini-challenge done. Daily-only, idempotent by seed. */
+  exitPractice: () => Promise<void>;
   markWorkoutDone: () => void;
 }
 
 let toastSeq = 0;
 
-/**
- * The initial state must NOT depend on the current date.
- *
- * This page is prerendered — at build time for the static export, at request
- * time otherwise — so anything seeded from `new Date()` here gets baked into
- * the HTML and then disagrees with the client on any later day, which React
- * reports as a hydration mismatch and recovers from by throwing the tree away.
- *
- * So the store boots from a fixed placeholder and `initGame` (client-only,
- * called from an effect) installs the real puzzle. Nothing is visible before
- * that: the board is rendered at opacity 0 until `hydrated` flips.
- */
-const PLACEHOLDER = ANSWERS[0];
+/** Answer-eligible words, for practice only. */
+const PRACTICE_POOL = CATALOGUE.filter((e) => e.isAnswer);
+
+const EMPTY_MUSCLES = { shared: [] as MuscleRegion[], missed: [] as MuscleRegion[] };
+const NO_HINTS = { category: null, equipment: null, nextHintIn: null };
+
+/** Local muscle overlap, used only in practice. Mirrors the server's rule. */
+function localMuscles(guesses: string[], answer: Exercise) {
+  const target = musclesOf(answer);
+  const shared = new Set<MuscleRegion>();
+  const missed = new Set<MuscleRegion>();
+  for (const name of guesses) {
+    const g = getExercise(name);
+    if (!g) continue;
+    for (const m of musclesOf(g)) (target.has(m) ? shared : missed).add(m);
+  }
+  return { shared: [...shared], missed: [...missed] };
+}
+
+function toTarget(e: Exercise): Target {
+  return {
+    name: e.name,
+    display: e.display,
+    group: e.group,
+    equipment: e.equipment,
+    difficulty: e.difficulty,
+    primary: e.primary,
+    secondary: e.secondary,
+    // Coaching content is server-only, so practice shows the muscle map and a
+    // search link rather than a curated video or a daily challenge.
+    howTo: [],
+    videoId: null,
+    videoQuery: `${e.display} proper form`,
+    challenge: '',
+  };
+}
 
 export const useGameStore = create<GameState>()((set, get) => ({
   seed: 0,
-  target: PLACEHOLDER,
-  wordLength: PLACEHOLDER.name.length,
+  wordLength: 5,
   guesses: [],
   evaluations: [],
   currentGuess: '',
   status: 'playing',
   mode: 'daily',
 
+  muscles: EMPTY_MUSCLES,
+  hints: NO_HINTS,
+  reveal: null,
+  serverState: null,
+  offline: false,
+
   save: defaultSave(),
   streak: 0,
 
   hydrated: false,
+  loading: true,
   revealingRow: null,
   shakeRow: null,
   modalOpen: false,
@@ -120,38 +160,69 @@ export const useGameStore = create<GameState>()((set, get) => ({
   tampered: false,
   clockRollback: false,
 
-  initGame: () => {
-    const seed = getDailySeed();
-    const target = ANSWERS[getDailyIndex()];
+  /**
+   * Asks the server for today's puzzle. The seed, the width and the scoring all
+   * come from there — a wound-forward local clock changes nothing.
+   */
+  initGame: async () => {
+    set({ loading: true });
 
     const { save: loaded, tampered } = loadSave();
-    const { save, day, alreadyComplete, clockRollback, streakBroken } = reconcile(loaded, seed);
+    const stored = loaded.day?.serverState ?? undefined;
 
-    // A stored board from a build with a different answer pool would have the
-    // wrong width; drop those rows rather than render a broken grid.
-    const restored = day.guesses.filter((g) => g.length === target.name.length);
-    if (restored.length !== day.guesses.length) {
-      day.guesses = restored;
-      save.day = day;
+    const result = await fetchToday(stored);
+
+    if (!result.ok) {
+      // Fail closed. Guessing offline would mean scoring locally, which needs
+      // the answer, which is the thing we just stopped shipping.
+      set({
+        loading: false,
+        hydrated: true,
+        offline: true,
+        toast: { id: ++toastSeq, message: 'Cannot reach the server — try again shortly' },
+      });
+      return;
     }
 
-    writeSave(save);
+    const d = result.data;
+    const { save, clockRollback, streakBroken } = reconcile(loaded, d.seed);
+
+    save.day = {
+      seed: d.seed,
+      guesses: d.guesses,
+      status: d.status,
+      serverState: d.state,
+    };
+
+    // The server is the authority on whether the round is finished, so the
+    // result is banked here rather than trusting a client-side status.
+    let next = save;
+    if (d.status !== 'playing') {
+      next = commitResult(save, d.seed, d.status === 'won', d.guesses.length, !clockRollback);
+      next.day = save.day;
+    }
+    writeSave(next);
 
     set({
-      seed,
-      target,
+      seed: d.seed,
       mode: 'daily',
-      wordLength: target.name.length,
-      guesses: day.guesses,
-      evaluations: day.guesses.map((g) => evaluateGuess(g, target.name)),
+      wordLength: d.wordLength,
+      guesses: d.guesses,
+      evaluations: d.evaluations,
+      muscles: d.muscles,
+      hints: d.hints as GameState['hints'],
+      reveal: d.reveal,
+      serverState: d.state,
+      offline: false,
       currentGuess: '',
-      status: day.status,
-      save,
-      streak: save.streak,
+      status: d.status,
+      save: next,
+      streak: next.streak,
       hydrated: true,
+      loading: false,
       revealingRow: null,
       shakeRow: null,
-      modalOpen: alreadyComplete,
+      modalOpen: d.status !== 'playing',
       tampered,
       clockRollback,
       toast: tampered
@@ -163,8 +234,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   addLetter: (char) => {
-    const { currentGuess, status, revealingRow, wordLength } = get();
-    if (status !== 'playing' || revealingRow !== null) return;
+    const { currentGuess, status, revealingRow, wordLength, offline } = get();
+    if (offline || status !== 'playing' || revealingRow !== null) return;
     if (currentGuess.length >= wordLength) return;
     if (!/^[a-zA-Z]$/.test(char)) return;
     set({ currentGuess: currentGuess + char.toUpperCase() });
@@ -176,88 +247,92 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({ currentGuess: currentGuess.slice(0, -1) });
   },
 
-  submitGuess: () => {
+  submitGuess: async () => {
     const {
-      currentGuess, target, wordLength, guesses, evaluations,
-      status, revealingRow, save, seed, clockRollback, mode,
+      currentGuess, wordLength, guesses, evaluations, status,
+      revealingRow, save, seed, clockRollback, mode, serverState, reveal,
     } = get();
 
     if (status !== 'playing' || revealingRow !== null) return;
 
     if (currentGuess.length !== wordLength) {
-      set({
-        shakeRow: guesses.length,
-        toast: { id: ++toastSeq, message: `Needs ${wordLength} letters` },
-      });
+      set({ shakeRow: guesses.length, toast: { id: ++toastSeq, message: `Needs ${wordLength} letters` } });
       return;
     }
 
-    // Guesses must be real exercises of today's length — that constraint is
-    // what makes the space knowable, and the exercise index makes it fair.
-    if (!isValidGuess(currentGuess, wordLength)) {
-      set({
-        shakeRow: guesses.length,
-        toast: { id: ++toastSeq, message: 'Not an exercise in the list' },
-      });
-      return;
-    }
-
-    if (guesses.includes(currentGuess)) {
-      set({
-        shakeRow: guesses.length,
-        toast: { id: ++toastSeq, message: 'Already guessed' },
-      });
-      return;
-    }
-
-    const row = guesses.length;
-    const evaluation = evaluateGuess(currentGuess, target.name);
-    const newGuesses = [...guesses, currentGuess];
-    const newEvaluations = [...evaluations, evaluation];
-
-    const won = currentGuess === target.name;
-    const lost = !won && newGuesses.length === MAX_GUESSES;
-    const newStatus: GameStatus = won ? 'won' : lost ? 'lost' : 'playing';
-
-    // Practice never touches the save. Not persisting is the whole guarantee:
-    // there is no path from a practice round to a streak, so replaying until
-    // you win buys nothing.
+    /* ── practice: scored locally, never persisted ── */
     if (mode === 'practice') {
+      const answer = reveal;
+      if (!answer) return;
+      if (!isValidGuess(currentGuess, wordLength)) {
+        set({ shakeRow: guesses.length, toast: { id: ++toastSeq, message: 'Not an exercise in the list' } });
+        return;
+      }
+      if (guesses.includes(currentGuess)) {
+        set({ shakeRow: guesses.length, toast: { id: ++toastSeq, message: 'Already guessed' } });
+        return;
+      }
+
+      const row = guesses.length;
+      const newGuesses = [...guesses, currentGuess];
+      const won = currentGuess === answer.name;
+      const lost = !won && newGuesses.length === MAX_GUESSES;
+      const target = getExercise(answer.name)!;
+
       set({
         guesses: newGuesses,
-        evaluations: newEvaluations,
+        evaluations: [...evaluations, evaluateGuess(currentGuess, answer.name)],
+        muscles: localMuscles(newGuesses, target),
         currentGuess: '',
-        status: newStatus,
+        status: won ? 'won' : lost ? 'lost' : 'playing',
         revealingRow: row,
       });
       return;
     }
 
-    let nextSave: SaveData = {
-      ...save,
-      day: { seed, guesses: newGuesses, status: newStatus },
-    };
+    /* ── daily: the server decides ── */
+    if (!serverState) return;
+    const row = guesses.length;
 
-    if (newStatus !== 'playing') {
-      nextSave = commitResult(nextSave, seed, won, newGuesses.length, !clockRollback);
+    const result = await submitGuessApi(currentGuess, serverState);
+    if (!result.ok) {
+      set({ shakeRow: row, toast: { id: ++toastSeq, message: result.error } });
+      return;
     }
 
-    writeSave(nextSave);
+    if (isRejection(result.data)) {
+      set({
+        shakeRow: row,
+        serverState: result.data.state,
+        toast: { id: ++toastSeq, message: result.data.message },
+      });
+      return;
+    }
 
-    // Fire-and-forget push so a finished daily lands on the other devices.
-    // Deliberately not awaited: a slow or failed network must never delay the
-    // tile flip, and local storage already holds the authoritative copy.
-    if (newStatus !== 'playing') {
+    const d = result.data;
+    let next: SaveData = {
+      ...save,
+      day: { seed, guesses: d.guesses, status: d.status, serverState: d.state },
+    };
+    if (d.status !== 'playing') {
+      const day = next.day;
+      next = commitResult(next, seed, d.status === 'won', d.guesses.length, !clockRollback);
+      next.day = day;
       void import('@/store/useAuthStore').then((m) => m.syncAfterGame());
     }
+    writeSave(next);
 
     set({
-      guesses: newGuesses,
-      evaluations: newEvaluations,
+      guesses: d.guesses,
+      evaluations: d.evaluations,
+      muscles: d.muscles,
+      hints: d.hints as GameState['hints'],
+      reveal: d.reveal,
+      serverState: d.state,
       currentGuess: '',
-      status: newStatus,
-      save: nextSave,
-      streak: nextSave.streak,
+      status: d.status,
+      save: next,
+      streak: next.streak,
       revealingRow: row,
     });
   },
@@ -282,18 +357,39 @@ export const useGameStore = create<GameState>()((set, get) => ({
   clearShake: () => set({ shakeRow: null }),
   setModalOpen: (open) => set({ modalOpen: open }),
 
+  resetProgress: () => {
+    clearSave();
+    const fresh = defaultSave();
+    writeSave(fresh);
+    void import('@/store/useAuthStore').then((m) => m.overwriteCloudIfSignedIn(fresh));
+    set({
+      save: fresh,
+      streak: 0,
+      toast: { id: ++toastSeq, message: 'Progress cleared' },
+    });
+    void get().initGame();
+  },
+
+  /**
+   * Practice picks locally from the answer-eligible pool. That is safe because
+   * practice can never touch a streak — leaking a practice answer costs nothing,
+   * and it keeps the mode playable without a round trip per guess.
+   */
   startPractice: () => {
-    // Any answer except today's, so practice cannot spoil the daily puzzle.
-    const todays = ANSWERS[getDailyIndex()].name;
-    const pool = ANSWERS.filter((a) => a.name !== todays);
-    const target = pool[Math.floor(Math.random() * pool.length)];
+    const todays = get().reveal?.name;
+    const pool = PRACTICE_POOL.filter((e) => e.name !== todays);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
 
     set({
       mode: 'practice',
-      target,
-      wordLength: target.name.length,
+      wordLength: pick.name.length,
       guesses: [],
       evaluations: [],
+      muscles: EMPTY_MUSCLES,
+      // Practice shows the answer's identity up front in `reveal` because the
+      // client is scoring; the UI still hides it until the round ends.
+      reveal: toTarget(pick),
+      hints: NO_HINTS,
       currentGuess: '',
       status: 'playing',
       revealingRow: null,
@@ -303,13 +399,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
     });
   },
 
-  // Re-runs the daily reconciliation, which restores the saved board. Practice
-  // state was never written anywhere, so there is nothing to clean up.
   exitPractice: () => get().initGame(),
 
   markWorkoutDone: () => {
     const { mode, save, seed } = get();
-    // Practice has no date of its own, so it can have no workout streak either.
     if (mode !== 'daily') return;
     if (save.lastWorkoutSeed === seed) return;
 
@@ -328,37 +421,11 @@ export const useGameStore = create<GameState>()((set, get) => ({
       },
     });
   },
-
-  resetProgress: () => {
-    clearSave();
-    const fresh = defaultSave();
-    writeSave(fresh);
-
-    // A merge cannot express a deletion (every counter takes the max), so the
-    // cleared save has to be pushed over the cloud copy. Without this, reset
-    // looks like it worked and then the next sync puts everything back.
-    void import('@/store/useAuthStore').then((m) =>
-      m.useAuthStore.getState().overwriteCloud(fresh),
-    );
-    set({
-      guesses: [],
-      evaluations: [],
-      currentGuess: '',
-      status: 'playing',
-      save: fresh,
-      streak: 0,
-      revealingRow: null,
-      modalOpen: false,
-      tampered: false,
-      toast: { id: ++toastSeq, message: 'Progress cleared' },
-    });
-  },
 }));
 
 /**
- * Guesses whose reveal animation has finished. Everything derived — keyboard
- * colours, the muscle figure, the hint unlocks — reads from this so nothing
- * updates mid-flip and spoils the reveal.
+ * Guesses whose reveal animation has finished. Everything derived reads from
+ * this so nothing updates mid-flip and spoils the reveal.
  */
 export function revealedCount(state: Pick<GameState, 'guesses' | 'revealingRow'>): number {
   return state.revealingRow === null ? state.guesses.length : state.revealingRow;
@@ -370,39 +437,21 @@ export function selectKeyStates(state: GameState): Record<string, LetterState> {
 }
 
 export interface Hints {
-  /** The answer's muscle group, or null while still locked. */
   category: MuscleGroup | null;
   equipment: Equipment | null;
-  /** Guesses remaining until the next hint, or null when all are out. */
   nextHintIn: number | null;
 }
 
 /**
- * Progressive disclosure. Two blind guesses of genuine deduction first — the
- * figure still reports overlap from your own guesses during those — then the
- * category as a safety net, then equipment.
- *
- * MUST be wrapped in `useShallow`. It builds a fresh object per call and
- * Zustand v5 compares snapshots by reference, so a bare `useGameStore(selectHints)`
- * re-renders until React throws "Maximum update depth exceeded". Same rule as
- * `selectKeyStates`. All three fields are primitives, so shallow compare is exact.
+ * Hints are computed server-side and arrive with each response, so the browser
+ * cannot unlock them early by lying about its guess count.
  */
 export function selectHints(state: GameState): Hints {
-  const revealed = revealedCount(state);
-  const finished = state.status !== 'playing';
-
-  const categoryOut = finished || revealed >= CATEGORY_HINT_AT - 1;
-  const equipmentOut = finished || revealed >= EQUIPMENT_HINT_AT - 1;
-
-  return {
-    category: categoryOut ? state.target.group : null,
-    equipment: equipmentOut ? state.target.equipment : null,
-    nextHintIn: categoryOut
-      ? equipmentOut
-        ? null
-        : EQUIPMENT_HINT_AT - 1 - revealed
-      : CATEGORY_HINT_AT - 1 - revealed,
-  };
+  // Suppress until the flip finishes, so a hint never lands before its row.
+  if (state.revealingRow !== null && state.status === 'playing') {
+    return state.hints.nextHintIn === null ? state.hints : { ...state.hints };
+  }
+  return state.hints;
 }
 
 export function selectWinRate(state: GameState): number {
@@ -410,7 +459,6 @@ export function selectWinRate(state: GameState): number {
   return played === 0 ? 0 : Math.round((wins / played) * 100);
 }
 
-/** Display name for a guessed row, used by the guess history list. */
 export function displayNameOf(name: string): string {
   return getExercise(name)?.display ?? name;
 }

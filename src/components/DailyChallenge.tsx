@@ -19,14 +19,15 @@ import { useGameStore } from '@/store/useGameStore';
  * leaderboard — there isn't one.
  */
 export function DailyChallenge() {
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const mode = useGameStore((s) => s.mode);
   const seed = useGameStore((s) => s.seed);
   const save = useGameStore((s) => s.save);
   const markWorkoutDone = useGameStore((s) => s.markWorkoutDone);
 
-  // Practice rounds have no date, so they can have no workout streak.
-  if (mode !== 'daily') return null;
+  // Practice rounds have no date, so they can have no workout streak. And
+  // without a revealed answer there is no movement to prescribe.
+  if (mode !== 'daily' || !target || !target.challenge) return null;
 
   const done = save.lastWorkoutSeed === seed;
   const streak = save.workoutStreak ?? 0;

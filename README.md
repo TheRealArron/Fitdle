@@ -8,7 +8,8 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
-npm test                 # 94 unit tests
+npm test                 # 93 unit tests
+npm run check:bundle     # prove the answer schedule is not in the shipped JS
 npm run cloud:check      # verify Supabase keys, schema and RLS
 npm run typecheck
 npm run lint
@@ -252,11 +253,17 @@ board's centre exactly the viewport's centre at every width; a test asserts
 | Clickjacking an authenticated session | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
 | Plugin / base-tag escalation | Blocked by `object-src 'none'`, `base-uri 'self'` |
 | Inline script injection | **Not** blocked — see the CSP note in [next.config.ts](next.config.ts) |
-| Answer list in the bundle | **Not** protected. A determined user can read every future answer |
-| Streak authenticity | **Not** protected. The client computes and uploads its own streak |
+| Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 43 client chunks to prove it |
+| Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
+| Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
+| Replaying an old session | **Blocked.** The seed is inside the signature |
+| Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP — a speed bump, not a distributed defence |
+| Streak authenticity | **Not** protected. The client still writes its own streak to localStorage |
 
-The last two need a server that owns the answer and the scoring. Everything
-above them is done and tested.
+Only the last row remains. Winning cannot be faked any more — you have to
+actually solve it to learn the answer — but the *record* of having won is still
+client-written. Closing that means the API writing to Supabase under the user's
+JWT, which is a natural next step rather than a rewrite.
 
 #### The trusted clock, and a trap worth knowing about
 
@@ -269,6 +276,44 @@ response header, so cross-origin JavaScript reads `null` even though `curl` sees
 the header perfectly. It was built that way first, and the clock-skew test
 caught it. The time now comes back in the response *body*, from a small `stable`
 SQL function in [schema.sql](supabase/schema.sql).
+
+### The server owns the answer
+
+The client used to ship `ANSWERS[seed % 60]`, which is the entire schedule —
+readable in devtools, every future puzzle included. That is now split:
+
+| Client (`data/exercises.ts`) | Server (`server/answers.ts`) |
+|---|---|
+| All 99 exercise names, muscles, equipment | The date→answer **ordering** |
+| `isAnswer` flag | How-to text, video ids, daily challenge |
+
+**The word list staying public is deliberate.** Wordle works because everyone
+carries common English in their head; nobody carries a list of exercise names,
+so the in-app index has to hand them over or the game is unplayable. Knowing a
+word *can* be an answer narrows 99 to 60. Knowing *which day* would give the
+game away — and that is the part that moved.
+
+`server-only` on the answer module turns an accidental client import into a
+build error rather than a silent leak. `npm run check:bundle` is the
+belt-and-braces version: it greps the compiled chunks for consecutive runs of
+the real schedule, because finding one name proves nothing when the catalogue is
+public by design.
+
+**Guesses are scored server-side.** `/api/guess` recomputes the whole game from
+a signed guess history and returns the truth — there is no code path that
+accepts a result from the browser. Verified by attacking it:
+
+```
+Forge a token claiming 5 guesses  -> REJECTED, token discarded, started fresh
+POST status:"won" alongside       -> IGNORED, status derived server-side
+Replay yesterday's token          -> REJECTED, seed is inside the signature
+```
+
+**The cost, stated plainly:** the daily now needs a network connection, and the
+Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
+static export has no server of its own. Practice mode stays fully local — it
+touches no streak, so leaking a practice answer costs nothing and requiring a
+round trip per practice guess would make the mode worse for no gain.
 
 ### Accounts and cloud sync
 
@@ -363,7 +408,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 94 tests over the things that must not silently break:
+`npm test` — 93 tests over the things that must not silently break:
 
 - **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each
