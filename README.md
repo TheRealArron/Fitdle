@@ -8,14 +8,36 @@ Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 ```bash
 npm install
 npm run dev              # http://localhost:3000
+
+npm run verify           # ← the one that matters. Everything, in order.
+```
+
+`verify` runs typecheck → lint → 93 unit tests → build → bundle leak check →
+smoke test in **both dev and production**. Individually:
+
+```bash
 npm test                 # 93 unit tests
+npm run smoke            # boots dev AND prod, drives a real browser
+npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
 npm run cloud:check      # verify Supabase keys, schema and RLS
-npm run typecheck
-npm run lint
-npm run build            # web build
 npm run build:extension  # -> extension-dist/, loadable in chrome://extensions
 ```
+
+### Why `smoke` runs both modes
+
+Twice, a change passed every unit test, typechecked, linted and built — and
+still shipped a dead page, because it was only exercised in one mode:
+
+| Regression | Passed | Broke |
+|---|---|---|
+| CSP without `'unsafe-eval'` | production | **dev** — no HMR, blank page at `opacity: 0` |
+| Daily seed from `new Date()` at module scope | dev | **production** — build-day answer baked into prerendered HTML |
+
+Neither is reachable from a unit test: both are properties of the running
+server. `smoke` boots each mode, drives a browser, and asserts the app actually
+hydrates — which is where both failures surfaced. It has been confirmed to fail
+on the real regression, not just to pass on the fix.
 
 ---
 

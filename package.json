@@ -11,7 +11,9 @@
     "test": "node --conditions=react-server --import ./tests/loader.mjs --test tests/*.test.ts",
     "build:extension": "node scripts/build-extension.mjs",
     "cloud:check": "node scripts/cloud-check.mjs",
-    "check:bundle": "node --conditions=react-server --import ./tests/loader.mjs scripts/check-bundle.mjs"
+    "check:bundle": "node --conditions=react-server --import ./tests/loader.mjs scripts/check-bundle.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:bundle && npm run smoke"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
@@ -31,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15.5.22",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

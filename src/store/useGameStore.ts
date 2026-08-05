@@ -16,6 +16,7 @@ import {
   submitGuess as submitGuessApi,
   type RevealedAnswer,
 } from '@/lib/api';
+import { adoptServerTime } from '@/lib/trustedTime';
 import { evaluateGuess, buildKeyStates, type LetterState } from '@/lib/evaluate';
 import {
   loadSave,
@@ -185,6 +186,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }
 
     const d = result.data;
+    // Every response carries the server clock; the countdown follows it.
+    adoptServerTime(d.serverTime);
+
     const { save, clockRollback, streakBroken } = reconcile(loaded, d.seed);
 
     save.day = {
@@ -310,6 +314,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }
 
     const d = result.data;
+    adoptServerTime(d.serverTime);
+
     let next: SaveData = {
       ...save,
       day: { seed, guesses: d.guesses, status: d.status, serverState: d.state },

@@ -169,30 +169,6 @@ if (!write.error) {
   console.log(`  ${c.warn('→')} Confirm RLS is enabled on public.fitdle_progress in the dashboard`);
 }
 
-/* ── 6. trusted clock function ────────────────────────────────────────────── */
-
-/*
- * Without this, the daily puzzle is decided by the player's own system clock and
- * winding it forward plays tomorrow early. The app degrades gracefully if the
- * function is missing, so this is a warning rather than a hard failure — but it
- * is a real protection that is simply off until the SQL is run.
- */
-const clock = await supabase.rpc('fitdle_server_time');
-
-if (clock.error) {
-  if (clock.error.code === 'PGRST202' || /could not find the function/i.test(clock.error.message)) {
-    console.log(`${c.warn('?')} trusted clock function missing ${c.dim('(fitdle_server_time)')}`);
-    console.log(
-      `  ${c.warn('→')} Re-run supabase/schema.sql. Until then the daily word follows the player's own clock, so winding it forward plays ahead.`,
-    );
-  } else {
-    fail(`trusted clock check failed: ${clock.error.message}`, 'Re-run supabase/schema.sql');
-  }
-} else {
-  const drift = Math.abs(new Date(clock.data).getTime() - Date.now());
-  pass('trusted clock available', `server time readable, local drift ${Math.round(drift / 1000)}s`);
-}
-
 console.log();
 if (failed) {
   console.log(c.bad('Cloud sync is not ready.'), 'Fix the items above and run again.');

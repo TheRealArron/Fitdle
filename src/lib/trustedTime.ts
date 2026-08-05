@@ -1,28 +1,20 @@
-import { isCloudConfigured } from '@/lib/supabase';
 
 /**
  * A clock the player does not control.
  *
- * `highSeed` already stops someone winding the clock BACK to farm old puzzles.
- * It cannot stop them winding it FORWARD to play tomorrow early — that just
- * looks like time passing, which is exactly what a monotonic high-water mark is
- * built to allow.
+ * This used to be the anti-cheat: `highSeed` blocked winding the clock BACK,
+ * and this blocked winding it FORWARD to play tomorrow early.
  *
- * The fix needs a time source outside the browser, and the Supabase project is
- * already configured, so it is the natural one.
+ * It is no longer load-bearing for that. `/api/today` computes the seed on the
+ * server, so which puzzle you get is not the browser's decision at all — a
+ * wound-forward clock changes nothing. What remains is presentation: the
+ * countdown to the next puzzle, and noticing when a tab has been open across
+ * UTC midnight.
  *
- * The obvious implementation — read the `Date` response header off any Supabase
- * call — DOES NOT WORK, and it fails silently, which is worse. `Date` is not on
- * the CORS-safelist for response headers, so `res.headers.get('date')` returns
- * null cross-origin even though curl can see the header perfectly well. It was
- * built that way first and the clock-skew test caught it.
- *
- * So the time arrives in the response BODY, from a tiny `stable` SQL function
- * (`fitdle_server_time`) defined in supabase/schema.sql.
- *
- * The offset is applied everywhere the daily seed is computed. If the server is
- * unreachable the app falls back to the local clock and says so, because
- * refusing to run offline would be a worse failure than an honest one.
+ * The offset is fed from the `serverTime` that every API response already
+ * carries. It previously made its own Supabase RPC call, which was a second
+ * mechanism for the same job, an extra thing to install, and a 404 in the
+ * console for anyone who had not run the newer schema.
  */
 
 /*
@@ -77,55 +69,18 @@ export function trustedNow(): Date {
  * leaves the offset at zero, which is the local clock, which is the honest
  * fallback.
  */
-export function syncTrustedTime(): Promise<boolean> {
+/**
+ * Adopts the server's clock from an API response.
+ *
+ * Cheap and idempotent — called on every `/api/today` and `/api/guess`, so the
+ * offset self-corrects if the machine sleeps or the clock is changed mid-game.
+ */
+export function adoptServerTime(iso: string): void {
+  const serverMs = new Date(iso).getTime();
+  if (!Number.isFinite(serverMs)) return;
   const st = state();
-  if (st.inFlight) return st.inFlight;
-  if (!isCloudConfigured() || typeof window === 'undefined') {
-    return Promise.resolve(false);
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return Promise.resolve(false);
-
-  st.inFlight = (async () => {
-    try {
-      // Round-trip time is halved out of the estimate. Sub-second accuracy is
-      // irrelevant here — we only care which UTC day it is.
-      const sentAt = Date.now();
-      const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/fitdle_server_time`, {
-        method: 'POST',
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: '{}',
-        cache: 'no-store',
-      });
-      // 404 means the project is on an older schema without the function.
-      if (!res.ok) return false;
-
-      // PostgREST returns a bare JSON string for a scalar-returning function.
-      const body: unknown = await res.json();
-      const iso = typeof body === 'string' ? body : null;
-      if (!iso) return false;
-
-      const serverMs = new Date(iso).getTime();
-      if (!Number.isFinite(serverMs)) return false;
-
-      const latency = (Date.now() - sentAt) / 2;
-      st.offsetMs = serverMs + latency - Date.now();
-      st.synced = true;
-      return true;
-    } catch {
-      return false;
-    } finally {
-      st.inFlight = null;
-    }
-  })();
-
-  return st.inFlight;
+  st.offsetMs = serverMs - Date.now();
+  st.synced = true;
 }
 
 /** Test seam. */

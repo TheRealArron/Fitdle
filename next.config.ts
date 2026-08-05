@@ -40,6 +40,16 @@ const isExtension = process.env.BUILD_TARGET === 'extension';
  * expressible here.
  */
 function contentSecurityPolicy(): string {
+  /*
+   * Next's dev server compiles with `eval` for HMR and source maps. Without
+   * this, the dev bundle is refused, React never hydrates, and the page renders
+   * a dead shell at opacity 0 — which is exactly what happened: the policy was
+   * only ever verified against a production build.
+   *
+   * Production never gets it.
+   */
+  const dev = process.env.NODE_ENV === 'development';
+
   let supabase = '';
   try {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -51,7 +61,7 @@ function contentSecurityPolicy(): string {
 
   return [
     `default-src 'self'`,
-    `script-src 'self' 'unsafe-inline'`,
+    `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: https://i.ytimg.com`,
     `font-src 'self' data:`,
