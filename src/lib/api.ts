@@ -26,6 +26,7 @@ export interface RevealedAnswer {
   videoId: string | null;
   videoQuery: string;
   challenge: string;
+  homeVersion: { name: string; howTo: string } | null;
 }
 
 export interface DailyState {
@@ -92,6 +93,14 @@ export function submitGuess(
 /** Locks in the opening muscle-group call. Server refuses it after guess 1. */
 export function placeCall(group: string, state: string): Promise<ApiResult<DailyState>> {
   return post<DailyState>('/api/call', { group, state });
+}
+
+/** Asks the coach about the day's exercise. Server refuses until the round ends. */
+export function askCoach(
+  question: string,
+  state: string,
+): Promise<ApiResult<{ status: string; text: string }>> {
+  return post('/api/coach', { question, state });
 }
 
 export function isRejection(d: DailyState | GuessRejected): d is GuessRejected {

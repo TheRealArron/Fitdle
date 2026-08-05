@@ -33,6 +33,17 @@ export interface Coaching {
   videoQuery: string;
   videoId: string | null;
   challenge: string;
+  /**
+   * A no-equipment substitute, for the 25 answers that need a barbell,
+   * dumbbell, kettlebell or machine.
+   *
+   * The game tells you to go and do the exercise. That instruction is worthless
+   * to anyone without a gym, which is most people most of the time, so every
+   * loaded movement carries a version you can do in a bedroom with a backpack
+   * and a towel. Bodyweight answers have none - they already are the home
+   * version.
+   */
+  homeVersion?: { name: string; howTo: string };
 }
 
 export const COACHING: Record<string, Coaching> = {
@@ -75,6 +86,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "conventional deadlift proper form",
     videoId: "GxsLrTzyGUU",
     challenge: "3 × 5",
+    homeVersion: { name: 'Single-leg backpack deadlift', howTo: 'Hold a loaded backpack in one hand. Stand on the opposite leg and hinge forward, letting the free leg swing back as a counterweight. Lower until your torso is parallel, then squeeze your glute to stand.' },
   },
   HIPTHRUST: {
     howTo: [
@@ -85,6 +97,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell hip thrust proper form",
     videoId: "pF17m_CXfL0",
     challenge: "3 × 12",
+    homeVersion: { name: 'Single-leg glute bridge', howTo: 'Shoulders on the floor, one foot planted, the other leg extended. Drive through your planted heel until your hips are level with your knees. Squeeze hard at the top for a full second.' },
   },
   PLANK: {
     howTo: [
@@ -125,6 +138,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell pullover proper form",
     videoId: "moKuOuFNBDM",
     challenge: "3 × 12",
+    homeVersion: { name: 'Backpack pullover', howTo: 'Lie on your back, knees bent, holding a loaded backpack over your chest with both hands. Keeping your arms nearly straight, lower it back past your head until you feel a stretch, then pull it back over.' },
   },
   BEARCRAWL: {
     howTo: [
@@ -175,6 +189,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell triceps kickback proper form",
     videoId: "m9me06UBPKc",
     challenge: "3 × 15",
+    homeVersion: { name: 'Bench dip', howTo: 'Hands on a chair edge behind you, legs out front. Lower until your elbows hit 90 degrees, then press up. Keep your elbows pointing straight back, not flaring.' },
   },
   CALFRAISE: {
     howTo: [
@@ -195,6 +210,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "standing overhead press proper form",
     videoId: "nNMR9fRGRjQ",
     challenge: "3 × 8",
+    homeVersion: { name: 'Pike push-up', howTo: 'Hands and feet on the floor, hips high so your body makes an inverted V. Lower the crown of your head towards the floor between your hands, then press back up. The more vertical your torso, the more it becomes a shoulder press.' },
   },
   PULLUP: {
     howTo: [
@@ -225,6 +241,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "leg press machine proper form",
     videoId: "K5n2vg3oZa4",
     challenge: "3 × 12",
+    homeVersion: { name: 'Wall sit', howTo: 'Slide down a wall until your thighs are parallel to the floor, knees over ankles. Hold. It is isometric rather than a press, but it hits the same quads just as hard.' },
   },
   SEATEDROW: {
     howTo: [
@@ -235,6 +252,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "seated cable row proper form",
     videoId: "7BkgqzC6WsM",
     challenge: "3 × 12",
+    homeVersion: { name: 'Towel seated row', howTo: 'Sit with legs extended, loop a towel around your feet, and hold both ends. Row your elbows back past your ribs, chest tall, pulling against your own tension. Squeeze the shoulder blades.' },
   },
   CLEAN: {
     howTo: [
@@ -245,6 +263,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "power clean proper form",
     videoId: "lI35socHJ4k",
     challenge: "5 × 3",
+    homeVersion: { name: 'Backpack clean', howTo: 'Load a backpack with books. Squat, grip the top handle, and drive up explosively, whipping your elbows through so the pack lands on your chest. Absorb it in a quarter squat.' },
   },
   CHINUP: {
     howTo: [
@@ -305,6 +324,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell snatch proper form",
     videoId: "3O7JjPr0_ok",
     challenge: "5 × 2",
+    homeVersion: { name: 'Backpack snatch', howTo: 'Loaded backpack between your feet. Hinge, grip the top handle with one hand, then drive through your legs and pull it overhead in one motion, finishing with a locked arm and a shrug.' },
   },
   LEGCURL: {
     howTo: [
@@ -315,6 +335,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "lying leg curl machine proper form",
     videoId: "lUH80pneL5w",
     challenge: "3 × 12",
+    homeVersion: { name: 'Sliding leg curl', howTo: 'Lie on your back, heels on cloths or a smooth floor, hips lifted. Slide your heels away until your legs are almost straight, then drag them back in. Keep your hips up the whole time.' },
   },
   SUPERMAN: {
     howTo: [
@@ -345,6 +366,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell shrug proper form",
     videoId: "YJ2q8RkOFVw",
     challenge: "3 × 15",
+    homeVersion: { name: 'Loaded backpack shrug', howTo: "Hold a heavy backpack by its handles at arm's length. Lift your shoulders straight up towards your ears, pause a second at the top, then let them drop under control. Do not roll them." },
   },
   BRIDGE: {
     howTo: [
@@ -365,6 +387,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell biceps curl proper form",
     videoId: "Jfp4b5Olc7A",
     challenge: "3 × 12",
+    homeVersion: { name: 'Towel curl', howTo: 'Loop a towel under a heavy backpack. Curl it up with your elbows pinned to your sides. Fight the descent for three seconds - resistance you create yourself is still resistance.' },
   },
   THRUSTER: {
     howTo: [
@@ -375,6 +398,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell thruster proper form",
     videoId: "z0PGxb8BSq8",
     challenge: "4 × 8",
+    homeVersion: { name: 'Backpack thruster', howTo: 'Hold a loaded backpack at your chest. Squat to parallel, then drive up and press it overhead in one continuous motion. The leg drive should start the press for you.' },
   },
   BACKSQUAT: {
     howTo: [
@@ -385,6 +409,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell back squat proper form",
     videoId: "8PMjqgR8Wa8",
     challenge: "4 × 6",
+    homeVersion: { name: 'Bulgarian split squat', howTo: 'Rear foot on a chair, front foot a stride ahead. Lower until your back knee nearly touches the floor, keeping your front shin vertical. Drive through your front heel. One leg at a time replaces the load.' },
   },
   FLYES: {
     howTo: [
@@ -395,6 +420,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell chest fly proper form",
     videoId: "ul7j4OkNRq4",
     challenge: "3 × 12",
+    homeVersion: { name: 'Sliding floor flye', howTo: 'Lie on your back on a smooth floor with a cloth under each hand. Arms out wide, elbows softly bent. Squeeze your chest to slide your hands together above you, then resist on the way out.' },
   },
   STEPUP: {
     howTo: [
@@ -415,6 +441,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell bent over row proper form",
     videoId: "rqTOAM8WoeM",
     challenge: "3 × 10",
+    homeVersion: { name: 'Backpack bent row', howTo: 'Hinge forward until your torso is at about 45 degrees, back flat. Row a loaded backpack to your belly button, elbows tracking close to your ribs. Pause, then lower fully.' },
   },
   LEGRAISE: {
     howTo: [
@@ -435,6 +462,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell push press proper form",
     videoId: "Hqxjk5Z35SM",
     challenge: "4 × 5",
+    homeVersion: { name: 'Backpack push press', howTo: 'Loaded backpack at your chest. Dip a few inches at the knees, then explode up, using the leg drive to punch it overhead. Lock out with your biceps beside your ears.' },
   },
   RAISE: {
     howTo: [
@@ -445,6 +473,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "dumbbell lateral raise proper form",
     videoId: "nnH63icHYXY",
     challenge: "3 × 15",
+    homeVersion: { name: 'Water bottle lateral raise', howTo: 'Hold a full bottle in each hand at your sides. Lead with your elbows and lift out to shoulder height, thumbs level with your little fingers. Lower over three seconds - the slow return is where the work is.' },
   },
   SPRINT: {
     howTo: [
@@ -465,6 +494,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "farmer's carry proper form",
     videoId: "lLAw6fUccKA",
     challenge: "3 × 30 metres",
+    homeVersion: { name: 'Shopping bag carry', howTo: 'Fill two bags with anything heavy. Stand tall, shoulders back, and walk. Do not lean or let your shoulders round. Distance and time matter more than load.' },
   },
   SKIPROPE: {
     howTo: [
@@ -485,6 +515,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "barbell hang clean technique",
     videoId: "HZOR7y9LcoA",
     challenge: "5 × 3",
+    homeVersion: { name: 'Backpack hang clean', howTo: "Hold a loaded backpack at arm's length by the top handle. Dip slightly at the knees, then explosively extend and pull it to your chest, catching it in a quarter squat." },
   },
   TWIST: {
     howTo: [
@@ -525,6 +556,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "face pull proper form",
     videoId: "eTCBSFlCJ_s",
     challenge: "3 × 15",
+    homeVersion: { name: 'Towel face pull', howTo: 'Hold a towel at head height, arms forward, wide grip. Pull it apart and towards your face, elbows high and flaring out. Finish with your hands beside your ears and your shoulder blades pinned.' },
   },
   HANDSTAND: {
     howTo: [
@@ -545,6 +577,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "kettlebell swing proper form",
     videoId: "bDCeXbMJVNs",
     challenge: "4 × 15",
+    homeVersion: { name: 'Backpack swing', howTo: 'Hold a loaded backpack by the top handle with both hands. Hinge at the hips, let it swing between your legs, then snap your hips forward to float it to chest height. Power comes from the hips, never the arms.' },
   },
   ROWING: {
     howTo: [
@@ -555,6 +588,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "rowing machine proper technique",
     videoId: "4zWu1yuJ0_g",
     challenge: "4 × 250 metres",
+    homeVersion: { name: 'Floor rowing', howTo: 'Lie face down, arms extended overhead. Pull your elbows down and back towards your ribs, lifting your chest and hands off the floor. Squeeze your shoulder blades together at the end of each pull.' },
   },
   LATPULL: {
     howTo: [
@@ -565,6 +599,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "lat pulldown proper form",
     videoId: "CAwf7n6Luuc",
     challenge: "3 × 12",
+    homeVersion: { name: 'Towel lat pulldown', howTo: 'Kneel and hold a towel overhead, wide grip, arms straight. Pull your hands apart and down towards your collarbone while resisting with the other arm. Slow and deliberate beats fast and loose.' },
   },
   PUSHDOWN: {
     howTo: [
@@ -575,6 +610,7 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "cable triceps pushdown proper form",
     videoId: "_w-HpW70nSQ",
     challenge: "3 × 15",
+    homeVersion: { name: 'Diamond push-up', howTo: 'Hands together under your chest, index fingers and thumbs forming a triangle. Lower with your elbows tracking backwards, not out. Press up. The narrow hand position shifts the load to your triceps.' },
   },
   KNEERAISE: {
     howTo: [

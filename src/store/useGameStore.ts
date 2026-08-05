@@ -142,6 +142,7 @@ function toTarget(e: Exercise): Target {
     videoId: null,
     videoQuery: `${e.display} proper form`,
     challenge: '',
+    homeVersion: null,
   };
 }
 

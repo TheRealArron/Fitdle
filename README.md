@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 93 unit tests
+npm test                 # 106 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -337,6 +337,52 @@ static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
 
+### Do the exercise, wherever you are
+
+Solving the puzzle gives you a prescription - `4 x 8 Burpee`, `3 x 45 seconds
+Plank`. For the 25 answers that need a barbell, dumbbell, kettlebell or machine,
+that instruction is useless to anyone not standing in a gym, so each one carries
+a **no-equipment substitute**: a backpack, a towel, a chair, a wall.
+
+That data lives in the catalogue, not in a model. It renders for every player on
+every deployment, with no API key and no network call beyond the one that
+revealed the answer.
+
+### The form coach
+
+On top of that sits an optional coach: ask a question about the exercise you
+just solved and get a coaching cue back. Scope is the whole design.
+
+**It answers about one exercise - the one you just solved.** A fitness chatbot
+that will write you a training programme is giving medical-adjacent advice to a
+stranger it cannot assess, and a daily word game has no business doing that.
+"My knees cave on squats" is useful and bounded. "Design my week" is neither.
+
+**It will not coach you through pain.** Joint pain, sharp pain, numbness or an
+existing injury gets one answer: it cannot assess that, a physio can. No
+workaround, no modification, no diagnosis. That is the one guardrail in the
+prompt that is not about product scope.
+
+**It cannot be used as an oracle.** The endpoint is gated on the same signed
+session that gates the reveal, so it is unreachable until the round is over.
+Verified by attacking it:
+
+```
+Ask mid-round, valid session   -> 403
+Ask with no session at all     -> 403
+Forge a session claiming 6 guesses -> 403
+```
+
+It is `claude-opus-5` at `effort: "low"` - the movement's details are already in
+the prompt, so deep reasoning buys nothing and costs the player latency on a
+result screen. Rate limited to 10 questions/min, capped at 400 characters, and
+it fails soft: no key, a refusal, or a network error hides the box rather than
+breaking the result screen it lives on.
+
+**Not verified end to end.** No Anthropic key was available in the development
+environment, so the gate, the rate limit and the no-key path are tested live but
+the model call itself is not.
+
 ### Accounts and cloud sync
 
 Real accounts via Supabase: email/password sign-up and sign-in, sessions that
@@ -430,7 +476,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 93 tests over the things that must not silently break:
+`npm test` - 106 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

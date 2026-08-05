@@ -68,6 +68,8 @@ export interface Reveal {
   videoId: string | null;
   videoQuery: string;
   challenge: string;
+  /** No-equipment substitute. Null for movements that need none. */
+  homeVersion: { name: string; howTo: string } | null;
 }
 
 export interface GuessOutcome {
@@ -167,6 +169,7 @@ export function playGuesses(
           videoId: coaching?.videoId ?? null,
           videoQuery: coaching?.videoQuery ?? answer.display,
           challenge: coaching?.challenge ?? '',
+          homeVersion: coaching?.homeVersion ?? null,
         }
       : null,
   };

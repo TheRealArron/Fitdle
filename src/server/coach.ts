@@ -1,0 +1,136 @@
+import 'server-only';
+import Anthropic from '@anthropic-ai/sdk';
+import type { Reveal } from '@/server/game';
+
+/**
+ * The form coach.
+ *
+ * Scope is the whole design. It answers questions about ONE exercise - the one
+ * you just solved - and nothing else. That is not a limitation to apologise
+ * for: a fitness chatbot that will write you a training programme is giving
+ * medical-adjacent advice to a stranger it cannot assess, and a daily word game
+ * has no business doing that. Answering "my knees cave on squats" is useful and
+ * bounded. "Design my week" is neither.
+ *
+ * The exercise's own coaching data is injected into the system prompt, so the
+ * model is describing a movement the app has already committed to rather than
+ * recalling one, and the home substitution comes from our data rather than
+ * being invented.
+ */
+
+const MODEL = 'claude-opus-5';
+
+/** Hard ceiling on what a caller can spend per question. */
+const MAX_QUESTION_CHARS = 400;
+
+export type CoachStatus = 'ok' | 'unconfigured' | 'refused' | 'error';
+
+export interface CoachReply {
+  status: CoachStatus;
+  text: string;
+}
+
+function systemPrompt(target: Reveal): string {
+  const home = target.homeVersion
+    ? `\nNo-equipment substitute (use this if they lack the kit):\n  ${target.homeVersion.name} - ${target.homeVersion.howTo}`
+    : '\nThis is a bodyweight movement; it needs no substitute.';
+
+  return `You are a form coach inside Fitdle, a daily exercise guessing game. The player has just finished today's puzzle and is asking about the exercise they solved.
+
+THE EXERCISE
+  Name: ${target.display}
+  Muscle group: ${target.group}
+  Equipment: ${target.equipment}
+  Difficulty: ${target.difficulty}
+  Primary muscles: ${target.primary.join(', ') || 'n/a'}
+  Secondary muscles: ${target.secondary.join(', ') || 'n/a'}
+  Today's prescription: ${target.challenge}
+
+  How to perform it:
+${target.howTo.map((s, i) => `  ${i + 1}. ${s}`).join('\n')}${home}
+
+SCOPE
+Answer questions about THIS exercise only: technique, common form errors, what
+it works, how it feels when done right, equipment substitutions, and how to
+scale it easier or harder. The details above are authoritative - if the player
+describes the movement differently, go with the description above.
+
+If asked for anything outside that - a training programme, a weekly split, diet
+or supplements, another exercise, or anything unrelated - say in one sentence
+that you only cover the day's movement, and offer what you can about ${target.display}.
+
+SAFETY
+You are not a clinician and you cannot see the player. If they describe pain
+(not muscle burn, but joint pain, sharp pain, numbness, or an existing injury),
+say plainly that you cannot assess it and that a physio or doctor should, then
+stop. Do not suggest a workaround, a modification, or a way to train through it.
+Never diagnose.
+
+STYLE
+Two to four sentences. Plain, specific, and practical - the kind of correction a
+good coach gives on the gym floor, not a paragraph of caveats. Give the cue that
+fixes the problem rather than a list of everything that could be wrong. No
+markdown headers, no bullet lists, no emoji. Address the player as "you".`;
+}
+
+/**
+ * Answers one question about the day's exercise.
+ *
+ * Never throws - a coaching feature failing must not take down the result
+ * screen it lives on. Every failure path returns a status the UI can render.
+ */
+export async function askCoach(question: string, target: Reveal): Promise<CoachReply> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      status: 'unconfigured',
+      text: 'The coach is not set up on this deployment.',
+    };
+  }
+
+  const trimmed = question.trim().slice(0, MAX_QUESTION_CHARS);
+  if (!trimmed) return { status: 'error', text: 'Ask a question first.' };
+
+  try {
+    const client = new Anthropic({ apiKey });
+
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      // Low effort deliberately: this is a short, bounded answer about a
+      // movement whose details are already in the prompt. Deep reasoning buys
+      // nothing here and costs the player latency on a result screen.
+      output_config: { effort: 'low' },
+      system: systemPrompt(target),
+      messages: [{ role: 'user', content: trimmed }],
+    });
+
+    /*
+     * Check stop_reason before touching content. On a refusal the content array
+     * can be empty, and indexing into it would throw inside a route handler.
+     */
+    if (response.stop_reason === 'refusal') {
+      return {
+        status: 'refused',
+        text: 'I cannot answer that one. Ask me about the movement itself and I will help.',
+      };
+    }
+
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .trim();
+
+    if (!text) return { status: 'error', text: 'No answer came back. Try rephrasing.' };
+    return { status: 'ok', text };
+  } catch (err) {
+    // Distinguish "you are asking too fast" from everything else; the rest is
+    // not the player's problem and should not be spelled out to them.
+    if (err instanceof Anthropic.RateLimitError) {
+      return { status: 'error', text: 'The coach is busy. Give it a moment.' };
+    }
+    console.error('[coach]', err);
+    return { status: 'error', text: 'The coach is unavailable right now.' };
+  }
+}

@@ -22,6 +22,7 @@
  */
 
 import { spawn, execSync } from 'node:child_process';
+import net from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +44,34 @@ const MODES = [
 
 let failures = 0;
 
+/**
+ * Refuses to run against a server this script did not start.
+ *
+ * This has now silently corrupted a test run twice: a stale `next start` left
+ * on the port answers 200, the readiness check is satisfied, and every
+ * assertion then runs against an old build. The failure is invisible - the
+ * checks pass, they just prove nothing. A readiness probe cannot tell whose
+ * server replied, so the only fix is to refuse to start at all.
+ */
+function assertPortFree(port) {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', (err) => {
+      reject(
+        err.code === 'EADDRINUSE'
+          ? new Error(
+              `port ${port} is already in use. Something else is listening there, ` +
+                `and testing against it would silently check the wrong build.\n` +
+                `  Free it first:  fuser -k ${port}/tcp`,
+            )
+          : err,
+      );
+    });
+    probe.once('listening', () => probe.close(() => resolve()));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
 async function waitForServer(port, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -59,6 +88,14 @@ async function waitForServer(port, timeoutMs = 120_000) {
 
 async function check(mode) {
   console.log(c.head(`\n── ${mode.name} ──────────────────────────────────────────`));
+
+  try {
+    await assertPortFree(mode.port);
+  } catch (err) {
+    console.log(c.bad(`✗ ${err.message}`));
+    failures++;
+    return;
+  }
 
   if (mode.needsBuild) {
     console.log(c.dim('  building…'));

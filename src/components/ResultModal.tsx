@@ -13,6 +13,7 @@ import { BodyFigure } from './BodyFigure';
 import { Countdown } from './Countdown';
 import { DailyChallenge } from './DailyChallenge';
 import { MuscleDetail } from './MuscleDetail';
+import { FormCoach } from './FormCoach';
 import { FormVideo } from './FormVideo';
 import { Modal } from './Modal';
 
@@ -191,6 +192,14 @@ export function ResultModal() {
           {/* Shown on wins too - the coaching is the point of the game, and
               hiding it behind a loss punishes the players who engaged most. */}
           <FormVideo answer={target} />
+        </section>
+
+        {/* Coaching sits after the how-to, not instead of it: the steps are the
+            authoritative description, this is where you go when they are not
+            enough or you have not got the kit. */}
+        <section>
+          <h3 className="label mb-2">Coach</h3>
+          <FormCoach />
         </section>
 
         <div className="flex flex-col gap-3 border-t border-white/10 pt-4">
