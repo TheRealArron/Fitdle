@@ -3,7 +3,7 @@ import { answerFor, dailySeed, playGuesses, validateGuess } from '@/server/game'
 import { openSession, sealSession } from '@/server/session';
 import { clientKey, rateLimit } from '@/server/rateLimit';
 import { bankResult } from '@/server/progress';
-import { userIdFromRequest } from '@/server/supabase';
+import { verifiedUser } from '@/server/supabase';
 
 /**
  * Submits one guess.
@@ -77,8 +77,16 @@ export async function POST(request: Request) {
    */
   let progress: Awaited<ReturnType<typeof bankResult>> = null;
   if (outcome.status !== 'playing') {
-    const userId = await userIdFromRequest(request);
-    if (userId) progress = await bankResult(userId, seed, outcome.status === 'won', guesses.length);
+    const user = await verifiedUser(request);
+    if (user) {
+      progress = await bankResult(
+        user.id,
+        seed,
+        outcome.status === 'won',
+        guesses.length,
+        user.username,
+      );
+    }
   }
 
   return NextResponse.json(

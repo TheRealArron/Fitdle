@@ -18,6 +18,50 @@ create table if not exists public.fitdle_progress (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Leaderboard columns.
+--
+-- GENERATED, not written separately. The save blob stays the single source of
+-- truth and Postgres derives these from it, so a leaderboard column physically
+-- cannot drift from the record it ranks - which it would within a week if the
+-- server had to remember to update both.
+--
+-- `username` is the exception: it lives in auth.users.user_metadata, which
+-- nobody can read for another user (correctly). The API denormalises it here at
+-- bank time so the leaderboard can show a name without ever exposing the
+-- account it belongs to.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table public.fitdle_progress
+  add column if not exists username text,
+  add column if not exists streak int
+    generated always as (nullif(save ->> 'streak', '')::int) stored,
+  add column if not exists max_streak int
+    generated always as (nullif(save ->> 'maxStreak', '')::int) stored,
+  -- Today's board: which puzzle, how many guesses, and whether it was solved.
+  add column if not exists day_seed int
+    generated always as (nullif(save -> 'day' ->> 'seed', '')::int) stored,
+  add column if not exists day_guesses int
+    generated always as (jsonb_array_length(save -> 'day' -> 'guesses')) stored,
+  add column if not exists day_won boolean
+    generated always as ((save -> 'day' ->> 'status') = 'won') stored;
+
+/*
+ * Indexes.
+ *
+ * The streak board is `order by streak desc, updated_at asc` - one composite
+ * index serves it directly. Partial on `streak > 0` because a table of people
+ * on zero is most of the table and none of the leaderboard.
+ */
+create index if not exists fitdle_streak_board
+  on public.fitdle_progress (streak desc, updated_at asc)
+  where streak > 0;
+
+-- Today's board is always filtered to one seed first, so that leads the index.
+create index if not exists fitdle_daily_board
+  on public.fitdle_progress (day_seed, day_guesses asc, updated_at asc)
+  where day_won;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Row level security.
 --
 -- This is the actual protection, not the anon key - that key is public by

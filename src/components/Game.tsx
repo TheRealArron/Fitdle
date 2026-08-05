@@ -12,6 +12,7 @@ import { useGameStore, selectHints } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
 import { DrillModal } from './DrillModal';
+import { LeaderboardModal } from './LeaderboardModal';
 import { ExerciseIndex } from './ExerciseIndex';
 import { Grid } from './Grid';
 import { Header } from './Header';
@@ -80,6 +81,9 @@ export function Game() {
 
   const [statsOpen, setStatsOpen] = useState(false);
   const [drillOpen, setDrillOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  /* Bumped when a round ends so the board reloads with the new standing. */
+  const [boardKey, setBoardKey] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [indexOpen, setIndexOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -130,11 +134,21 @@ export function Game() {
     [hints.category],
   );
 
+  /*
+   * The server banks the result as the round ends, so the board is already
+   * stale by the time the player looks at it. Bumping the key on that
+   * transition means they open it to their new rank rather than their old one.
+   */
+  useEffect(() => {
+    if (mode === 'daily' && gameStatus !== 'playing') setBoardKey((k) => k + 1);
+  }, [mode, gameStatus]);
+
   const sidebarActions = {
     onOpenHelp: () => setHelpOpen(true),
     onOpenIndex: () => setIndexOpen(true),
     onOpenStats: () => setStatsOpen(true),
     onOpenDrill: () => setDrillOpen(true),
+    onOpenBoard: () => setBoardOpen(true),
     onOpenAccount: () => setAccountOpen(true),
     onOpenSettings: () => setSettingsOpen(true),
   };
@@ -292,6 +306,11 @@ export function Game() {
       <ResultModal />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} />
       <DrillModal open={drillOpen} onClose={() => setDrillOpen(false)} />
+      <LeaderboardModal
+        open={boardOpen}
+        onClose={() => setBoardOpen(false)}
+        refreshKey={boardKey}
+      />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExerciseIndex open={indexOpen} onClose={() => setIndexOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />

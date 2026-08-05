@@ -58,12 +58,19 @@ test('identity comes from a verified token, not the request body', () => {
 });
 
 test('the banked user id comes from the verified caller', () => {
+  /*
+   * Asserts the property, not the helper's name: whatever it is called, the id
+   * handed to bankResult must be derived from the request's verified token and
+   * never from the request body.
+   */
   const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
-  assert.match(route, /userIdFromRequest\(request\)/);
-  assert.ok(
-    !/bankResult\(\s*body\.|bankResult\(\s*userId\s*\)\s*=>/.test(route),
-    'a caller-supplied id is being banked',
+  assert.match(
+    route,
+    /(verifiedUser|userIdFromRequest)\(request\)/,
+    'identity is not resolved from the request',
   );
+  assert.match(route, /bankResult\(\s*user\.id,/, 'the banked id is not the verified one');
+  assert.ok(!/bankResult\(\s*body\./.test(route), 'a caller-supplied id is being banked');
 });
 
 /* ── the policy shape ─────────────────────────────────────────────────────── */

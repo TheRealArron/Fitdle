@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 134 unit tests
+npm test                 # 147 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -336,6 +336,42 @@ Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
 static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
+
+### Leaderboard
+
+Two boards, both public, both read-only. The only way onto either is to finish a
+round, which `/api/guess` banks from a session it signed itself.
+
+| Board | Ranks by | Ties |
+|---|---|---|
+| **Streaks** | Current streak, descending | Whoever got there first |
+| **Today** | Fewest guesses | Whoever finished earlier |
+
+**No user id ever reaches the client.** A stable public identifier is a
+correlation key, and a leaderboard is exactly where someone would go to collect
+them - so "is this row me?" is decided on the server against the verified caller
+and leaves as a boolean. Your own rank when you miss the top ten is computed the
+same way: a count of players strictly ahead of you, never a list.
+
+**The ranking columns are generated, not written.** Postgres derives `streak`,
+`day_seed`, `day_guesses` and `day_won` from the save blob, so a leaderboard
+column physically cannot drift from the record it ranks - which it would within
+a week if the server had to remember to update both. `username` is the one
+exception: it lives in `auth.users`, which nobody may read for another account,
+so the API denormalises it at bank time.
+
+Both boards have a composite index matching their exact sort order, and tests
+assert the query and the index agree - a mismatch is invisible until the table
+is big enough to hurt.
+
+#### Why "Today" ranks guesses, not speed
+
+A speed board was the obvious second dimension, and it is not honestly
+measurable here. Nothing records when a player *started*, and anything that did
+would reset by discarding the session and asking for a fresh one - so the board
+would rank whoever worked that out rather than whoever solved it fastest. Guess
+count is already measured, already unforgeable, and is what the game is
+about. The UI never uses the word "fastest", and a test enforces that.
 
 ### The streak is the server's, not the browser's
 

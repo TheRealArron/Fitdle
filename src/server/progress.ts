@@ -65,6 +65,7 @@ export async function bankResult(
   seed: number,
   won: boolean,
   guessCount: number,
+  username?: string | null,
 ): Promise<BankedProgress | null> {
   const client = adminClient();
   if (!client) return null;
@@ -83,7 +84,18 @@ export async function bankResult(
   const { error } = await client
     .from(TABLE)
     .upsert(
-      { user_id: userId, save: next, updated_at: new Date().toISOString() },
+      {
+        user_id: userId,
+        save: next,
+        updated_at: new Date().toISOString(),
+        /*
+         * Denormalised so the leaderboard can show a name without reading
+         * auth.users - which nobody can do for another account, correctly.
+         * Refreshed on every bank, so a rename propagates on the next round
+         * rather than needing a migration.
+         */
+        ...(username ? { username } : {}),
+      },
       { onConflict: 'user_id' },
     );
 

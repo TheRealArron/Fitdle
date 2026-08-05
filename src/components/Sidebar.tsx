@@ -27,6 +27,7 @@ export interface SidebarActions {
   onOpenIndex: () => void;
   onOpenStats: () => void;
   onOpenDrill: () => void;
+  onOpenBoard: () => void;
   onOpenAccount: () => void;
   onOpenSettings: () => void;
   /** Fired after any navigation, so the mobile drawer can close itself. */
@@ -77,6 +78,7 @@ export function Sidebar({
   onOpenIndex,
   onOpenStats,
   onOpenDrill,
+  onOpenBoard,
   onOpenAccount,
   onOpenSettings,
   onNavigate,
@@ -161,6 +163,7 @@ export function Sidebar({
           hint={String(CATALOGUE.length)}
           onClick={go(onOpenIndex)}
         />
+        <NavItem icon={Trophy} label="Leaderboard" onClick={go(onOpenBoard)} />
         <NavItem icon={ChartColumn} label="Statistics" onClick={go(onOpenStats)} />
         {/* A warm-up, not a second game: it drills the exercise-to-muscle
             mapping the puzzle already scores you on. */}

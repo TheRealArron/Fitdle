@@ -65,6 +65,13 @@ export function adminClient(): SupabaseClient | null {
  * callers treat both as "play locally", never as "trust it anyway".
  */
 export async function userIdFromRequest(request: Request): Promise<string | null> {
+  return (await verifiedUser(request))?.id ?? null;
+}
+
+/** The verified caller, with the display name they chose. Null when anonymous. */
+export async function verifiedUser(
+  request: Request,
+): Promise<{ id: string; username: string | null } | null> {
   if (!url || !anonKey) return null;
 
   const header = request.headers.get('authorization');
@@ -78,7 +85,10 @@ export async function userIdFromRequest(request: Request): Promise<string | null
     });
     const { data, error } = await client.auth.getUser(token);
     if (error || !data.user) return null;
-    return data.user.id;
+
+    const meta = data.user.user_metadata as Record<string, unknown> | null;
+    const username = typeof meta?.username === 'string' ? meta.username : null;
+    return { id: data.user.id, username };
   } catch {
     // Network trouble reaching the auth server is not proof of identity.
     return null;

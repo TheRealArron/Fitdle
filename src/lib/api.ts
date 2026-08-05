@@ -133,6 +133,38 @@ export function askCoach(
   return post('/api/coach', { question, state });
 }
 
+export interface BoardEntry {
+  rank: number;
+  name: string;
+  value: number;
+  isYou: boolean;
+}
+
+export interface LeaderboardData {
+  board: 'streak' | 'daily';
+  seed: number;
+  top: BoardEntry[];
+  you: { rank: number; value: number; name: string } | null;
+  total: number;
+}
+
+/** Public boards. Auth is optional; signing in adds `isYou` and your standing. */
+export async function fetchBoard(
+  which: 'streak' | 'daily',
+): Promise<ApiResult<LeaderboardData>> {
+  try {
+    const token = await bearerToken();
+    const res = await fetch(`${BASE}/api/leaderboard?board=${which}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+    });
+    if (!res.ok) return { ok: false, error: `Server error (${res.status})` };
+    return { ok: true, data: (await res.json()) as LeaderboardData };
+  } catch {
+    return { ok: false, error: 'Could not reach the server.' };
+  }
+}
+
 export function isRejection(d: DailyState | GuessRejected): d is GuessRejected {
   return (d as GuessRejected).ok === false;
 }
