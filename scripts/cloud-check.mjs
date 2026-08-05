@@ -58,6 +58,7 @@ const env = Object.fromEntries(
 
 const url = env.NEXT_PUBLIC_SUPABASE_URL;
 const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !key) {
   fail(
@@ -167,6 +168,63 @@ if (!write.error) {
     )}`,
   );
   console.log(`  ${c.warn('→')} Confirm RLS is enabled on public.fitdle_progress in the dashboard`);
+}
+
+/* ── 6. the server can write, and only the server ─────────────────────────── */
+
+/*
+ * This is the check that matters now.
+ *
+ * The streak became authoritative by REVOKING the client's insert/update
+ * permission and moving writes to the API under the service-role key. A project
+ * still running the old schema keeps those policies, so the browser can still
+ * write its own row - and the app will look completely fine while a forged
+ * streak sails straight through. Nothing else would catch that.
+ */
+if (!serviceKey) {
+  console.log(
+    `${c.warn('?')} SUPABASE_SERVICE_ROLE_KEY is not set ${c.dim('(streaks stay local-only)')}`,
+  );
+  console.log(
+    `  ${c.warn('→')} Supabase → Settings → API → service_role key. Server-only: never NEXT_PUBLIC_`,
+  );
+} else if (/^ey/.test(serviceKey) && serviceKey === key) {
+  fail(
+    'SUPABASE_SERVICE_ROLE_KEY is the same value as the anon key',
+    'Copy the service_role key, not the anon/publishable one',
+  );
+} else {
+  pass('service-role key present', 'the API can write authoritative streaks');
+}
+
+/*
+ * The policy probe. An anonymous insert already had to fail; the NEW property
+ * is that it must fail with 42501 rather than reaching the foreign key, because
+ * reaching the FK means an insert policy still exists and is letting rows past.
+ */
+const policyProbe = await supabase
+  .from('fitdle_progress')
+  .update({ save: {} })
+  .eq('user_id', '00000000-0000-0000-0000-000000000000')
+  .select();
+
+if (policyProbe.error?.code === '42501') {
+  pass('client writes are revoked', 'update refused by RLS');
+} else if (!policyProbe.error && (policyProbe.data ?? []).length === 0) {
+  // An update matching no rows is not proof either way - with no update policy
+  // Postgres reports zero rows rather than an error.
+  pass('client writes are revoked', 'no row was updatable');
+} else if (!policyProbe.error) {
+  fail(
+    'a client UPDATE was accepted - the old write policies are still in place',
+    'Re-run supabase/schema.sql; it drops "insert own progress" and "update own progress"',
+  );
+} else {
+  console.log(
+    `${c.warn('?')} client update refused, but not by RLS ${c.dim(
+      `(${policyProbe.error.code ?? 'no code'})`,
+    )}`,
+  );
 }
 
 console.log();

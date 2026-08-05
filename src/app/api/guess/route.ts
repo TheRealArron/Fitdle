@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { answerFor, dailySeed, playGuesses, validateGuess } from '@/server/game';
 import { openSession, sealSession } from '@/server/session';
 import { clientKey, rateLimit } from '@/server/rateLimit';
+import { bankResult } from '@/server/progress';
+import { userIdFromRequest } from '@/server/supabase';
 
 /**
  * Submits one guess.
@@ -61,11 +63,30 @@ export async function POST(request: Request) {
   const guesses = [...existing, guess];
   const outcome = playGuesses(seed, guesses, answer, session?.call);
 
+  /*
+   * Bank the streak here, on the server, at the moment the round ends.
+   *
+   * This is the only place that knows - from a session it signed itself - both
+   * that the round is over and how many guesses it took. The browser used to
+   * decide this and upload the answer, which made `streak: 9999` a devtools
+   * one-liner.
+   *
+   * Signed-in players only, and best effort: an anonymous player, an
+   * unconfigured deployment, or a failed write all fall back to the local save.
+   * A cloud problem must not cost someone the result they just earned.
+   */
+  let progress: Awaited<ReturnType<typeof bankResult>> = null;
+  if (outcome.status !== 'playing') {
+    const userId = await userIdFromRequest(request);
+    if (userId) progress = await bankResult(userId, seed, outcome.status === 'won', guesses.length);
+  }
+
   return NextResponse.json(
     {
       seed,
       serverTime: new Date().toISOString(),
       ...outcome,
+      progress: progress?.save ?? null,
       state: sealSession({ seed, guesses, call: session?.call }),
     },
     { headers: { 'Cache-Control': 'no-store' } },

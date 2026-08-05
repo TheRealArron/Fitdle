@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 122 unit tests
+npm test                 # 134 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -280,12 +280,12 @@ board's centre exactly the viewport's centre at every width; a test asserts
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
 | Replaying an old session | **Blocked.** The seed is inside the signature |
 | Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP - a speed bump, not a distributed defence |
-| Streak authenticity | **Not** protected. The client still writes its own streak to localStorage |
+| Forging a streak in the cloud | **Blocked for signed-in players.** The client's `insert`/`update` permission on the progress row is revoked; the API writes it under the service-role key |
+| Forging a streak while signed out | **Not** protected, and cannot be. A local save is the player's own file. It is also private, and not what a leaderboard reads |
 
-Only the last row remains. Winning cannot be faked any more - you have to
-actually solve it to learn the answer - but the *record* of having won is still
-client-written. Closing that means the API writing to Supabase under the user's
-JWT, which is a natural next step rather than a rewrite.
+The remaining row is by design rather than unfinished. An anonymous player's
+save lives on their machine and no amount of client-side cleverness makes it
+trustworthy - but nothing reads it except them.
 
 #### The trusted clock, and a trap worth knowing about
 
@@ -336,6 +336,42 @@ Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
 static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
+
+### The streak is the server's, not the browser's
+
+RLS stops you writing someone else's row. It says **nothing** about the
+truthfulness of your own - so while the browser held write permission,
+`streak: 9999` against your own record was a devtools one-liner. Private, that
+is untidy. On a public leaderboard it is the whole game, which is why this had
+to land before the leaderboard rather than after.
+
+So the write moved:
+
+| | Before | Now |
+|---|---|---|
+| Who computes the streak | The browser | `/api/guess`, from a session it signed itself |
+| Who writes the row | The browser, via RLS | The API, via the service-role key |
+| Client RLS on progress | select, insert, update, delete | **select and delete only** |
+
+`/api/guess` is the one place that knows both that the round is over and how
+many guesses it took, so it banks the result at that moment and returns the
+record. The client adopts it wholesale rather than merging - merging would let
+an edited local save pull the displayed streak back up, which is the exact hole
+being closed.
+
+Two properties worth stating:
+
+- **Idempotent.** `commitResult` refuses to pay out twice for the same seed, so
+  a retried request or a replayed winning call cannot inflate anything. That is
+  inherited from the existing arithmetic, not re-implemented, and pinned by a test.
+- **Fails soft.** An anonymous player, a deployment with no service-role key, or
+  a failed write all fall back to the local save. A cloud problem must never
+  cost someone the result they just earned.
+
+`SUPABASE_SERVICE_ROLE_KEY` bypasses RLS completely, so it is server-only and
+`npm run cloud:check` fails loudly if it is ever the anon key by mistake - or if
+the project is still running the old policies, which would look completely fine
+while forged streaks sailed through.
 
 ### Anatomy drill
 

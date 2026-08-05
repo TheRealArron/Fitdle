@@ -336,9 +336,22 @@ export const useGameStore = create<GameState>()((set, get) => ({
     };
     if (d.status !== 'playing') {
       const day = next.day;
-      next = commitResult(next, seed, d.status === 'won', d.guesses.length, !clockRollback);
+
+      /*
+       * `d.progress` is the server's record, written the moment the round ended
+       * for a signed-in player. Adopt it WHOLESALE rather than merging: it is
+       * authoritative, the local copy is a cache, and merging would let an
+       * edited local save pull the displayed streak back up - which is the
+       * exact hole this change closes.
+       *
+       * Anonymous play, or a deployment with no service-role key, falls back to
+       * computing it locally as before. That save is still forgeable; it is
+       * also still private, and it is not what a leaderboard would read.
+       */
+      next = d.progress
+        ? { ...d.progress, day }
+        : commitResult(next, seed, d.status === 'won', d.guesses.length, !clockRollback);
       next.day = day;
-      void import('@/store/useAuthStore').then((m) => m.syncAfterGame());
     }
     writeSave(next);
 

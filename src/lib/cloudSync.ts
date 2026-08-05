@@ -95,6 +95,18 @@ export async function fetchCloudSave(userId: string): Promise<CloudResult<SaveDa
   return { ok: true, data: (data?.save as SaveData | undefined) ?? null };
 }
 
+/**
+ * Writes the player's row.
+ *
+ * ⚠ The client no longer has permission to do this for progress. RLS grants
+ * `select` and `delete` only; `insert` and `update` were revoked when the
+ * server took ownership of the streak, so this now fails for ordinary players
+ * and that is the intended behaviour rather than a bug to route around.
+ *
+ * It survives for `overwriteCloud`, which is how "reset my statistics" clears
+ * the cloud copy - and a reset can only ever lower a streak, so nothing is at
+ * risk. That path will move to a DELETE once there is a reason to touch it.
+ */
 export async function pushCloudSave(
   userId: string,
   save: SaveData,
@@ -114,8 +126,17 @@ export async function pushCloudSave(
 }
 
 /**
- * Full sync: pull, merge, push back the merged result so both ends agree.
- * Returns the save the app should now use.
+ * Pull the cloud record and reconcile it with what is on this device.
+ *
+ * This used to pull, merge, and push the merged result back. It no longer
+ * pushes: the server owns the progress row now, so a client that wrote its
+ * merge back would be overwriting the authoritative record with a number it
+ * computed itself - exactly the hole this whole change closes.
+ *
+ * The merge still happens locally, because the device may hold a legitimately
+ * newer in-progress board, or progress earned while signed out. Anything a
+ * merge produces that the server disagrees with is corrected on the next
+ * completed round, when the API writes the truth and returns it.
  */
 export async function syncSave(
   userId: string,
@@ -124,10 +145,5 @@ export async function syncSave(
   const remote = await fetchCloudSave(userId);
   if (!remote.ok) return remote;
 
-  const merged = remote.data ? mergeSaves(local, remote.data) : local;
-
-  const pushed = await pushCloudSave(userId, merged);
-  if (!pushed.ok) return pushed;
-
-  return { ok: true, data: merged };
+  return { ok: true, data: remote.data ? mergeSaves(local, remote.data) : local };
 }

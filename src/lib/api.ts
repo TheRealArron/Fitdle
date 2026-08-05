@@ -12,6 +12,9 @@ import type { LetterState } from '@/lib/evaluate';
  * its own origin. The Chrome extension needs it - a static export has no
  * server of its own, so it must call the deployed one.
  */
+import type { SaveData } from '@/lib/secureStorage';
+import { getSupabase } from '@/lib/supabase';
+
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
 
 export interface RevealedAnswer {
@@ -41,6 +44,11 @@ export interface DailyState {
   /** The opening call and how it went. Null when none was made. */
   call: { group: MuscleGroup; correct: boolean } | null;
   reveal: RevealedAnswer | null;
+  /**
+   * The server's authoritative record, returned when a signed-in player
+   * finishes a round. Null for anonymous play or an unconfigured deployment.
+   */
+  progress?: SaveData | null;
   /** Signed, opaque. Round-tripped on the next guess. */
   state: string;
 }
@@ -54,11 +62,33 @@ export interface GuessRejected {
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+/**
+ * The signed-in player's access token, if there is one.
+ *
+ * Sent so the server can bank the streak against the right account. It is the
+ * player's own JWT - the server verifies it rather than trusting the `sub`
+ * inside it, so a forged token buys nothing.
+ */
+async function bearerToken(): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
   try {
+    const token = await bearerToken();
     const res = await fetch(`${BASE}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
       cache: 'no-store',
     });

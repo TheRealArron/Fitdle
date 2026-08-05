@@ -33,18 +33,27 @@ create policy "read own progress"
   for select
   using (auth.uid() = user_id);
 
-drop policy if exists "insert own progress" on public.fitdle_progress;
-create policy "insert own progress"
-  on public.fitdle_progress
-  for insert
-  with check (auth.uid() = user_id);
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The client can READ its progress. It can no longer WRITE it.
+ *
+ * RLS stops you writing someone else's row. It says nothing about the
+ * truthfulness of your own, so while the browser held write permission,
+ * `streak: 9999` was a devtools one-liner against your own record. Private,
+ * that is merely untidy. On a public leaderboard it is the whole game.
+ *
+ * Writes now come from the API, using the service-role key, which bypasses RLS.
+ * The server is the only party that knows - from a session it signed itself -
+ * that a round was genuinely won and in how many guesses.
+ *
+ * Deleting is kept, because a player must always be able to remove their own
+ * data. It cannot be used to inflate anything: the worst it does is reset you
+ * to zero.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 
+drop policy if exists "insert own progress" on public.fitdle_progress;
 drop policy if exists "update own progress" on public.fitdle_progress;
-create policy "update own progress"
-  on public.fitdle_progress
-  for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
 
 drop policy if exists "delete own progress" on public.fitdle_progress;
 create policy "delete own progress"

@@ -215,9 +215,18 @@ export async function overwriteCloudIfSignedIn(save: SaveData): Promise<void> {
   await useAuthStore.getState().overwriteCloud(save);
 }
 
-/** Pushes local progress to the cloud after a completed daily, if signed in. */
+/**
+ * No longer needed after a completed daily.
+ *
+ * `/api/guess` writes the authoritative record itself the moment the round
+ * ends, and returns it. A client-side sync here would pull that fresh row back
+ * down, merge it with the local copy, and re-display a number the browser
+ * computed - which is what the server just took ownership of.
+ *
+ * Kept as a no-op rather than deleted so any straggling caller is inert instead
+ * of a build error, and so the reason is recorded where someone would look for
+ * it.
+ */
 export async function syncAfterGame(): Promise<void> {
-  const { user, cloudAvailable } = useAuthStore.getState();
-  if (!cloudAvailable || !user) return;
-  await useAuthStore.getState().syncNow();
+  /* intentionally empty - the server banks the result */
 }
