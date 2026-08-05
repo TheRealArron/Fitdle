@@ -71,6 +71,13 @@ export interface SaveData {
   /** In-progress (or finished) board for a single day. */
   day: DayRecord | null;
 
+  /**
+   * Best anatomy-drill score. Optional for the same reason the workout fields
+   * are: bumping SAVE_VERSION would fail every existing save's coherence check
+   * and wipe real streaks, so `normalise()` backfills it on load instead.
+   */
+  drillBest?: number;
+
   /*
    * Workout tracking - a second, independent streak for actually doing the
    * movement. Optional on purpose: these were added after people already had
@@ -93,6 +100,7 @@ export function normalise(save: SaveData): SaveData {
     maxWorkoutStreak: save.maxWorkoutStreak ?? 0,
     workoutsDone: save.workoutsDone ?? 0,
     lastWorkoutSeed: save.lastWorkoutSeed ?? null,
+    drillBest: save.drillBest ?? 0,
   };
 }
 
@@ -112,6 +120,7 @@ export function defaultSave(): SaveData {
     maxWorkoutStreak: 0,
     workoutsDone: 0,
     lastWorkoutSeed: null,
+    drillBest: 0,
   };
 }
 
@@ -246,6 +255,8 @@ function isCoherent(d: unknown): d is SaveData {
   if (isInt(s.workoutStreak) && isInt(s.workoutsDone) && s.workoutStreak > s.workoutsDone) {
     return false;
   }
+
+  if (s.drillBest !== undefined && !isInt(s.drillBest)) return false;
 
   if (s.lastSeed !== null && !isInt(s.lastSeed)) return false;
   if (s.lastResult !== null && s.lastResult !== 'won' && s.lastResult !== 'lost') return false;
@@ -493,6 +504,18 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
  * `commitResult` - you can only bank one workout per day, so spamming the
  * button cannot inflate the workout streak.
  */
+/**
+ * Records a drill score, keeping only the best.
+ *
+ * Monotonic on purpose: the drill has no streak to break and no round to
+ * replay, so there is nothing to protect beyond "your record should not go
+ * down because you had one bad run".
+ */
+export function commitDrill(save: SaveData, score: number): SaveData {
+  const best = Math.max(save.drillBest ?? 0, Math.max(0, Math.floor(score)));
+  return { ...save, drillBest: best };
+}
+
 export function commitWorkout(input: SaveData, seed: number): SaveData {
   if (input.lastWorkoutSeed === seed) return input;
 

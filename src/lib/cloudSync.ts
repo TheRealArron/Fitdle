@@ -68,6 +68,8 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     // comes from whichever device logged a workout most recently.
     workoutsDone: Math.max(a.workoutsDone ?? 0, b.workoutsDone ?? 0),
     maxWorkoutStreak: Math.max(a.maxWorkoutStreak ?? 0, b.maxWorkoutStreak ?? 0),
+    // A personal best is a high-water mark, so max is the whole merge rule.
+    drillBest: Math.max(a.drillBest ?? 0, b.drillBest ?? 0),
     workoutStreak: Math.min(
       ((a.lastWorkoutSeed ?? -1) >= (b.lastWorkoutSeed ?? -1) ? a : b).workoutStreak ?? 0,
       Math.max(a.workoutsDone ?? 0, b.workoutsDone ?? 0),

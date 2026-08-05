@@ -5,6 +5,7 @@ import { ChartColumn, CirclePlay, Share2, Shuffle, Trophy, Undo2 } from 'lucide-
 import { useState } from 'react';
 import { MAX_GUESSES } from '@/data/exercises';
 import { buildShareText, shareResult } from '@/lib/share';
+import { loadSave } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { Countdown } from './Countdown';
@@ -32,6 +33,9 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
   const startPractice = useGameStore((s) => s.startPractice);
   const setToast = useGameStore((s) => s.setToast);
   const colourblind = useSettingsStore((s) => s.colourblind);
+  // Read straight from storage: a drill best is not puzzle state and has no
+  // business living in the game store.
+  const drillBest = loadSave().save.drillBest ?? 0;
   const [sharing, setSharing] = useState(false);
 
   const won = status === 'won';
@@ -42,7 +46,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
 
   const onShare = async () => {
     setSharing(true);
-    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind));
+    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind, drillBest));
     setSharing(false);
     setToast(
       outcome === 'shared'

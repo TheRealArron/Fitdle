@@ -7,6 +7,7 @@ import { MAX_GUESSES, musclesOf } from '@/data/exercises';
 import { MUSCLE_LABEL, REGIONS_IN_GROUP, type MuscleGroup } from '@/data/muscles';
 import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { buildShareText, shareResult } from '@/lib/share';
+import { loadSave } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { BodyFigure } from './BodyFigure';
@@ -42,6 +43,9 @@ export function ResultModal() {
   const isPractice = mode === 'practice';
 
   const colourblind = useSettingsStore((s) => s.colourblind);
+  // Read straight from storage: a drill best is not puzzle state and has no
+  // business living in the game store.
+  const drillBest = loadSave().save.drillBest ?? 0;
   const [sharing, setSharing] = useState(false);
   const [region, setRegion] = useState<MuscleRegion | null>(null);
   const won = status === 'won';
@@ -74,7 +78,7 @@ export function ResultModal() {
     // a practice grid.
     if (isPractice) return;
     setSharing(true);
-    const text = buildShareText(seed, evaluations, won, streak, colourblind);
+    const text = buildShareText(seed, evaluations, won, streak, colourblind, drillBest);
     const outcome = await shareResult(text);
     setSharing(false);
     setToast(

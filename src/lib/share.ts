@@ -1,5 +1,6 @@
 import { MAX_GUESSES } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
+import { badgeFor } from '@/lib/drill';
 import { evaluationToEmoji, type LetterState } from '@/lib/evaluate';
 
 /**
@@ -15,11 +16,21 @@ export function buildShareText(
   won: boolean,
   streak: number,
   colourblind = false,
+  drillBest = 0,
 ): string {
   const score = won ? `${evaluations.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`;
   const grid = evaluations.map((e) => evaluationToEmoji(e, colourblind)).join('\n');
   const streakLine = streak > 1 ? `\n🔥 ${streak} day streak` : '';
-  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}\n\n${SITE_URL}`;
+
+  /*
+   * The drill badge, earned in the anatomy warm-up rather than the puzzle.
+   * Deliberately a separate line: the score line has to stay comparable between
+   * players, so an achievement from a different mode cannot be folded into it.
+   */
+  const badge = badgeFor(drillBest);
+  const badgeLine = badge ? `\n${badge.emoji} ${badge.label} (${drillBest} anatomy)` : '';
+
+  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}${badgeLine}\n\n${SITE_URL}`;
 }
 
 export type ShareOutcome = 'shared' | 'copied' | 'failed';

@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/useSettingsStore';
 import { useGameStore, selectHints } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
+import { DrillModal } from './DrillModal';
 import { ExerciseIndex } from './ExerciseIndex';
 import { Grid } from './Grid';
 import { Header } from './Header';
@@ -78,6 +79,7 @@ export function Game() {
     mode === 'daily' && gameStatus !== 'playing' && !modalOpen && revealingRow === null;
 
   const [statsOpen, setStatsOpen] = useState(false);
+  const [drillOpen, setDrillOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [indexOpen, setIndexOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -132,6 +134,7 @@ export function Game() {
     onOpenHelp: () => setHelpOpen(true),
     onOpenIndex: () => setIndexOpen(true),
     onOpenStats: () => setStatsOpen(true),
+    onOpenDrill: () => setDrillOpen(true),
     onOpenAccount: () => setAccountOpen(true),
     onOpenSettings: () => setSettingsOpen(true),
   };
@@ -288,6 +291,7 @@ export function Game() {
       <Toast />
       <ResultModal />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} />
+      <DrillModal open={drillOpen} onClose={() => setDrillOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExerciseIndex open={indexOpen} onClose={() => setIndexOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />

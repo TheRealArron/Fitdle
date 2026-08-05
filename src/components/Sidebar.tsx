@@ -10,6 +10,7 @@ import {
   List,
   Settings,
   Shuffle,
+  Zap,
   Trophy,
   Undo2,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ export interface SidebarActions {
   onOpenHelp: () => void;
   onOpenIndex: () => void;
   onOpenStats: () => void;
+  onOpenDrill: () => void;
   onOpenAccount: () => void;
   onOpenSettings: () => void;
   /** Fired after any navigation, so the mobile drawer can close itself. */
@@ -74,6 +76,7 @@ export function Sidebar({
   onOpenHelp,
   onOpenIndex,
   onOpenStats,
+  onOpenDrill,
   onOpenAccount,
   onOpenSettings,
   onNavigate,
@@ -159,6 +162,9 @@ export function Sidebar({
           onClick={go(onOpenIndex)}
         />
         <NavItem icon={ChartColumn} label="Statistics" onClick={go(onOpenStats)} />
+        {/* A warm-up, not a second game: it drills the exercise-to-muscle
+            mapping the puzzle already scores you on. */}
+        <NavItem icon={Zap} label="Anatomy drill" hint="30s" onClick={go(onOpenDrill)} />
         {mode === 'daily' && (
           <NavItem
             icon={Shuffle}

@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 106 unit tests
+npm test                 # 122 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -336,6 +336,32 @@ Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
 static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
+
+### Anatomy drill
+
+A 30-second warm-up: name the muscle each exercise works, as fast as you can.
+
+**It is not brain training, and the copy never says it is.** The evidence that
+generic cognitive-training games transfer to anything outside themselves is
+weak, and a health claim we cannot support has no place in a fitness product.
+This drills one specific, checkable skill - the exercise-to-muscle mapping - and
+that is precisely the second feedback channel the puzzle scores you on. Getting
+better at it makes you measurably better at Fitdle. That is the only claim made.
+
+Two invariants a generator this small could easily get wrong, both pinned by
+tests:
+
+- **No distractor is a muscle the exercise actually works**, not even as a
+  secondary assistor. Otherwise the "wrong" answer is arguably right, and a quiz
+  you can lose by being correct teaches the opposite of what it should.
+- **The pool is the whole catalogue, including today's answer.** Excluding it
+  would be a leak: diff the drill's vocabulary against the exercise index and
+  the missing word is the answer.
+
+It touches no puzzle state - no streak, no seed, no server call. The worst
+outcome of a bug in it is a wrong personal best. The badge it earns
+(🔥 / 💪 / 🧠) rides on its own line in the share text, never folded into the
+`n/6` score, which has to stay comparable between players.
 
 ### Do the exercise, wherever you are
 
