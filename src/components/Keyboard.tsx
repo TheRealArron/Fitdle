@@ -17,7 +17,7 @@ const KEY_CLASS: Record<LetterState, string> = {
   correct: 'bg-state-correct text-white shadow-[0_2px_10px_-2px_rgba(34,197,94,0.6)]',
   // Same dark-on-yellow pairing as the tiles; white on #eab308 fails contrast.
   present: 'on-present bg-state-present text-[#231a00] shadow-[0_2px_10px_-2px_rgba(234,179,8,0.5)]',
-  // Eliminated keys recede rather than shout — they are the least useful thing
+  // Eliminated keys recede rather than shout - they are the least useful thing
   // on screen once known, so they lose contrast instead of gaining a colour.
   absent: 'bg-state-absent/45 text-white/35',
 };
@@ -80,7 +80,7 @@ export function Keyboard() {
                 className={[
                   'flex h-12 items-center justify-center rounded-lg font-game text-sm font-bold uppercase',
                   'transition-colors duration-300 select-none sm:h-14 sm:text-base',
-                  // Top-edge highlight matches .panel — the keys read as the
+                  // Top-edge highlight matches .panel - the keys read as the
                   // same material as the rails rather than floating chips.
                   'shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
                   wide ? 'grow-[1.6] basis-0 text-xs sm:text-sm' : 'grow basis-0',

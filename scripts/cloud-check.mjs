@@ -114,11 +114,11 @@ if (probe.error) {
  * The anon key is public and ships in the browser bundle, so RLS is the only
  * thing standing between one player and everybody else's rows. If an
  * unauthenticated select returns data, the policies did not apply and the table
- * is world-readable — worth failing loudly over.
+ * is world-readable - worth failing loudly over.
  */
 if (!probe.error && Array.isArray(probe.data) && probe.data.length > 0) {
   fail(
-    'RLS is NOT enforced — an unauthenticated read returned rows',
+    'RLS is NOT enforced - an unauthenticated read returned rows',
     'Re-run supabase/schema.sql; it enables RLS and creates the four owner-only policies',
   );
 } else {
@@ -135,7 +135,7 @@ const write = await supabase
  * Read the error code, do not just check that one occurred.
  *
  * `user_id` is a foreign key to auth.users, and the probe UUID does not exist
- * there — so a naive "did it error?" test passes on a foreign-key violation
+ * there - so a naive "did it error?" test passes on a foreign-key violation
  * even when RLS is wide open. That would be a false pass on the one check that
  * actually matters, so the codes are distinguished:
  *
@@ -149,14 +149,14 @@ const code = write.error?.code;
 
 if (!write.error) {
   fail(
-    'an anonymous INSERT succeeded — the table is writable by anyone',
+    'an anonymous INSERT succeeded - the table is writable by anyone',
     'Re-run supabase/schema.sql; it enables RLS and adds the owner-only insert policy',
   );
 } else if (code === '42501' || /row-level security/i.test(write.error.message)) {
   pass('anonymous writes refused by RLS', '42501 insufficient_privilege');
 } else if (code === '23503') {
   fail(
-    'anonymous INSERT reached the foreign key — RLS did not block it',
+    'anonymous INSERT reached the foreign key - RLS did not block it',
     'The insert policy is missing or too permissive. Re-run supabase/schema.sql',
   );
 } else {

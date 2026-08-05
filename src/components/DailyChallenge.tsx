@@ -9,14 +9,14 @@ import { useGameStore } from '@/store/useGameStore';
  *
  * A guessing game about exercises that never asks you to do one is a crossword
  * with a fitness skin. This turns the answer into a prescription and gives it
- * its own streak, tracked separately from the puzzle streak — because getting
+ * its own streak, tracked separately from the puzzle streak - because getting
  * the word is not the same achievement as doing the work, and conflating them
  * would let one paper over the other.
  *
  * Marking it done is on the honour system, and deliberately so: verifying a set
  * of squats is not something a browser can do, and pretending otherwise would
  * be worse than trusting the player. The streak is for them, not for a
- * leaderboard — there isn't one.
+ * leaderboard - there isn't one.
  */
 export function DailyChallenge() {
   const target = useGameStore((s) => s.reveal);
@@ -48,7 +48,7 @@ export function DailyChallenge() {
       </div>
 
       <p className="mb-3 text-sm leading-relaxed text-slate-300">
-        You found it — now do it.{' '}
+        You found it - now do it.{' '}
         <strong className="numeric text-white">{target.challenge}</strong>{' '}
         <strong className="text-white">{target.display}</strong>.
       </p>
@@ -72,7 +72,7 @@ export function DailyChallenge() {
       <p className="mt-2 text-center text-[11px] leading-snug text-slate-500">
         {done
           ? 'Counts once per day. Come back tomorrow.'
-          : 'Honour system — nobody is checking, and there is no leaderboard.'}
+          : 'Honour system - nobody is checking, and there is no leaderboard.'}
       </p>
     </section>
   );

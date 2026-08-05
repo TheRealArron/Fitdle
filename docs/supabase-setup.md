@@ -1,6 +1,6 @@
 # Setting up cloud sync
 
-Fitdle works with no backend — progress just stays in one browser. This turns on
+Fitdle works with no backend - progress just stays in one browser. This turns on
 real accounts and a streak that follows you between devices.
 
 Takes about five minutes. Free tier is plenty.
@@ -11,10 +11,10 @@ Takes about five minutes. Free tier is plenty.
 
 1. Sign up at **[supabase.com](https://supabase.com)** and verify your email.
 2. **New project**. You'll be asked for:
-   - **Name** — anything, e.g. `fitdle`
-   - **Database password** — generated is fine. You will not need it for this,
+   - **Name** - anything, e.g. `fitdle`
+   - **Database password** - generated is fine. You will not need it for this,
      but save it anyway; it cannot be shown again.
-   - **Region** — pick the one closest to your players, not to you.
+   - **Region** - pick the one closest to your players, not to you.
 3. Wait ~2 minutes while it provisions.
 
 ## 2. Copy your keys
@@ -27,7 +27,7 @@ Takes about five minutes. Free tier is plenty.
 | **anon / public** key | a long `eyJ...` string |
 
 Newer projects may show **Publishable key** (`sb_publishable_...`) instead of, or
-alongside, the legacy `anon` key. Either works — they're both the browser-safe
+alongside, the legacy `anon` key. Either works - they're both the browser-safe
 key.
 
 > **Never use the `service_role` / `secret` key here.** It bypasses row-level
@@ -35,7 +35,7 @@ key.
 > JavaScript that ships to every visitor. Handing that out would let anyone read
 > and rewrite every row in your database.
 >
-> The anon key being public is fine and intended — RLS is what protects the data.
+> The anon key being public is fine and intended - RLS is what protects the data.
 
 ## 3. Put them in `.env.local`
 
@@ -57,7 +57,7 @@ No quotes, no trailing spaces. `.env.local` is gitignored.
 **SQL Editor → New query**, paste the whole of
 [`supabase/schema.sql`](../supabase/schema.sql), and **Run**.
 
-It's idempotent — safe to run again if you're unsure whether it took.
+It's idempotent - safe to run again if you're unsure whether it took.
 
 That creates `public.fitdle_progress` (one row per user), enables row-level
 security, and adds four owner-only policies so a signed-in user can only touch
@@ -86,7 +86,7 @@ Cloud sync is ready.
 ```
 
 Anything missing is named with the fix. The two RLS lines are the ones to care
-about — if either fails, your table is readable or writable by anyone with the
+about - if either fails, your table is readable or writable by anyone with the
 key, which is everyone.
 
 ## 6. Restart the dev server
@@ -105,7 +105,7 @@ will not see the keys and the app will still say "Accounts are not set up".
 ## Email confirmation
 
 Supabase requires email confirmation by default. On sign-up the app will say
-*"Check your email for a confirmation link, then sign in"* — that's expected, not
+*"Check your email for a confirmation link, then sign in"* - that's expected, not
 a bug.
 
 To skip it while testing: **Authentication → Providers → Email** and turn off
@@ -125,12 +125,12 @@ the dashboard header matches the URL in `.env.local`.
 
 **`RLS is NOT enforced`**
 The schema ran but the policies didn't apply. Re-run
-[`supabase/schema.sql`](../supabase/schema.sql) — the policy statements are
+[`supabase/schema.sql`](../supabase/schema.sql) - the policy statements are
 `drop policy if exists` first, so re-running is safe.
 
 **Sign-in works but the streak doesn't sync**
 Open the Account panel; it shows the sync state. "Sync failed" means the row
-couldn't be written — usually the update policy. Re-run the schema.
+couldn't be written - usually the update policy. Re-run the schema.
 
 **"Too many attempts"**
 Supabase rate-limits auth. Wait a minute.
@@ -143,6 +143,6 @@ RLS stops one player reading or writing another's row. That's real and it works.
 
 What it does **not** do is make streaks trustworthy. The client computes its own
 streak and uploads it, so a determined user can upload any number they like.
-Making that authoritative means moving the answer and the scoring server-side —
-a Postgres function that owns the daily word and validates each guess — which is
+Making that authoritative means moving the answer and the scoring server-side -
+a Postgres function that owns the daily word and validates each guess - which is
 a different product, not a policy change. The schema says so in a comment too.

@@ -47,13 +47,13 @@ export function ResultModal() {
 
   /*
    * `reveal` is null until the server discloses the answer, which it only does
-   * once the round is over. This modal cannot render before then — and that is
+   * once the round is over. This modal cannot render before then - and that is
    * the guarantee, not a formality: there is no client-side path to the answer.
    */
   const hasAnswer = target !== null;
 
   // On the result screen the full answer is public, so the figure switches
-  // from "what you probed" to the complete muscle map — the teaching payoff.
+  // from "what you probed" to the complete muscle map - the teaching payoff.
   const answerMuscles = useMemo(
     () => (target ? musclesOf(target) : new Set<MuscleRegion>()),
     [target],
@@ -81,7 +81,7 @@ export function ResultModal() {
         ? 'Shared'
         : outcome === 'copied'
           ? 'Result copied to clipboard'
-          : 'Could not share — copy manually',
+          : 'Could not share - copy manually',
     );
   };
 
@@ -188,7 +188,7 @@ export function ResultModal() {
               </li>
             ))}
           </ol>
-          {/* Shown on wins too — the coaching is the point of the game, and
+          {/* Shown on wins too - the coaching is the point of the game, and
               hiding it behind a loss punishes the players who engaged most. */}
           <FormVideo answer={target} />
         </section>

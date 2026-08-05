@@ -10,7 +10,7 @@ import { MUSCLE_LABEL, type MuscleRegion } from '@/data/muscles';
 interface MuscleDetailProps {
   region: MuscleRegion | null;
   /**
-   * Null while a daily round is live — the browser genuinely does not know the
+   * Null while a daily round is live - the browser genuinely does not know the
    * answer, because the server has not sent it. That is the safe state: there
    * is nothing to exclude and nothing to leak. Non-null once revealed (or in
    * practice, where the client scores locally).
@@ -23,7 +23,7 @@ interface MuscleDetailProps {
  * What you get for tapping a muscle.
  *
  * Two jobs. During play it answers "what else hits this?", which is a genuine
- * strategic aid — knowing three other exercises that work the lats tells you
+ * strategic aid - knowing three other exercises that work the lats tells you
  * what to probe next. After the game it becomes the teaching payoff, naming
  * whether the answer worked that muscle and why.
  *
@@ -35,7 +35,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
    * When the answer IS known (post-game, or practice) it is excluded from both
    * lists, so the panel never restates what the modal already says.
    *
-   * When it is not known — a live daily — nothing needs excluding, because the
+   * When it is not known - a live daily - nothing needs excluding, because the
    * client cannot identify which of these words is today's. This used to be a
    * real leak: the answer was filtered only once revealed, so tapping "Abs"
    * mid-game listed BURPEE outright. Moving the answer server-side removes the

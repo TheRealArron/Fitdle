@@ -29,7 +29,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Fitdle — Daily Exercise Deduction Game',
+  title: 'Fitdle - Daily Exercise Deduction Game',
   description:
     'Guess the daily exercise in six tries using two clues: the letters, and the muscles it works.',
 };

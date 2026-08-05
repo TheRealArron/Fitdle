@@ -12,7 +12,7 @@ test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-12-31T23:59:59Z')), 20261231);
 });
 
-test('index is seed modulo the answer pool — on the SERVER', () => {
+test('index is seed modulo the answer pool - on the SERVER', () => {
   // The mapping lives in server/game.ts now. This is the whole point: the
   // browser cannot compute it, so it cannot read tomorrow's answer.
   assert.equal(answerFor(20260730).name, ANSWER_ORDER[20260730 % ANSWER_ORDER.length]);
@@ -56,7 +56,7 @@ test('countdown lands on the next UTC midnight', () => {
 
 test('ANSWERS order is load-bearing and must stay pinned', () => {
   // Reordering silently rewrites every past and future puzzle. So does changing
-  // the pool size, since the index is a modulus — see the caveat in exercises.ts.
+  // the pool size, since the index is a modulus - see the caveat in exercises.ts.
   assert.equal(ANSWER_ORDER.length, 60);
   assert.equal(ANSWER_ORDER[0], 'SQUAT');
   assert.equal(ANSWER_ORDER[59], 'ARMCIRCLE');

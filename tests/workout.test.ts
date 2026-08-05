@@ -84,7 +84,7 @@ test('old saves without workout fields load rather than being rejected', () => {
   /*
    * These fields were added after people had saves. If `normalise` did not fill
    * them in, an existing record would fail the coherence check, be treated as
-   * tampering, and wipe a real streak — the exact bug that bit the variable
+   * tampering, and wipe a real streak - the exact bug that bit the variable
    * length change.
    */
   const legacy = { ...defaultSave() } as Partial<SaveData>;
@@ -131,7 +131,7 @@ test('no answer is ever the only exercise training one of its own muscles', () =
    *
    * The muscle-detail panel lists other exercises that train the tapped muscle,
    * and it now excludes the answer at all times. But if an answer were the ONLY
-   * exercise touching some muscle, excluding it would leave an empty list — and
+   * exercise touching some muscle, excluding it would leave an empty list - and
    * an empty list where every other muscle has suggestions is itself a tell.
    *
    * This asserts every muscle each answer works is also worked by something
@@ -144,7 +144,7 @@ test('no answer is ever the only exercise training one of its own muscles', () =
       );
       assert.ok(
         others.length > 0,
-        `${a.name} is the only exercise working ${m} — excluding it would leave an empty list`,
+        `${a.name} is the only exercise working ${m} - excluding it would leave an empty list`,
       );
     }
   }

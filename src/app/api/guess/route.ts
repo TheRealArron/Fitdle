@@ -8,7 +8,7 @@ import { clientKey, rateLimit } from '@/server/rateLimit';
  *
  * The client sends its signed state plus the new word. The server re-derives
  * the entire game from scratch and returns the truth. There is no code path
- * that accepts a result from the client — `status` is computed here, from
+ * that accepts a result from the client - `status` is computed here, from
  * guesses in a token this server signed.
  *
  * Rate limited to 20/minute: six guesses is a complete game, so anything past
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   const limit = rateLimit(`guess:${clientKey(request)}`, 20, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
-      { error: 'Slow down — too many guesses.' },
+      { error: 'Slow down - too many guesses.' },
       { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } },
     );
   }
@@ -48,25 +48,25 @@ export async function POST(request: Request) {
   const existing = session?.guesses ?? [];
 
   // Status of the game BEFORE this guess, so a finished board cannot be extended.
-  const before = playGuesses(seed, existing, answer);
+  const before = playGuesses(seed, existing, answer, session?.call);
 
   const rejection = validateGuess(guess, existing, answer.name.length, before.status);
   if (rejection) {
     return NextResponse.json(
-      { ...rejection, state: sealSession({ seed, guesses: existing }) },
+      { ...rejection, state: sealSession({ seed, guesses: existing, call: session?.call }) },
       { status: 200 },
     );
   }
 
   const guesses = [...existing, guess];
-  const outcome = playGuesses(seed, guesses, answer);
+  const outcome = playGuesses(seed, guesses, answer, session?.call);
 
   return NextResponse.json(
     {
       seed,
       serverTime: new Date().toISOString(),
       ...outcome,
-      state: sealSession({ seed, guesses }),
+      state: sealSession({ seed, guesses, call: session?.call }),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );

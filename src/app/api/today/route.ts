@@ -6,8 +6,8 @@ import { clientKey, rateLimit } from '@/server/rateLimit';
 /**
  * Opens (or resumes) today's puzzle.
  *
- * Returns everything the client needs to render a board — width, hint state,
- * muscle feedback for guesses already made — and never the answer, unless the
+ * Returns everything the client needs to render a board - width, hint state,
+ * muscle feedback for guesses already made - and never the answer, unless the
  * round is already over.
  *
  * The server clock is the only clock. A client with a wound-forward system time
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as { state?: unknown };
     if (typeof body.state === 'string') token = body.state;
   } catch {
-    /* No body is fine — that is a fresh game. */
+    /* No body is fine - that is a fresh game. */
   }
 
   const seed = dailySeed();
@@ -39,14 +39,14 @@ export async function POST(request: Request) {
   const session = openSession(token, seed);
   const guesses = session?.guesses ?? [];
 
-  const outcome = playGuesses(seed, guesses, answer);
+  const outcome = playGuesses(seed, guesses, answer, session?.call);
 
   return NextResponse.json(
     {
       seed,
       serverTime: new Date().toISOString(),
       ...outcome,
-      state: sealSession({ seed, guesses }),
+      state: sealSession({ seed, guesses, call: session?.call }),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );

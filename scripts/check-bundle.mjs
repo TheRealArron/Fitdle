@@ -2,7 +2,7 @@
 /**
  * Proves the answer schedule is not in the JavaScript that ships.
  *
- * The unit test scans source, which is fast but not the real question — the
+ * The unit test scans source, which is fast but not the real question - the
  * real question is what a player can read in devtools. This greps the compiled
  * client chunks for the two things that must never appear:
  *
@@ -48,7 +48,7 @@ function clientChunks() {
 
 const files = clientChunks();
 if (files.length === 0) {
-  console.log(c.bad('✗ no client chunks found — run `npm run build` first'));
+  console.log(c.bad('✗ no client chunks found - run `npm run build` first'));
   process.exit(1);
 }
 

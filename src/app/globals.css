@@ -5,7 +5,7 @@
  * DESIGN SYSTEM
  * ─────────────────────────────────────────────────────────────────────────────
  * Built around one decision: the three tile states are the only saturated
- * colours in the product. Everything else — surfaces, text, borders, chrome —
+ * colours in the product. Everything else - surfaces, text, borders, chrome -
  * is a cool neutral ramp, so the eye goes straight to the board and the muscle
  * figure and nothing competes with them.
  *
@@ -53,7 +53,7 @@
 /*
  * Themes.
  *
- * Surfaces and accent only — the three result colours are deliberately absent
+ * Surfaces and accent only - the three result colours are deliberately absent
  * from every block below. A screenshot has to mean the same thing whichever
  * theme took it, and the shared emoji grid has to keep matching the board.
  *
@@ -125,15 +125,15 @@
 /*
  * Colourblind-safe palette.
  *
- * The whole game is two colour channels — green/yellow on the tiles and
- * keyboard, green/wine on the muscle figure — and red-green deficiency is the
+ * The whole game is two colour channels - green/yellow on the tiles and
+ * keyboard, green/wine on the muscle figure - and red-green deficiency is the
  * common one, so both channels fail together for roughly 1 in 12 men. Swapping
  * to blue/orange keeps the same hue *distance* while separating on a axis that
  * deuteranopes and protanopes can still read, and orange stays distinguishable
  * from blue for tritanopes too.
  *
  * Overriding the variables rather than the components means tiles, keys, the
- * figure, the legend, the chips and the share emoji all change together — there
+ * figure, the legend, the chips and the share emoji all change together - there
  * is no surface that can be forgotten.
  */
 :root[data-colourblind] {
@@ -190,7 +190,7 @@ body {
 
 /*
  * A single very large, very dim radial wash behind the board. It gives the
- * page a light source so flat panels read as surfaces rather than blocks —
+ * page a light source so flat panels read as surfaces rather than blocks -
  * the cheapest way to make a dark UI feel deliberate. Fixed and non-scrolling,
  * so it costs one paint.
  */
@@ -213,7 +213,7 @@ body > * {
 /* ── typography helpers ─────────────────────────────────────────────────── */
 
 /*
- * Section labels. Small, wide-tracked, low-contrast — the standard way to make
+ * Section labels. Small, wide-tracked, low-contrast - the standard way to make
  * a label recede so the value beside it can carry the hierarchy. Applied via a
  * class because it is used in a dozen places and must stay identical.
  */

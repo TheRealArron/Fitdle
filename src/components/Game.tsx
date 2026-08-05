@@ -19,6 +19,7 @@ import { HintBar } from './HintBar';
 import { Keyboard } from './Keyboard';
 import { MuscleDetail } from './MuscleDetail';
 import { MuscleLegend } from './MuscleLegend';
+import { OpeningCall } from './OpeningCall';
 import { PostGamePanel, PracticeBar } from './PostGamePanel';
 import { ResultModal } from './ResultModal';
 import { SettingsModal } from './SettingsModal';
@@ -33,7 +34,7 @@ const EMPTY: ReadonlySet<MuscleRegion> = new Set();
  *
  * The side rails are deliberately the SAME width. An asymmetric layout would
  * push the board off the viewport centre while the header and keyboard stayed
- * centred on it, and that mismatch is what reads as "broken alignment" — it was
+ * centred on it, and that mismatch is what reads as "broken alignment" - it was
  * the bug in the previous version, where the board lived in a flex-1 column
  * beside a fixed-width figure and centred itself within that column instead.
  *
@@ -107,7 +108,7 @@ export function Game() {
   }, [initGame]);
 
   /*
-   * Muscle feedback is computed by the SERVER and arrives with each response —
+   * Muscle feedback is computed by the SERVER and arrives with each response -
    * the client cannot derive it any more, because deriving it needs the answer.
    *
    * Still wrapped in useMemo: these are Sets built from arrays, so a bare
@@ -153,17 +154,17 @@ export function Game() {
       {clockRollback && (
         <div className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-          <span>Your clock is behind a date you have already played — no streak credit today.</span>
+          <span>Your clock is behind a date you have already played - no streak credit today.</span>
         </div>
       )}
 
       <div className="flex min-h-0 w-full flex-1 overflow-hidden">
-        {/* Left rail — menu. */}
+        {/* Left rail - menu. */}
         <aside className={`hidden border-r border-white/10 xl:block ${RAIL}`}>
           <Sidebar {...sidebarActions} />
         </aside>
 
-        {/* Centre — board, hints, keyboard. */}
+        {/* Centre - board, hints, keyboard. */}
         <main
           className="flex min-h-0 min-w-0 flex-1 flex-col items-center transition-opacity duration-200"
           style={{ opacity: hydrated ? 1 : 0 }}
@@ -178,7 +179,7 @@ export function Game() {
             />
 
             {/*
-              Size container — see .board-area in globals.css. The hint chips
+              Size container - see .board-area in globals.css. The hint chips
               live inside the centred group rather than after it, so they stay
               attached to the board instead of drifting to the bottom of a tall
               viewport. The 3.5rem term reserves their row in the height budget.
@@ -197,7 +198,12 @@ export function Game() {
                 >
                   <Grid />
                 </div>
-                {showPostGame ? null : <HintBar />}
+                {showPostGame ? null : (
+                  <>
+                    <HintBar />
+                    <OpeningCall />
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -221,11 +227,11 @@ export function Game() {
           </div>
         </main>
 
-        {/* Right rail — the muscle map, big enough to actually read. */}
+        {/* Right rail - the muscle map, big enough to actually read. */}
         <aside
           className={`hidden flex-col items-center justify-center gap-5 border-l border-white/10 p-5 xl:flex ${RAIL}`}
         >
-          {/* No width cap — the figure should use the whole rail. */}
+          {/* No width cap - the figure should use the whole rail. */}
           <div className="w-full">{figure}</div>
           <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
           {!region && (

@@ -10,12 +10,12 @@ import 'server-only';
  *
  * That is a deliberate trade rather than an oversight. A correct shared limiter
  * needs Redis (Upstash), which is another service to run, pay for and keep
- * available — and if it is unavailable you must then decide whether to fail open
+ * available - and if it is unavailable you must then decide whether to fail open
  * (no protection) or closed (the game stops). For a daily word game the real
  * abuse ceiling is already low: guesses are validated against a signed token, so
  * brute force cannot bank a win, only waste bandwidth.
  *
- * Swap in @upstash/ratelimit here if this ever needs to be authoritative — the
+ * Swap in @upstash/ratelimit here if this ever needs to be authoritative - the
  * call site takes a key and returns the same shape.
  */
 

@@ -5,7 +5,7 @@ import { create } from 'zustand';
 const KEY = 'fitdle:settings:v1';
 
 /**
- * Themes recolour the *surfaces* only — never the three tile states.
+ * Themes recolour the *surfaces* only - never the three tile states.
  *
  * The whole palette rests on one rule: the result colours are the only
  * saturated things on screen. If a theme could change them, a screenshot from
@@ -59,7 +59,7 @@ function read(): Settings {
 /**
  * Applied as attributes on <html> rather than by threading props through every
  * component. The palette swap is then a handful of CSS variable overrides in
- * globals.css, which means every surface — tiles, keys, figure, legend, chips —
+ * globals.css, which means every surface - tiles, keys, figure, legend, chips -
  * changes together and nothing can be missed.
  */
 function apply(s: Settings) {
@@ -93,7 +93,7 @@ export const useSettingsStore = create<SettingsState>()((setState, get) => ({
     try {
       window.localStorage.setItem(KEY, JSON.stringify(next));
     } catch {
-      /* Storage disabled — the setting still applies for this session. */
+      /* Storage disabled - the setting still applies for this session. */
     }
   },
 }));

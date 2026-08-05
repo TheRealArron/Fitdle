@@ -6,7 +6,7 @@
  * and this blocked winding it FORWARD to play tomorrow early.
  *
  * It is no longer load-bearing for that. `/api/today` computes the seed on the
- * server, so which puzzle you get is not the browser's decision at all — a
+ * server, so which puzzle you get is not the browser's decision at all - a
  * wound-forward clock changes nothing. What remains is presentation: the
  * countdown to the next puzzle, and noticing when a tab has been open across
  * UTC midnight.
@@ -23,7 +23,7 @@
  * `syncTrustedTime` is called from a component while `trustedNow` is called
  * from lib/daily, which is reached through the store and through a dynamically
  * imported chunk. If the bundler emits this module into more than one chunk,
- * module-scoped state gives each copy its own `offsetMs` — the writer sets one
+ * module-scoped state gives each copy its own `offsetMs` - the writer sets one
  * and the reader sees the other, so the correction silently never applies.
  * A single global slot cannot be duplicated, and it doubles as a probe point.
  */
@@ -65,14 +65,14 @@ export function trustedNow(): Date {
 /**
  * Fetches the server clock once and caches the offset.
  *
- * Deduplicated: concurrent callers share one request. Never throws — a failure
+ * Deduplicated: concurrent callers share one request. Never throws - a failure
  * leaves the offset at zero, which is the local clock, which is the honest
  * fallback.
  */
 /**
  * Adopts the server's clock from an API response.
  *
- * Cheap and idempotent — called on every `/api/today` and `/api/guess`, so the
+ * Cheap and idempotent - called on every `/api/today` and `/api/guess`, so the
  * offset self-corrects if the machine sleeps or the clock is changed mid-game.
  */
 export function adoptServerTime(iso: string): void {

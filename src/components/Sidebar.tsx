@@ -18,7 +18,6 @@ import { CATALOGUE, getExercise } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useGameStore, selectWinRate } from '@/store/useGameStore';
-import { CandidatePanel } from './CandidatePanel';
 import { Countdown } from './Countdown';
 import { MuscleLegend } from './MuscleLegend';
 
@@ -32,7 +31,7 @@ export interface SidebarActions {
   onNavigate?: () => void;
   /**
    * The desktop rail sits opposite the figure, which carries its own key.
-   * Only the drawer — where no figure rail exists — needs to repeat it.
+   * Only the drawer - where no figure rail exists - needs to repeat it.
    */
   showLegend?: boolean;
 }
@@ -111,7 +110,7 @@ export function Sidebar({
             : /* Date-derived: blank until the client has read the real clock. */
               hydrated
               ? `Puzzle #${getPuzzleNumber(seed)}`
-              : '—'}
+              : '-'}
         </p>
         {mode === 'daily' && <Countdown />}
       </section>
@@ -200,8 +199,6 @@ export function Sidebar({
         )}
       </nav>
 
-      <CandidatePanel onOpenIndex={go(onOpenIndex)} />
-
       {/*
         Guess history with real names. Doubles as the teaching payoff: you type
         CALFRAISE, and the sidebar tells you that is a Calf Raise hitting Legs.
@@ -223,7 +220,7 @@ export function Sidebar({
                       {name}
                     </p>
                     <p className="truncate text-[10px] text-slate-500">
-                      {e ? `${e.display} · ${e.group}` : '—'}
+                      {e ? `${e.display} · ${e.group}` : '-'}
                     </p>
                   </div>
                 </li>

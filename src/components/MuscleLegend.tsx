@@ -6,7 +6,7 @@ import { CATEGORY_HINT_AT } from '@/data/exercises';
  * Colour key for the body figure.
  *
  * Every visual state the figure can show is listed here, including the dashed
- * amber outline — that one is easy to miss because it appears mid-game rather
+ * amber outline - that one is easy to miss because it appears mid-game rather
  * than at the start, and an unexplained marker on an anatomy diagram reads as
  * decoration instead of information.
  */
@@ -62,7 +62,7 @@ export function MuscleLegend({
         </li>
       ))}
 
-      {/* The dashed outline is a different channel from the fills — it marks the
+      {/* The dashed outline is a different channel from the fills - it marks the
           answer's muscle group, which is a hint, not a scored result. */}
       <li className="flex items-start gap-2.5">
         <span
@@ -75,8 +75,8 @@ export function MuscleLegend({
           </span>
           <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
             {detailed
-              ? `The dashed amber outline appears at guess ${CATEGORY_HINT_AT} and rings the answer's muscle group. It is a hint, not a result — outlined muscles are not necessarily worked.`
-              : `Outlined at guess ${CATEGORY_HINT_AT}`}
+              ? `From guess ${CATEGORY_HINT_AT}, a dashed amber ring marks the answer's muscle group. It only appears on muscles you have not probed yet, so it always tells you something new. An outlined muscle is not necessarily worked.`
+              : `Unprobed muscles in the target group, from guess ${CATEGORY_HINT_AT}`}
           </p>
         </div>
       </li>

@@ -18,7 +18,7 @@ interface PostGamePanelProps {
  * Replaces the board once the day is finished and the result modal is dismissed.
  *
  * Without this the player is left staring at a dead board with a keyboard that
- * does nothing — the single most common complaint about daily word games. The
+ * does nothing - the single most common complaint about daily word games. The
  * obvious next action (another round) is offered right here, and it is a
  * practice round, so nothing on offer can affect the streak.
  */
@@ -49,7 +49,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
         ? 'Shared'
         : outcome === 'copied'
           ? 'Result copied to clipboard'
-          : 'Could not share — copy manually',
+          : 'Could not share - copy manually',
     );
   };
 
@@ -93,7 +93,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
           Play a practice round
         </button>
         <p className="-mt-1 text-center text-[11px] leading-snug text-slate-500">
-          Unlimited, random, and never counted — your streak is safe.
+          Unlimited, random, and never counted - your streak is safe.
         </p>
 
         <div className="mt-1 grid grid-cols-3 gap-2">

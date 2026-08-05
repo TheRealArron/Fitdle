@@ -49,7 +49,7 @@ test('the streak comes from the more recently played save, not the bigger one', 
 });
 
 test('the merged save stays internally coherent', () => {
-  // The same invariants isCoherent enforces — a merge that violates them would
+  // The same invariants isCoherent enforces - a merge that violates them would
   // be rejected on the next load and silently wipe the player.
   const a = make({ played: 7, wins: 5, streak: 2, maxStreak: 5, distribution: [2, 1, 1, 1, 0, 0], lastSeed: 20260729, lastResult: 'won', highSeed: 20260729 });
   const b = make({ played: 4, wins: 4, streak: 4, maxStreak: 4, distribution: [1, 1, 1, 1, 0, 0], lastSeed: 20260730, lastResult: 'won', highSeed: 20260730 });
@@ -61,13 +61,13 @@ test('the merged save stays internally coherent', () => {
   assert.equal(m.distribution.length, 6);
 });
 
-test('a merge CANNOT express a reset — which is why reset must overwrite', () => {
+test('a merge CANNOT express a reset - which is why reset must overwrite', () => {
   /*
    * Regression guard. `resetProgress` used to clear local storage only. Because
    * every counter here takes the max, the next sync merged the cleared save
    * with the old cloud row and restored it in full: reset appeared to work and
    * was silently undone. The fix is `overwriteCloud`, and this test pins the
-   * property that makes it necessary — if merge ever started honouring a reset,
+   * property that makes it necessary - if merge ever started honouring a reset,
    * this fails and the overwrite can be reconsidered.
    */
   const cleared = defaultSave();
@@ -77,15 +77,15 @@ test('a merge CANNOT express a reset — which is why reset must overwrite', () 
   });
 
   const merged = mergeSaves(cleared, oldCloud);
-  assert.equal(merged.played, 12, 'merge restores the old history — by design');
+  assert.equal(merged.played, 12, 'merge restores the old history - by design');
   assert.equal(merged.maxStreak, 7);
 });
 
-test('merging a stranger’s local save would leak their stats — signOut must clear', () => {
+test('merging a stranger’s local save would leak their stats - signOut must clear', () => {
   /*
    * Sign-in merges local progress so an anonymous player keeps their streak.
    * That is only safe while the local save belongs to whoever is signing in.
-   * If signOut leaves it behind, the next account on the device inherits it —
+   * If signOut leaves it behind, the next account on the device inherits it -
    * this test documents the leak that `clearSave()` on signOut prevents.
    */
   const userA = make({

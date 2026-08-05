@@ -126,7 +126,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           onChange={(v) => setSetting('reduceMotion', v)}
         />
         <p className="px-1 text-[11px] leading-relaxed text-slate-500">
-          Saved in this browser. Reduce motion also follows your system setting automatically —
+          Saved in this browser. Reduce motion also follows your system setting automatically -
           this forces it on regardless.
         </p>
       </div>

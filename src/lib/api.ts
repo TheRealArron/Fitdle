@@ -9,7 +9,7 @@ import type { LetterState } from '@/lib/evaluate';
  * that once the round is genuinely over.
  *
  * `NEXT_PUBLIC_API_URL` lets a build point at a deployed instance rather than
- * its own origin. The Chrome extension needs it — a static export has no
+ * its own origin. The Chrome extension needs it - a static export has no
  * server of its own, so it must call the deployed one.
  */
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
@@ -37,6 +37,8 @@ export interface DailyState {
   muscles: { shared: MuscleRegion[]; missed: MuscleRegion[] };
   status: 'playing' | 'won' | 'lost';
   hints: { category: MuscleGroup | null; equipment: Equipment | null; nextHintIn: number | null };
+  /** The opening call and how it went. Null when none was made. */
+  call: { group: MuscleGroup; correct: boolean } | null;
   reveal: RevealedAnswer | null;
   /** Signed, opaque. Round-tripped on the next guess. */
   state: string;
@@ -61,7 +63,7 @@ async function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
     });
 
     if (res.status === 429) {
-      return { ok: false, error: 'Too many requests — wait a moment.' };
+      return { ok: false, error: 'Too many requests - wait a moment.' };
     }
     if (!res.ok) {
       return { ok: false, error: `Server error (${res.status})` };
@@ -85,6 +87,11 @@ export function submitGuess(
   state: string,
 ): Promise<ApiResult<DailyState | GuessRejected>> {
   return post<DailyState | GuessRejected>('/api/guess', { guess, state });
+}
+
+/** Locks in the opening muscle-group call. Server refuses it after guess 1. */
+export function placeCall(group: string, state: string): Promise<ApiResult<DailyState>> {
+  return post<DailyState>('/api/call', { group, state });
 }
 
 export function isRejection(d: DailyState | GuessRejected): d is GuessRejected {

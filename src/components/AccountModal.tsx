@@ -29,8 +29,8 @@ type Tab = 'signin' | 'signup';
  * Account panel.
  *
  * When Supabase keys are present this is a real login: sign up, sign in, sign
- * out, and a streak that follows you between devices. When they are absent —
- * a fresh clone, or the extension build — the same panel says so plainly and
+ * out, and a streak that follows you between devices. When they are absent -
+ * a fresh clone, or the extension build - the same panel says so plainly and
  * falls back to a backup code, because a sign-in form that cannot reach a
  * server is worse than no sign-in form at all.
  */
@@ -80,7 +80,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setToast('Could not copy — select the code and copy manually');
+      setToast('Could not copy - select the code and copy manually');
     }
   };
 
@@ -119,7 +119,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
                     </>
                   ) : syncState === 'error' ? (
                     <>
-                      <CloudOff className="h-3 w-3 text-amber-400" /> Sync failed — playing locally
+                      <CloudOff className="h-3 w-3 text-amber-400" /> Sync failed - playing locally
                     </>
                   ) : (
                     <>
@@ -213,7 +213,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
                     className="field"
                   />
                   <span className="text-[11px] text-slate-500">
-                    Shown in the menu. Nobody else sees it — there is no leaderboard.
+                    Shown in the menu. Nobody else sees it - there is no leaderboard.
                   </span>
                 </label>
               )}
@@ -263,7 +263,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
             </form>
 
             <p className="text-[11px] leading-relaxed text-slate-500">
-              Signing in merges whatever you have played on this device with your account — you
+              Signing in merges whatever you have played on this device with your account - you
               will not lose the streak you already have.
             </p>
           </>
@@ -331,7 +331,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
               </button>
             </>
           ) : (
-            // Padded to a real tap target. As bare text this was 16px tall —
+            // Padded to a real tap target. As bare text this was 16px tall -
             // under the ~24px minimum, awkward on touch, and a synthetic click
             // could miss it entirely.
             <button

@@ -16,7 +16,7 @@ export interface AuthUser {
 /**
  * Stored in Supabase's `user_metadata`, not a table of our own.
  *
- * A display name is not relational data — nothing joins on it, and it belongs to
+ * A display name is not relational data - nothing joins on it, and it belongs to
  * the identity rather than to progress. Keeping it on the auth user means no
  * extra table, no extra RLS policy, and it arrives with the session instead of
  * needing a second round trip before the sidebar can render.
@@ -30,7 +30,7 @@ function toUser(u: { id: string; email?: string; user_metadata?: Record<string, 
 export type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
 
 export interface AuthState {
-  /** False when the project has no Supabase keys — the app still works locally. */
+  /** False when the project has no Supabase keys - the app still works locally. */
   cloudAvailable: boolean;
   user: AuthUser | null;
   /** True until the initial session check settles, so the UI can avoid flicker. */
@@ -148,7 +148,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
      * someone who played anonymously keeps their streak when they sign up.
      * That is only correct if the local save belongs to the person signing in.
      * Leaving it behind means the next account on this device inherits the
-     * previous one's stats — so signing out has to clear it. Nothing is lost:
+     * previous one's stats - so signing out has to clear it. Nothing is lost:
      * it was just pushed to the cloud and comes back on the next sign-in.
      */
     clearSave();
@@ -162,7 +162,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   /**
    * Replaces the cloud copy outright instead of merging into it.
    *
-   * Merging cannot express a deletion — every counter takes the max, so a
+   * Merging cannot express a deletion - every counter takes the max, so a
    * cleared save merged with the old cloud row restores it in full. "Reset
    * statistics" therefore has to overwrite, or it silently does nothing for
    * signed-in players.

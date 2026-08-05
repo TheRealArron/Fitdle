@@ -11,7 +11,7 @@ export const FLIP_STAGGER = 0.1;
 interface TileProps {
   letter: string;
   state: LetterState | null;
-  /** Column index — drives the stagger. */
+  /** Column index - drives the stagger. */
   index: number;
   /** Play the flip now (a freshly submitted row). */
   revealing: boolean;
@@ -25,7 +25,7 @@ interface TileProps {
 const FACE_CLASS: Record<LetterState, string> = {
   // Scored faces carry a bloom in their own colour (see globals.css). Present
   // uses near-black text because yellow at full saturation cannot hold white
-  // legibly — that pairing is the one place the palette needs a dark foreground.
+  // legibly - that pairing is the one place the palette needs a dark foreground.
   correct: 'bg-state-correct border-state-correct text-white tile-glow-correct',
   present: 'on-present bg-state-present border-state-present text-[#231a00] tile-glow-present',
   absent: 'bg-state-absent border-state-absent text-white/85 tile-glow-absent',
@@ -75,7 +75,7 @@ function TileImpl({
           if (revealing) onFlipComplete?.();
         }}
       >
-        {/* Front — unrevealed face. */}
+        {/* Front - unrevealed face. */}
         <motion.div
           className={[
             'tile-face absolute inset-0 flex items-center justify-center',
@@ -94,7 +94,7 @@ function TileImpl({
           {letter}
         </motion.div>
 
-        {/* Back — scored face, pre-rotated so it reads upright at 180deg. */}
+        {/* Back - scored face, pre-rotated so it reads upright at 180deg. */}
         <div
           className={[
             'tile-face tile-face-back absolute inset-0 flex items-center justify-center',

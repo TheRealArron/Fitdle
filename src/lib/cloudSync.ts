@@ -13,7 +13,7 @@ const TABLE = 'fitdle_progress';
  *   - Monotonic counters take the MAX. You cannot un-play a game, so the larger
  *     count is the more complete history.
  *   - `highSeed` takes the max, preserving clock-rollback protection across
- *     devices — syncing must never hand back a lower high-water mark.
+ *     devices - syncing must never hand back a lower high-water mark.
  *   - The streak comes from whichever save has played more recently
  *     (`lastSeed`), because a streak is only meaningful with its anchor. Taking
  *     the max streak instead would let a stale device resurrect a broken streak.

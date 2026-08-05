@@ -10,7 +10,7 @@ import type { RevealedAnswer } from '@/lib/api';
  * CDN. No embed and no API key: an iframe would be blocked by the extension's
  * MV3 CSP, and an embedded player in a 600px popup is worse than a link anyway.
  *
- * If the thumbnail fails to load — offline, CDN blocked, video pulled — the
+ * If the thumbnail fails to load - offline, CDN blocked, video pulled - the
  * image is dropped and the row degrades to a plain link rather than showing a
  * broken frame. The search fallback below it can never 404.
  */

@@ -4,7 +4,7 @@ import { evaluationToEmoji, type LetterState } from '@/lib/evaluate';
 
 /**
  * Where the share text points people. Override with NEXT_PUBLIC_SITE_URL once
- * the real domain is live — the link is the whole growth mechanism, so it must
+ * the real domain is live - the link is the whole growth mechanism, so it must
  * not silently point at nothing.
  */
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://fitdle.app';
@@ -35,7 +35,7 @@ export async function shareResult(text: string): Promise<ShareOutcome> {
       await navigator.share({ text });
       return 'shared';
     } catch (err) {
-      // User dismissed the sheet — do not fall through to a surprise copy.
+      // User dismissed the sheet - do not fall through to a surprise copy.
       if (err instanceof DOMException && err.name === 'AbortError') return 'failed';
     }
   }

@@ -16,7 +16,7 @@ import { ANSWER_ORDER, COACHING } from '@/server/answers';
  * The authoritative game. Everything the client used to compute for itself.
  *
  * The client keeps the catalogue (it needs it to render), but it never learns
- * which entry is today's answer until this module tells it — and it only tells
+ * which entry is today's answer until this module tells it - and it only tells
  * it once the round is genuinely over.
  */
 
@@ -78,6 +78,8 @@ export interface GuessOutcome {
   muscles: MuscleFeedback;
   status: GameStatus;
   hints: { category: string | null; equipment: string | null; nextHintIn: number | null };
+  /** The opening call and how it went. Null when no call was made. */
+  call: { group: string; correct: boolean } | null;
   /** Present only once the round is over. This is the only path to the answer. */
   reveal: Reveal | null;
 }
@@ -96,7 +98,12 @@ export interface GuessRejection {
  * the complete truth, so there is no partial state on either side to disagree
  * about, and no way to inject a single fabricated result into a real game.
  */
-export function playGuesses(seed: number, guesses: string[], answer: Exercise): GuessOutcome {
+export function playGuesses(
+  seed: number,
+  guesses: string[],
+  answer: Exercise,
+  call?: string,
+): GuessOutcome {
   const wordLength = answer.name.length;
   const evaluations = guesses.map((g) => evaluateGuess(g, answer.name));
 
@@ -106,8 +113,24 @@ export function playGuesses(seed: number, guesses: string[], answer: Exercise): 
   const over = status !== 'playing';
 
   const count = guesses.length;
-  const categoryOut = over || count >= CATEGORY_HINT_AT - 1;
-  const equipmentOut = over || count >= EQUIPMENT_HINT_AT - 1;
+
+  /*
+   * The opening call is a bet on fitness knowledge rather than letter entropy.
+   *
+   *   right -> the equipment hint lands immediately, which is a real edge no
+   *            amount of solver maths would have given you.
+   *   wrong -> you forfeit the guess-3 category hint. You were confident and
+   *            you were wrong, so the safety net goes.
+   *   none  -> the ordinary game, unchanged.
+   *
+   * This is the only mechanic in the game a solver cannot play, which is the
+   * whole point of adding it.
+   */
+  const called = call !== undefined;
+  const calledRight = called && call === answer.group;
+
+  const categoryOut = over || (called && !calledRight ? false : count >= CATEGORY_HINT_AT - 1);
+  const equipmentOut = over || calledRight || count >= EQUIPMENT_HINT_AT - 1;
 
   const coaching = COACHING[answer.name];
 
@@ -118,6 +141,7 @@ export function playGuesses(seed: number, guesses: string[], answer: Exercise): 
     evaluations,
     muscles: muscleFeedback(guesses, answer),
     status,
+    call: called ? { group: call!, correct: calledRight } : null,
     hints: {
       category: categoryOut ? answer.group : null,
       equipment: equipmentOut ? answer.equipment : null,
@@ -125,7 +149,10 @@ export function playGuesses(seed: number, guesses: string[], answer: Exercise): 
         ? equipmentOut
           ? null
           : EQUIPMENT_HINT_AT - 1 - count
-        : CATEGORY_HINT_AT - 1 - count,
+        : called && !calledRight
+          // Forfeited. There is no next category hint to count down to.
+          ? null
+          : CATEGORY_HINT_AT - 1 - count,
     },
     reveal: over
       ? {

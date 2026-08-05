@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 /**
  * Supabase client, created lazily and only if the project is configured.
  *
- * The app must run with no backend at all — that is the default for anyone who
+ * The app must run with no backend at all - that is the default for anyone who
  * clones it, and the Chrome extension build ships without keys. So every call
  * site treats `null` as "cloud is unavailable" and falls back to local storage
  * rather than throwing. `isCloudConfigured()` is what the UI asks before it
@@ -69,7 +69,7 @@ export function friendlyAuthError(message: string): string {
     return 'Check your inbox and confirm your email first.';
   }
   if (m.includes('rate limit') || m.includes('too many')) {
-    return 'Too many attempts — wait a minute and try again.';
+    return 'Too many attempts - wait a minute and try again.';
   }
   if (m.includes('fetch') || m.includes('network')) {
     return 'Could not reach the server. Check your connection.';

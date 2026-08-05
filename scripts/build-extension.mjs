@@ -13,15 +13,15 @@
  *   1. Hoist every inline <script> into an external file and re-reference it.
  *   2. Rewrite absolute `/_next/...` URLs to relative, since a popup is loaded
  *      from chrome-extension://<id>/index.html and `/` is the extension root.
- *   3. Rename `_next` to `next-assets` — Chrome refuses to load resources from
+ *   3. Rename `_next` to `next-assets` - Chrome refuses to load resources from
  *      directories whose name starts with an underscore.
  *   4. Drop the manifest and generated icons in beside it.
  *
- * Output: extension-dist/ — load it unpacked via chrome://extensions.
+ * Output: extension-dist/ - load it unpacked via chrome://extensions.
  *
  * The API routes are moved aside for the duration of the build. `output:
  * 'export'` refuses to build at all if a route handler exists, and the
- * extension has no server to host one on — it calls the deployed instance
+ * extension has no server to host one on - it calls the deployed instance
  * instead (NEXT_PUBLIC_API_URL). `pageExtensions` looked like a tidier filter
  * but breaks Next's own module resolution, so this is the honest version:
  * move, build, always move back.
@@ -62,7 +62,7 @@ function run() {
   }
 
   if (!fs.existsSync(outDir)) {
-    throw new Error('next build did not produce out/ — is output:"export" active?');
+    throw new Error('next build did not produce out/ - is output:"export" active?');
   }
 
   fs.rmSync(distDir, { recursive: true, force: true });
@@ -115,7 +115,7 @@ function run() {
   fs.copyFileSync(path.join(extDir, 'manifest.json'), path.join(distDir, 'manifest.json'));
   writeIcons(path.join(distDir, 'icons'));
 
-  console.log(`✓ extension-dist/ ready — ${htmlFiles.length} page(s), ${extracted} inline script(s) externalised`);
+  console.log(`✓ extension-dist/ ready - ${htmlFiles.length} page(s), ${extracted} inline script(s) externalised`);
   console.log('  Load unpacked: chrome://extensions → Developer mode → Load unpacked → extension-dist/');
 }
 
@@ -127,7 +127,7 @@ function walk(dir) {
 }
 
 /**
- * Minimal PNG writer — a solid slate square with a green bar, so the extension
+ * Minimal PNG writer - a solid slate square with a green bar, so the extension
  * has real icons without adding an image dependency or binary assets to git.
  */
 function writeIcons(dir) {

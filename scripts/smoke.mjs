@@ -3,7 +3,7 @@
  * Boots the app for real and checks it actually works.
  *
  * WHY THIS EXISTS
- * Twice now a change passed every unit test, typechecked, linted and built —
+ * Twice now a change passed every unit test, typechecked, linted and built -
  * and still shipped a dead page, because it was only ever exercised in ONE
  * mode:
  *

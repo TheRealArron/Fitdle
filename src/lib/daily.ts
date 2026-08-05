@@ -10,8 +10,8 @@ import { trustedNow } from '@/lib/trustedTime';
  * The one deliberate deviation: the spec read *local* date parts, which means
  * a player in Auckland and a player in Los Angeles are on different puzzles for
  * ~21 hours out of every 24. The requirement is that every user gets the same
- * word today, so the date parts are read in UTC. Everything downstream — the
- * modulus, the answer order, the resulting answer — is unchanged.
+ * word today, so the date parts are read in UTC. Everything downstream - the
+ * modulus, the answer order, the resulting answer - is unchanged.
  *
  * This module knows the DATE but not the ANSWER. `seed -> answer` lives in
  * server/game.ts, so the mapping never reaches the browser.

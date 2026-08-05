@@ -4,8 +4,8 @@ import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 /**
  * Signed game state.
  *
- * The server has to know how many guesses you have made — that gates the hints
- * and decides when the round ends — but keeping a row per player per day just
+ * The server has to know how many guesses you have made - that gates the hints
+ * and decides when the round ends - but keeping a row per player per day just
  * to count to six is a database write on every keystroke-completed guess.
  *
  * So the state travels with the request, signed. The client can read it (it is
@@ -21,7 +21,7 @@ import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
  *
  * The secret is server-only. Without it set the routes refuse to start rather
  * than fall back to unsigned state, because an unsigned token is worse than
- * none — it looks like a guarantee and is not one.
+ * none - it looks like a guarantee and is not one.
  */
 
 const VERSION = 'v1';
@@ -30,6 +30,12 @@ export interface GameSession {
   /** YYYYMMDD. Binds the token to one puzzle. */
   seed: number;
   guesses: string[];
+  /**
+   * The opening muscle-group call, if the player made one. Signed like
+   * everything else, so it cannot be added after seeing a result or changed
+   * once it turns out to be wrong.
+   */
+  call?: string;
   /** Practice rounds carry their own answer; the daily never does. */
   practiceAnswer?: string;
 }
@@ -60,7 +66,7 @@ export function sealSession(session: GameSession): string {
 }
 
 /**
- * Returns null for anything that does not verify — a tampered token, a token
+ * Returns null for anything that does not verify - a tampered token, a token
  * from another deployment, or one for a different day. Callers treat null as
  * "start a fresh game", never as "trust it anyway".
  */
@@ -85,6 +91,7 @@ export function openSession(token: string | undefined, expectedSeed: number): Ga
     if (!session.guesses.every((g) => typeof g === 'string' && /^[A-Z]{4,10}$/.test(g))) {
       return null;
     }
+    if (session.call !== undefined && typeof session.call !== 'string') return null;
     return session;
   } catch {
     return null;

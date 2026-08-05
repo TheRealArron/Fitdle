@@ -7,7 +7,7 @@ import 'server-only';
  * build error rather than a silent leak.
  *
  * What is secret is NOT the word list. The 99 guessable names are a deliberate
- * product feature — the in-app exercise index hands them over, because nobody
+ * product feature - the in-app exercise index hands them over, because nobody
  * carries a list of exercise names in their head the way they carry common
  * English. Publishing them costs nothing.
  *
@@ -17,7 +17,7 @@ import 'server-only';
  * answer set from which exercises happen to have how-to text.
  */
 
-/** ORDER IS PROTOCOL — see the caveat in data/exercises.ts. */
+/** ORDER IS PROTOCOL - see the caveat in data/exercises.ts. */
 export const ANSWER_ORDER: readonly string[] = [
   "SQUAT", "BURPEE", "CLIMBER", "DEADLIFT", "HIPTHRUST", "PLANK", "CRUNCH", "BOXJUMP", "PULLOVER",
   "BEARCRAWL", "LUNGE", "PUSHUP", "DEADBUG", "KICKBACK", "CALFRAISE", "PRESS", "PULLUP", "WALLSIT",
@@ -70,7 +70,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Bar over mid-foot, shins an inch away, grip just outside the knees.",
       "Set a flat back and pull the slack out of the bar before it moves.",
-      "Push the floor away — hips and shoulders rise together. Lock out with glutes, not by leaning back.",
+      "Push the floor away - hips and shoulders rise together. Lock out with glutes, not by leaning back.",
     ],
     videoQuery: "conventional deadlift proper form",
     videoId: "GxsLrTzyGUU",
@@ -80,7 +80,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Upper back on a bench, feet flat and shin vertical at the top.",
       "Tuck the ribs down and drive through the heels until hips are level with knees.",
-      "Squeeze the glutes hard for a second — do not arch the lower back to get higher.",
+      "Squeeze the glutes hard for a second - do not arch the lower back to get higher.",
     ],
     videoQuery: "barbell hip thrust proper form",
     videoId: "pF17m_CXfL0",
@@ -90,7 +90,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Forearms under the shoulders, elbows at 90 degrees.",
       "Squeeze the glutes and brace the ribs down so the spine stays neutral.",
-      "Hold a straight line from ear to heel — no sagging hips, no piking. Quality beats duration.",
+      "Hold a straight line from ear to heel - no sagging hips, no piking. Quality beats duration.",
     ],
     videoQuery: "plank exercise proper form",
     videoId: "A2b2EmIg0dA",
@@ -99,7 +99,7 @@ export const COACHING: Record<string, Coaching> = {
   CRUNCH: {
     howTo: [
       "Lie back, knees bent, feet flat, hands light at the temples.",
-      "Curl the ribcage toward the pelvis — this is a short range of motion.",
+      "Curl the ribcage toward the pelvis - this is a short range of motion.",
       "Leave a fist of space under the chin; never pull on the neck.",
     ],
     videoQuery: "abdominal crunch proper form",
@@ -110,7 +110,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Stand a foot from the box, dip to a quarter squat and swing the arms back.",
       "Jump and land softly in a quarter squat with the whole foot on the box.",
-      "Step down, never jump down — that is where Achilles injuries come from.",
+      "Step down, never jump down - that is where Achilles injuries come from.",
     ],
     videoQuery: "box jump proper form",
     videoId: "G-bxQY57mKc",
@@ -130,7 +130,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Hands under shoulders, knees under hips and hovering an inch off the floor.",
       "Move the opposite hand and foot together, keeping the knees low.",
-      "Hips stay level — if they rock side to side, shorten your steps.",
+      "Hips stay level - if they rock side to side, shorten your steps.",
     ],
     videoQuery: "bear crawl exercise proper form",
     videoId: "U3Y58Kyw7Xw",
@@ -159,7 +159,7 @@ export const COACHING: Record<string, Coaching> = {
   DEADBUG: {
     howTo: [
       "On your back, arms straight up, hips and knees at 90 degrees.",
-      "Press the lower back into the floor and hold it there — that is the whole exercise.",
+      "Press the lower back into the floor and hold it there - that is the whole exercise.",
       "Slowly extend the opposite arm and leg, return, then switch. Stop when the back lifts.",
     ],
     videoQuery: "dead bug core exercise proper form",
@@ -210,7 +210,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Back flat against a wall, walk the feet out until knees and hips are both at 90 degrees.",
       "Knees stack over the ankles, weight through the heels.",
-      "Hold. Breathe normally — holding your breath makes it much harder than it needs to be.",
+      "Hold. Breathe normally - holding your breath makes it much harder than it needs to be.",
     ],
     videoQuery: "wall sit exercise proper form",
     videoId: "JaZNYM3zAP0",
@@ -219,7 +219,7 @@ export const COACHING: Record<string, Coaching> = {
   LEGPRESS: {
     howTo: [
       "Feet shoulder-width in the middle of the platform, whole foot in contact.",
-      "Lower until the knees reach about 90 degrees — stop before the pelvis tucks.",
+      "Lower until the knees reach about 90 degrees - stop before the pelvis tucks.",
       "Press back without snapping the knees into a hard lockout.",
     ],
     videoQuery: "leg press machine proper form",
@@ -250,7 +250,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Underhand grip at about shoulder width, hanging from straight arms.",
       "Lead with the chest and drive the elbows down toward your pockets.",
-      "The supinated grip gives the biceps more leverage — expect a few more reps than pull-ups.",
+      "The supinated grip gives the biceps more leverage - expect a few more reps than pull-ups.",
     ],
     videoQuery: "chin up proper form",
     videoId: "e1YSApl-QcM",
@@ -260,7 +260,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "On hands and knees, hands under shoulders, knees under hips, spine neutral.",
       "Extend the opposite arm and leg until both are level with the torso.",
-      "Do not let the hips rotate — balance a glass of water on your lower back.",
+      "Do not let the hips rotate - balance a glass of water on your lower back.",
     ],
     videoQuery: "bird dog exercise proper form",
     videoId: "ZdAHe9_HeEw",
@@ -270,7 +270,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "On your back with legs straight up toward the ceiling.",
       "Curl the shoulder blades off the floor and reach the fingertips toward the toes.",
-      "It is a crunch, not a sit-up — the lower back stays down the whole time.",
+      "It is a crunch, not a sit-up - the lower back stays down the whole time.",
     ],
     videoQuery: "toe touch crunch abs proper form",
     videoId: "9iEI95-eZWk",
@@ -280,7 +280,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Drop into a quarter to half squat, then jump as high as you can.",
       "Land on the whole foot and absorb straight into the next rep.",
-      "Stop the set the moment your landings start getting loud — that is fatigue, not effort.",
+      "Stop the set the moment your landings start getting loud - that is fatigue, not effort.",
     ],
     videoQuery: "jump squat proper form",
     videoId: "tZSYZdtbONc",
@@ -310,7 +310,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Line the knee joint up with the machine pivot before you start.",
       "Curl the heels toward the glutes without the hips lifting off the pad.",
-      "Lower over three seconds — hamstrings respond well to a slow negative.",
+      "Lower over three seconds - hamstrings respond well to a slow negative.",
     ],
     videoQuery: "lying leg curl machine proper form",
     videoId: "lUH80pneL5w",
@@ -339,7 +339,7 @@ export const COACHING: Record<string, Coaching> = {
   SHRUG: {
     howTo: [
       "Stand tall holding the weight at arms length, shoulders relaxed down.",
-      "Lift the shoulders straight up toward the ears — no rolling, that does nothing.",
+      "Lift the shoulders straight up toward the ears - no rolling, that does nothing.",
       "Pause at the top, then lower all the way for a full stretch.",
     ],
     videoQuery: "dumbbell shrug proper form",
@@ -359,7 +359,7 @@ export const COACHING: Record<string, Coaching> = {
   ARMCURL: {
     howTo: [
       "Elbows pinned at the ribs, shoulders back.",
-      "Curl with the biceps only — the upper arm must not swing forward.",
+      "Curl with the biceps only - the upper arm must not swing forward.",
       "Squeeze at the top, then lower over 2–3 seconds. The negative builds the arm.",
     ],
     videoQuery: "dumbbell biceps curl proper form",
@@ -388,7 +388,7 @@ export const COACHING: Record<string, Coaching> = {
   },
   FLYES: {
     howTo: [
-      "Lie back with a soft, fixed elbow bend — that angle never changes.",
+      "Lie back with a soft, fixed elbow bend - that angle never changes.",
       "Open the arms wide until you feel a stretch across the chest, not the shoulder joint.",
       "Hug the weights back together. Go lighter than you think; this is a stretch exercise.",
     ],
@@ -400,7 +400,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Use a box that puts the working thigh at roughly parallel.",
       "Plant the whole foot on the box, heel included, and drive up through that heel.",
-      "Do not push off the trailing foot. Lower over 2–3 seconds — that is the hard part.",
+      "Do not push off the trailing foot. Lower over 2–3 seconds - that is the hard part.",
     ],
     videoQuery: "box step up proper form",
     videoId: "vOiHvzj5XhA",
@@ -419,7 +419,7 @@ export const COACHING: Record<string, Coaching> = {
   LEGRAISE: {
     howTo: [
       "On your back, hands under the hips or gripping something overhead.",
-      "Press the lower back flat and keep it there — this is the whole game.",
+      "Press the lower back flat and keep it there - this is the whole game.",
       "Lower straight legs only as far as you can hold that position, then lift back up.",
     ],
     videoQuery: "lying leg raise proper form",
@@ -429,7 +429,7 @@ export const COACHING: Record<string, Coaching> = {
   PUSHPRESS: {
     howTo: [
       "Start in the overhead press rack position, feet hip-width.",
-      "Dip a few inches by bending the knees — torso stays vertical.",
+      "Dip a few inches by bending the knees - torso stays vertical.",
       "Drive the legs explosively and let that momentum carry the bar past the sticking point.",
     ],
     videoQuery: "barbell push press proper form",
@@ -470,7 +470,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Rope length: stand on the middle and the handles should reach your armpits.",
       "Turn the rope with the wrists, not the shoulders. Elbows stay close to the ribs.",
-      "Jump an inch off the floor and land on the balls of the feet — heels never touch.",
+      "Jump an inch off the floor and land on the balls of the feet - heels never touch.",
     ],
     videoQuery: "jump rope technique beginners",
     videoId: "nMHfZ-yrFjA",
@@ -479,7 +479,7 @@ export const COACHING: Record<string, Coaching> = {
   HANGCLEAN: {
     howTo: [
       "Start standing with the bar at mid-thigh, shoulders slightly over it.",
-      "Hinge to just above the knee, then explode — hips, knees and ankles together.",
+      "Hinge to just above the knee, then explode - hips, knees and ankles together.",
       "Pull under and catch on the front delts with the elbows whipping through fast.",
     ],
     videoQuery: "barbell hang clean technique",
@@ -489,7 +489,7 @@ export const COACHING: Record<string, Coaching> = {
   TWIST: {
     howTo: [
       "Sit with knees bent and heels light on the floor, chest tall, leaning back about 45 degrees.",
-      "Rotate the whole ribcage until your hands pass your hip — not just the arms.",
+      "Rotate the whole ribcage until your hands pass your hip - not just the arms.",
       "Move slowly. Speed here turns it into arm-waving.",
     ],
     videoQuery: "russian twist proper form",
@@ -510,7 +510,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Start with feet together and arms at your sides.",
       "Jump the feet wide while the arms sweep overhead, landing on the balls of the feet.",
-      "Stay light and quiet — loud landings mean you are collapsing through the ankles.",
+      "Stay light and quiet - loud landings mean you are collapsing through the ankles.",
     ],
     videoQuery: "jumping jacks proper form",
     videoId: "uLVt6u15L98",
@@ -539,7 +539,7 @@ export const COACHING: Record<string, Coaching> = {
   SWING: {
     howTo: [
       "Hinge at the hips with a flat back and hike the bell behind you like a snap pass.",
-      "Snap the hips forward hard — the bell floats up, you never lift it with the arms.",
+      "Snap the hips forward hard - the bell floats up, you never lift it with the arms.",
       "Let it fall and absorb with another hinge. This is a hinge, not a squat.",
     ],
     videoQuery: "kettlebell swing proper form",
@@ -549,7 +549,7 @@ export const COACHING: Record<string, Coaching> = {
   ROWING: {
     howTo: [
       "Drive: legs, then body, then arms. Recovery: arms, then body, then legs.",
-      "Push with the legs first — the stroke is roughly 60% legs, 30% hips, 10% arms.",
+      "Push with the legs first - the stroke is roughly 60% legs, 30% hips, 10% arms.",
       "Pull the handle to the bottom of the ribs and never round the lower back.",
     ],
     videoQuery: "rowing machine proper technique",
@@ -568,7 +568,7 @@ export const COACHING: Record<string, Coaching> = {
   },
   PUSHDOWN: {
     howTo: [
-      "Elbows pinned at your sides — they do not travel forward at any point.",
+      "Elbows pinned at your sides - they do not travel forward at any point.",
       "Push down until the arms lock, then spread the rope apart at the bottom.",
       "Come back up only until the forearms reach parallel, then go again.",
     ],
@@ -630,7 +630,7 @@ export const COACHING: Record<string, Coaching> = {
     howTo: [
       "Stand with the arms straight out to the sides so the body forms a T.",
       "Draw small circles forward, growing them gradually, then reverse direction.",
-      "This is a warm-up, not a strength move — keep it light and controlled.",
+      "This is a warm-up, not a strength move - keep it light and controlled.",
     ],
     videoQuery: "arm circles warm up proper form",
     videoId: "tYo5ghpLksg",

@@ -31,7 +31,7 @@ test('length is folded in, so truncation and extension are detected', () => {
   assert.notEqual(digest('a'.repeat(64)), digest('a'.repeat(65)));
 });
 
-test('digest avalanches — flipping one bit changes most of the output', () => {
+test('digest avalanches - flipping one bit changes most of the output', () => {
   const a = digest('streak:10');
   const b = digest('streak:11');
   let same = 0;

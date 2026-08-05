@@ -24,16 +24,25 @@ type Shape =
  * Which way the figure is facing.
  *
  * Two identical silhouettes with FRONT and BACK captions under them force the
- * player to read a label to know which chest they are looking at — and the
+ * player to read a label to know which chest they are looking at - and the
  * whole point of the figure is to be understood at a glance. A face on one and
  * the back of a head on the other makes the orientation pre-attentive: you know
  * before you have read anything.
  */
 const FACE_DETAIL: Record<'front' | 'back', Shape[]> = {
   front: [
-    { t: 'ellipse', cx: 45.5, cy: 16, rx: 1.7, ry: 2.1 }, // left eye
-    { t: 'ellipse', cx: 54.5, cy: 16, rx: 1.7, ry: 2.1 }, // right eye
-    { t: 'path', d: 'M46 24 Q50 26.5 54 24' }, // mouth
+    /*
+     * Brow line and nose bridge, no mouth and no round eyes.
+     *
+     * A smiley reads as a cartoon and undercuts a diagram people are meant to
+     * take seriously as anatomy. Printed anatomical charts solve orientation the
+     * same way: a suggestion of the brow and nose is enough to fix which way the
+     * body faces, without drawing a character.
+     */
+    { t: 'path', d: 'M43.5 14.5 L47.5 14.5' }, // left brow
+    { t: 'path', d: 'M52.5 14.5 L56.5 14.5' }, // right brow
+    { t: 'path', d: 'M50 16 L50 22' }, // nose bridge
+    { t: 'path', d: 'M47.5 23.5 L52.5 23.5' }, // jaw/mouth line, straight
   ],
   back: [
     /*
@@ -51,7 +60,7 @@ const EARS: Shape[] = [
   { t: 'ellipse', cx: 62.5, cy: 18, rx: 2.2, ry: 3.4 },
 ];
 
-/** Neutral scaffolding — never highlighted, just makes the blobs read as a body. */
+/** Neutral scaffolding - never highlighted, just makes the blobs read as a body. */
 const BASE: Shape[] = [
   { t: 'ellipse', cx: 50, cy: 18, rx: 12, ry: 14 }, // head
   { t: 'rect', x: 44, y: 29, w: 12, h: 10, r: 3 }, // neck
@@ -148,7 +157,7 @@ const FILL: Record<RegionState, string> = {
   // Your guess and the answer both work this muscle.
   shared: 'var(--color-state-correct)',
   // Your guess works it; the answer does not. Must be the variable, not the
-  // literal — the legend reads the variable, so a hardcoded hex here meant
+  // literal - the legend reads the variable, so a hardcoded hex here meant
   // colourblind mode recoloured the key while leaving the figure unchanged.
   missed: 'var(--color-state-excluded)',
   idle: 'var(--color-tile-empty)',
@@ -183,6 +192,18 @@ function BodyFigureImpl({
   const stateOf = (r: MuscleRegion): RegionState =>
     shared.has(r) ? 'shared' : missed.has(r) ? 'missed' : 'idle';
 
+  /*
+   * The target-area outline is drawn only on regions the player has NOT already
+   * probed.
+   *
+   * Ringing a muscle that is already lit green or red says nothing they did not
+   * work out for themselves, and stacking an amber dashed border on a filled
+   * region is just visual noise. Restricting it to unknown regions makes the
+   * hint additive: it points at the part of the target area still in question.
+   */
+  const outlined = (r: MuscleRegion): boolean =>
+    category.has(r) && !shared.has(r) && !missed.has(r);
+
   const view = (
     map: Partial<Record<MuscleRegion, Shape[]>>,
     dx: number,
@@ -198,7 +219,7 @@ function BodyFigureImpl({
 
       {/*
         Orientation cue. Slightly brighter than the scaffolding so it reads as
-        detail rather than another muscle — it must never be mistaken for a
+        detail rather than another muscle - it must never be mistaken for a
         scored region, so it deliberately uses neither state colour.
       */}
       <g fill="var(--color-tile-filled)" opacity={0.85}>
@@ -206,12 +227,12 @@ function BodyFigureImpl({
           renderShape(
             s,
             `f${i}`,
-            // The mouth is the one stroked shape; everything else is filled.
-            facing === 'front' && s.t === 'path'
+            // Front is line work; back is a filled mass.
+            facing === 'front'
               ? {
                   fill: 'none',
                   stroke: 'var(--color-tile-filled)',
-                  strokeWidth: 1.4,
+                  strokeWidth: 1.3,
                   strokeLinecap: 'round',
                 }
               : {},
@@ -232,7 +253,7 @@ function BodyFigureImpl({
             // instances in modals do not advertise interactivity they lack.
             role={onSelectRegion ? 'button' : undefined}
             tabIndex={onSelectRegion ? 0 : undefined}
-            aria-label={onSelectRegion ? `${MUSCLE_LABEL[region]} — show details` : undefined}
+            aria-label={onSelectRegion ? `${MUSCLE_LABEL[region]} - show details` : undefined}
             style={onSelectRegion ? { cursor: 'pointer' } : undefined}
             onClick={onSelectRegion ? () => onSelectRegion(region) : undefined}
             onKeyDown={
@@ -246,7 +267,7 @@ function BodyFigureImpl({
                 : undefined
             }
           >
-            <title>{`${MUSCLE_LABEL[region]} — ${
+            <title>{`${MUSCLE_LABEL[region]} - ${
               state === 'shared'
                 ? 'also worked by the answer'
                 : state === 'missed'
@@ -261,12 +282,12 @@ function BodyFigureImpl({
                 // uses a different colour AND a solid stroke.
                 stroke: selected === region
                   ? '#ffffff'
-                  : category.has(region)
+                  : outlined(region)
                     ? 'var(--color-state-present)'
                     : 'none',
-                strokeWidth: selected === region ? 2 : category.has(region) ? 2 : 0,
+                strokeWidth: selected === region || outlined(region) ? 2 : 0,
                 strokeDasharray:
-                  selected !== region && category.has(region) ? '3 2' : undefined,
+                  selected !== region && outlined(region) ? '3 2' : undefined,
                 style: { transition: 'fill 350ms ease' },
               }),
             )}

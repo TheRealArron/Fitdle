@@ -26,17 +26,17 @@ npm run build:extension  # -> extension-dist/, loadable in chrome://extensions
 
 ### Why `smoke` runs both modes
 
-Twice, a change passed every unit test, typechecked, linted and built — and
+Twice, a change passed every unit test, typechecked, linted and built - and
 still shipped a dead page, because it was only exercised in one mode:
 
 | Regression | Passed | Broke |
 |---|---|---|
-| CSP without `'unsafe-eval'` | production | **dev** — no HMR, blank page at `opacity: 0` |
-| Daily seed from `new Date()` at module scope | dev | **production** — build-day answer baked into prerendered HTML |
+| CSP without `'unsafe-eval'` | production | **dev** - no HMR, blank page at `opacity: 0` |
+| Daily seed from `new Date()` at module scope | dev | **production** - build-day answer baked into prerendered HTML |
 
 Neither is reachable from a unit test: both are properties of the running
 server. `smoke` boots each mode, drives a browser, and asserts the app actually
-hydrates — which is where both failures surfaced. It has been confirmed to fail
+hydrates - which is where both failures surfaced. It has been confirmed to fail
 on the real regression, not just to pass on the fix.
 
 ---
@@ -54,7 +54,7 @@ reacts to every guess:
 |---|---|
 | 🟩 green | your guess and the answer both work this muscle |
 | 🟥 red | your guess works it, the answer does not |
-| ▪ dark | you have not probed it — it tells you nothing |
+| ▪ dark | you have not probed it - it tells you nothing |
 
 Guess SQUAT against a hidden DEADLIFT and the glutes go green while the abs go
 red: you have learned it is a posterior-chain movement without a single letter
@@ -65,17 +65,17 @@ the answer.
 **Hints unlock progressively.** Guesses 1–2 are yours alone. Guess 3 reveals the
 muscle group, guess 5 the equipment.
 
-**Names are letters only** — no spaces or hyphens, singular. Pull-ups is
+**Names are letters only** - no spaces or hyphens, singular. Pull-ups is
 `PULLUP`, Farmer's carry is `FARMERS`. All 99 names are one tap away behind the
 list icon; you are not expected to know them by heart.
 
-**When the daily is done** the keyboard — now dead weight — is replaced by a
+**When the daily is done** the keyboard - now dead weight - is replaced by a
 panel offering the thing you actually want next: another round. Practice mode
 gives you unlimited random puzzles. They are never written to
-storage, so there is no path from a practice round to a streak — replaying until
+storage, so there is no path from a practice round to a streak - replaying until
 you win buys nothing.
 
-**Today's shortlist** unlocks after guess 2 — a collapsible panel listing every
+**Today's shortlist** unlocks after guess 2 - a collapsible panel listing every
 answer of today's length. A second tab narrows it to only those matching every
 clue on your board. That one is a solver and says so: with 12 answers per length
 it will often leave a single word, which is why the plain list is the default
@@ -86,22 +86,22 @@ figure, legend and the share grid. The game runs two colour channels
 (green/yellow on the board, green/wine on the figure) and red-green deficiency
 breaks both at once, so all of them move together.
 
-**Today's challenge** turns the answer into a prescription — `4 × 8 Burpee`,
-`3 × 45 seconds Plank` — with its own streak, tracked separately from the puzzle
+**Today's challenge** turns the answer into a prescription - `4 × 8 Burpee`,
+`3 × 45 seconds Plank` - with its own streak, tracked separately from the puzzle
 streak. Getting the word is not the same achievement as doing the work, and
 conflating them would let one paper over the other. Marking it done is the
 honour system, deliberately: a browser cannot verify a set of squats, and
 pretending otherwise would be worse than trusting the player.
 
 **Tap any muscle** on the figure to see what else trains it. Mid-game that is a
-strategic aid — knowing three other exercises that hit the lats tells you what to
+strategic aid - knowing three other exercises that hit the lats tells you what to
 probe. After the round it names whether the answer worked that muscle and how.
 The answer is excluded from those lists at all times, so the panel can never
 become an oracle.
 
 **Form videos.** Every one of the 60 answers links to a real, curated coaching
 video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
-too, not just losses — the coaching is the point of the game, and hiding it
+too, not just losses - the coaching is the point of the game, and hiding it
 behind a loss punishes the players who engaged most.
 
 ---
@@ -109,15 +109,15 @@ behind a loss punishes the players who engaged most.
 ## Where this deviates from `claude.md`, and why
 
 The spec was implemented as written except for the following. Each change is
-load-bearing — the spec as literally written does not deliver what section 1
+load-bearing - the spec as literally written does not deliver what section 1
 promises.
 
 ### 1. The five-letter grid had to go
 
 English contains roughly **eight** real five-letter exercise names. The spec
 needed fifteen, so it padded the list with mutilations: `BURPE`, `ROWSR`,
-`DIPSB`, `VUPPS`, `CRUNC`. Those are unguessable — no player can deduce a word
-that is not a word — and no amount of curating the list fixes it while the grid
+`DIPSB`, `VUPPS`, `CRUNC`. Those are unguessable - no player can deduce a word
+that is not a word - and no amount of curating the list fixes it while the grid
 is five wide.
 
 Answers now run **5–9 letters at their natural spelling**, and the grid width
@@ -126,14 +126,14 @@ length) inside a 99-exercise catalogue.
 
 One caveat stated plainly in the source: the daily index is `seed % ANSWERS.length`,
 so **changing the pool size reshuffles the whole calendar**, not just future
-days. Growing the pool is safe before launch and not after — at that point
+days. Growing the pool is safe before launch and not after - at that point
 either freeze the size or move to a pinned date→answer schedule.
 
 ### 2. "What do I even guess?" needed an answer inside the product
 
 Wordle works because every player already carries the answer space in their
 head: common English. Nobody carries a list of exercise names. So the game hands
-it over — [ExerciseIndex.tsx](src/components/ExerciseIndex.tsx) is a searchable
+it over - [ExerciseIndex.tsx](src/components/ExerciseIndex.tsx) is a searchable
 list of the full vocabulary, defaulting to today's length so it doubles as the
 candidate list for the puzzle in front of you.
 
@@ -143,7 +143,7 @@ makes the space *knowable*; the index is what makes it *fair*.
 ### 3. The muscle figure, per section 1's "muscle-group feedback"
 
 The spec listed muscle-group feedback as a core feature but only ever surfaced
-it in the result modal — after you had already won, when it could no longer help
+it in the result modal - after you had already won, when it could no longer help
 you. It is now a live deduction channel. See
 [BodyFigure.tsx](src/components/BodyFigure.tsx) and
 [muscleFeedback.ts](src/lib/muscleFeedback.ts).
@@ -155,12 +155,12 @@ accurate.
 ### 4. The daily word is seeded from UTC, not local time
 
 The spec's `getDailyIndex` read `now.getFullYear()`, `now.getMonth()`,
-`now.getDate()` — **local** date parts. At 2026-07-30 10:00 UTC a player in
+`now.getDate()` - **local** date parts. At 2026-07-30 10:00 UTC a player in
 Auckland is on the 30th and one in Los Angeles is still on the 29th, so they get
 different answers. That contradicts the stated requirement that every user gets
 the same word today.
 
-The seed arithmetic is unchanged — `year * 10000 + (month + 1) * 100 + date`,
+The seed arithmetic is unchanged - `year * 10000 + (month + 1) * 100 + date`,
 then `% ANSWERS.length`. Only the getters became `getUTC*`. See
 [daily.ts](src/lib/daily.ts).
 
@@ -193,13 +193,13 @@ The fixes, in descending order of what they're worth:
 
 | Defence | Attack it stops |
 |---|---|
-| `lastSeed` anchor — a puzzle pays out at most once, idempotent by seed | Replay. Clearing storage to retry now *resets* the streak, so cheating is strictly worse than playing |
+| `lastSeed` anchor - a puzzle pays out at most once, idempotent by seed | Replay. Clearing storage to retry now *resets* the streak, so cheating is strictly worse than playing |
 | `highSeed` monotonic high-water mark | Winding the system clock back to farm past puzzles |
-| Keyed 128-bit digest over a canonically serialised record | Hand-editing `"streak":3` in devtools — the realistic attack |
+| Keyed 128-bit digest over a canonically serialised record | Hand-editing `"streak":3` in devtools - the realistic attack |
 | Semantic coherence checks (`wins <= played`, `distribution` sums to `wins`, uniform guess width) | Forged records that verify but are internally impossible |
 | Fail-closed | A record that does not verify is discarded, not trusted |
 
-The spec's digest was a non-keyed 32-bit hash rendered as short hex —
+The spec's digest was a non-keyed 32-bit hash rendered as short hex -
 reproducible in a one-line console expression and collision-prone. The
 replacement runs four FNV-1a-style lanes with distinct primes and cross-lane
 diffusion. Obfuscation with a real avalanche property, not cryptography.
@@ -244,7 +244,7 @@ the parent rotates `rotateX: 0 → 180`. No timers, so the animation cannot drif
 out of sync with the state driving it.
 
 Stagger is `index * 0.1s` per the spec. Only the last tile in a row reports
-completion, which advances `revealingRow` and gates everything derived — the
+completion, which advances `revealingRow` and gates everything derived - the
 keyboard, the muscle figure and the hint unlocks all wait, so nothing spoils the
 reveal.
 
@@ -258,7 +258,7 @@ width**, and both appear at `xl` or not at all.
 
 This is not cosmetic. An asymmetric layout pushes the board off the viewport
 centre while the header and keyboard stay centred on it, and that mismatch is
-what reads as broken alignment — it was a real bug in the previous version,
+what reads as broken alignment - it was a real bug in the previous version,
 where the board lived in a `flex-1` column beside a fixed-width figure and
 centred itself within that column instead of the page. Equal rails make the
 board's centre exactly the viewport's centre at every width; a test asserts
@@ -270,27 +270,27 @@ board's centre exactly the viewport's centre at every width; a test asserts
 |---|---|
 | Row-level security | Enabled, four owner-only policies, **verified live** by `cloud:check` returning `42501` on an anonymous write |
 | Clock rewind (replay old puzzles) | Blocked by the monotonic `highSeed` high-water mark |
-| Clock *forward* skip (play tomorrow early) | Blocked once `fitdle_server_time()` exists — the daily seed comes from the server, not the browser |
+| Clock *forward* skip (play tomorrow early) | Blocked once `fitdle_server_time()` exists - the daily seed comes from the server, not the browser |
 | Token exfiltration after an XSS | Blocked by `connect-src` pinned to self + your one Supabase project |
 | Clickjacking an authenticated session | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
 | Plugin / base-tag escalation | Blocked by `object-src 'none'`, `base-uri 'self'` |
-| Inline script injection | **Not** blocked — see the CSP note in [next.config.ts](next.config.ts) |
+| Inline script injection | **Not** blocked - see the CSP note in [next.config.ts](next.config.ts) |
 | Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 43 client chunks to prove it |
 | Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
 | Replaying an old session | **Blocked.** The seed is inside the signature |
-| Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP — a speed bump, not a distributed defence |
+| Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP - a speed bump, not a distributed defence |
 | Streak authenticity | **Not** protected. The client still writes its own streak to localStorage |
 
-Only the last row remains. Winning cannot be faked any more — you have to
-actually solve it to learn the answer — but the *record* of having won is still
+Only the last row remains. Winning cannot be faked any more - you have to
+actually solve it to learn the answer - but the *record* of having won is still
 client-written. Closing that means the API writing to Supabase under the user's
 JWT, which is a natural next step rather than a rewrite.
 
 #### The trusted clock, and a trap worth knowing about
 
 `highSeed` stops someone winding the clock *back* to farm old puzzles, but not
-*forward* to play tomorrow early — that just looks like time passing.
+*forward* to play tomorrow early - that just looks like time passing.
 
 The obvious fix is to read the `Date` response header off any Supabase call.
 **It does not work, and it fails silently.** `Date` is not a CORS-safelisted
@@ -301,7 +301,7 @@ SQL function in [schema.sql](supabase/schema.sql).
 
 ### The server owns the answer
 
-The client used to ship `ANSWERS[seed % 60]`, which is the entire schedule —
+The client used to ship `ANSWERS[seed % 60]`, which is the entire schedule -
 readable in devtools, every future puzzle included. That is now split:
 
 | Client (`data/exercises.ts`) | Server (`server/answers.ts`) |
@@ -313,7 +313,7 @@ readable in devtools, every future puzzle included. That is now split:
 carries common English in their head; nobody carries a list of exercise names,
 so the in-app index has to hand them over or the game is unplayable. Knowing a
 word *can* be an answer narrows 99 to 60. Knowing *which day* would give the
-game away — and that is the part that moved.
+game away - and that is the part that moved.
 
 `server-only` on the answer module turns an accidental client import into a
 build error rather than a silent leak. `npm run check:bundle` is the
@@ -322,7 +322,7 @@ the real schedule, because finding one name proves nothing when the catalogue is
 public by design.
 
 **Guesses are scored server-side.** `/api/guess` recomputes the whole game from
-a signed guess history and returns the truth — there is no code path that
+a signed guess history and returns the truth - there is no code path that
 accepts a result from the browser. Verified by attacking it:
 
 ```
@@ -333,7 +333,7 @@ Replay yesterday's token          -> REJECTED, seed is inside the signature
 
 **The cost, stated plainly:** the daily now needs a network connection, and the
 Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
-static export has no server of its own. Practice mode stays fully local — it
+static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
 
@@ -342,7 +342,7 @@ round trip per practice guess would make the mode worse for no gain.
 Real accounts via Supabase: email/password sign-up and sign-in, sessions that
 survive reloads, and a streak that follows you between devices.
 
-**Setup: [docs/supabase-setup.md](docs/supabase-setup.md)** — five minutes, free
+**Setup: [docs/supabase-setup.md](docs/supabase-setup.md)** - five minutes, free
 tier, with troubleshooting.
 
 **It works without keys.** A fresh clone and the extension build have no
@@ -351,9 +351,9 @@ rather than showing a sign-in form that cannot reach a server.
 
 **`npm run cloud:check` before you trust it.** The cloud path cannot be
 exercised without real credentials, so it ships untested by construction.
-[cloud-check.mjs](scripts/cloud-check.mjs) walks the whole chain — keys present,
+[cloud-check.mjs](scripts/cloud-check.mjs) walks the whole chain - keys present,
 project reachable, table exists, RLS actually enforced, anonymous writes refused
-— and names the exact fix for whatever is missing. The RLS checks matter most:
+- and names the exact fix for whatever is missing. The RLS checks matter most:
 the anon key is public and ships in the bundle, so those policies are the only
 thing between one player and everyone else's rows.
 
@@ -363,7 +363,7 @@ the player. So [cloudSync.ts](src/lib/cloudSync.ts) merges on the data itself:
 monotonic counters take the max (you cannot un-play a game), `highSeed` takes
 the max so clock-rollback protection cannot be laundered away by syncing from a
 tampered device, and the *streak* comes from whichever save played most recently
-— taking the larger streak would let a stale device resurrect a broken one. The
+- taking the larger streak would let a stale device resurrect a broken one. The
 merge is order-independent and its result always satisfies the same coherence
 invariants `isCoherent` enforces, so a sync can never produce a save that the
 next load rejects.
@@ -381,21 +381,21 @@ on a single hue, so nothing competes with the board and the muscle figure.
 Borders are white at low alpha rather than another grey, which means one value
 sits correctly on every surface in the ramp.
 
-Two typefaces, each with a job. Inter carries the interface — its tall x-height
+Two typefaces, each with a job. Inter carries the interface - its tall x-height
 keeps the 10–12px rail labels legible where a monospace turns to mush. Geist
 Mono carries anything read as *data*: tiles, timers, streaks, exercise names,
 backup codes. Fixed advance width means a ticking countdown never reflows its
 neighbours.
 
 Scored tiles get a bloom in their own colour, which is what makes the board read
-as lit rather than painted — and because it only ever appears on the three
+as lit rather than painted - and because it only ever appears on the three
 result states, it reinforces the same one-saturated-colour rule.
 
 ### Form videos
 
 `FORM_VIDEO` in [exercises.ts](src/data/exercises.ts) pins one video per answer.
 Every ID was resolved from a real search and then checked against YouTube's
-oEmbed endpoint, which returns the live title and channel — 40/40 came back
+oEmbed endpoint, which returns the live title and channel - 40/40 came back
 valid, so none are guessed and none were dead at the time of writing. The
 verified title sits beside each ID as a comment.
 
@@ -407,7 +407,7 @@ block an embedded player in the extension popup anyway.
 
 ### Board sizing
 
-Tiles are `aspect-square`, so the board is width-driven — but its available
+Tiles are `aspect-square`, so the board is width-driven - but its available
 space is height-constrained and the column count changes daily. The board area
 is a CSS **size container**, letting it compute its own width from the height it
 actually has:
@@ -430,19 +430,19 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` — 93 tests over the things that must not silently break:
+`npm test` - 93 tests over the things that must not silently break:
 
-- **daily** — seed formula, timezone invariance, the UTC-midnight boundary, the
+- **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each
   answer length has enough candidates to be a real puzzle.
-- **evaluate** — duplicate-letter scoring, position-before-presence, keyboard
+- **evaluate** - duplicate-letter scoring, position-before-presence, keyboard
   state never downgrading, length-agnostic scoring.
-- **muscles** — overlap accumulation, `shared`/`missed` disjointness, and the
+- **muscles** - overlap accumulation, `shared`/`missed` disjointness, and the
   core guarantee that unprobed muscles stay dark.
-- **security / persistence** — digest avalanche and collisions, replay blocking,
+- **security / persistence** - digest avalanche and collisions, replay blocking,
   clock-rollback detection, streak continuity, stats coherence, and a save round
   trip at every answer length.
-- **videos** — every answer has a pinned video, ids are well-formed, no two
+- **videos** - every answer has a pinned video, ids are well-formed, no two
   exercises share one, and the search fallback is always present.
 
 Browser passes (Playwright, not part of `npm test`): the full game flow, the
@@ -453,5 +453,5 @@ the backup-code round trip, forged-code rejection and the video links.
 That last one is a regression test. `isCoherent` originally hardcoded
 `/^[A-Z]{5}$/`; once answers became variable-length, every save on a 6–9 letter
 day failed validation, was treated as tampering, and silently wiped the player's
-streak. The unit tests passed throughout — only driving the real browser caught
+streak. The unit tests passed throughout - only driving the real browser caught
 it.

@@ -39,7 +39,7 @@ test('no two exercises share a video', () => {
 test('the client module carries no answer ordering or coaching payload', () => {
   /*
    * Scans CODE, not prose. The file's own header documents what must never be
-   * added, and a naive substring search matched that comment — a false positive
+   * added, and a naive substring search matched that comment - a false positive
    * that would have trained everyone to ignore this test.
    *
    * `npm run check:bundle` is the authoritative version: it greps the compiled

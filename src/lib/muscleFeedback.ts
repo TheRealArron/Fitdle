@@ -13,7 +13,7 @@ export interface MuscleFeedback {
  *
  * Crucially this only ever reports on muscles you have *probed*. The answer's
  * untouched muscles stay dark, so the figure narrows the search space without
- * handing over the category — that is what the guess-3 hint is for.
+ * handing over the category - that is what the guess-3 hint is for.
  *
  * A region is `shared` if any guess so far shares it with the answer, and
  * `missed` only if it has been hit by a guess and is not in the answer. The two

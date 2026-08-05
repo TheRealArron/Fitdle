@@ -13,6 +13,7 @@ import type { Equipment, MuscleGroup, MuscleRegion } from '@/data/muscles';
 import {
   fetchToday,
   isRejection,
+  placeCall as placeCallApi,
   submitGuess as submitGuessApi,
   type RevealedAnswer,
 } from '@/lib/api';
@@ -40,7 +41,7 @@ export type GameMode = 'daily' | 'practice';
 /**
  * What the client knows about the target.
  *
- * For the DAILY this is null until the server reveals it — the browser cannot
+ * For the DAILY this is null until the server reveals it - the browser cannot
  * see today's answer, by construction. For PRACTICE the client picks and scores
  * locally, which is safe precisely because practice touches no streak: leaking
  * a practice answer costs nothing, and requiring a round trip per practice
@@ -62,6 +63,8 @@ export interface GameState {
   hints: { category: MuscleGroup | null; equipment: Equipment | null; nextHintIn: number | null };
   /** Non-null only once the round is over. The only path to the answer. */
   reveal: Target | null;
+  /** The opening muscle-group call, once made. Server-scored. */
+  call: { group: MuscleGroup; correct: boolean } | null;
 
   /** Opaque signed session from the server. Daily only. */
   serverState: string | null;
@@ -93,12 +96,20 @@ export interface GameState {
   startPractice: () => void;
   exitPractice: () => Promise<void>;
   markWorkoutDone: () => void;
+  /** Lock in the opening muscle-group call. Daily only, before guess 1. */
+  placeCall: (group: MuscleGroup) => Promise<void>;
 }
 
 let toastSeq = 0;
 
-/** Answer-eligible words, for practice only. */
-const PRACTICE_POOL = CATALOGUE.filter((e) => e.isAnswer);
+/**
+ * Practice draws from the WHOLE catalogue, not the daily answer pool.
+ *
+ * The client no longer knows which words can be answers, and that is the point:
+ * publishing that subset is what made the daily solvable in two guesses. Any
+ * exercise makes a fine practice round, so nothing is lost by widening it.
+ */
+const PRACTICE_POOL = CATALOGUE;
 
 const EMPTY_MUSCLES = { shared: [] as MuscleRegion[], missed: [] as MuscleRegion[] };
 const NO_HINTS = { category: null, equipment: null, nextHintIn: null };
@@ -146,6 +157,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   muscles: EMPTY_MUSCLES,
   hints: NO_HINTS,
   reveal: null,
+  call: null,
   serverState: null,
   offline: false,
 
@@ -163,7 +175,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   /**
    * Asks the server for today's puzzle. The seed, the width and the scoring all
-   * come from there — a wound-forward local clock changes nothing.
+   * come from there - a wound-forward local clock changes nothing.
    */
   initGame: async () => {
     set({ loading: true });
@@ -180,7 +192,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
         loading: false,
         hydrated: true,
         offline: true,
-        toast: { id: ++toastSeq, message: 'Cannot reach the server — try again shortly' },
+        toast: { id: ++toastSeq, message: 'Cannot reach the server - try again shortly' },
       });
       return;
     }
@@ -216,6 +228,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       muscles: d.muscles,
       hints: d.hints as GameState['hints'],
       reveal: d.reveal,
+      call: d.call,
       serverState: d.state,
       offline: false,
       currentGuess: '',
@@ -230,9 +243,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
       tampered,
       clockRollback,
       toast: tampered
-        ? { id: ++toastSeq, message: 'Saved progress was invalid — stats reset' }
+        ? { id: ++toastSeq, message: 'Saved progress was invalid - stats reset' }
         : streakBroken
-          ? { id: ++toastSeq, message: 'You missed a day — streak reset' }
+          ? { id: ++toastSeq, message: 'You missed a day - streak reset' }
           : null,
     });
   },
@@ -334,6 +347,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       muscles: d.muscles,
       hints: d.hints as GameState['hints'],
       reveal: d.reveal,
+      call: d.call,
       serverState: d.state,
       currentGuess: '',
       status: d.status,
@@ -378,7 +392,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   /**
    * Practice picks locally from the answer-eligible pool. That is safe because
-   * practice can never touch a streak — leaking a practice answer costs nothing,
+   * practice can never touch a streak - leaking a practice answer costs nothing,
    * and it keeps the mode playable without a round trip per guess.
    */
   startPractice: () => {
@@ -401,11 +415,38 @@ export const useGameStore = create<GameState>()((set, get) => ({
       revealingRow: null,
       shakeRow: null,
       modalOpen: false,
-      toast: { id: ++toastSeq, message: 'Practice round — streak is safe' },
+      call: null,
+      toast: { id: ++toastSeq, message: 'Practice round - streak is safe' },
     });
   },
 
   exitPractice: () => get().initGame(),
+
+  placeCall: async (group) => {
+    const { serverState, mode, guesses } = get();
+    // Server enforces these too; checking here only avoids a pointless request.
+    if (mode !== 'daily' || !serverState || guesses.length > 0) return;
+
+    const result = await placeCallApi(group, serverState);
+    if (!result.ok) {
+      set({ toast: { id: ++toastSeq, message: result.error } });
+      return;
+    }
+
+    const d = result.data;
+    adoptServerTime(d.serverTime);
+    set({
+      call: d.call,
+      hints: d.hints as GameState['hints'],
+      serverState: d.state,
+      toast: {
+        id: ++toastSeq,
+        message: d.call?.correct
+          ? `Called it. Equipment unlocked.`
+          : `Not ${group}. Category hint forfeited.`,
+      },
+    });
+  },
 
   markWorkoutDone: () => {
     const { mode, save, seed } = get();
@@ -422,7 +463,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
         id: ++toastSeq,
         message:
           (next.workoutStreak ?? 0) > 1
-            ? `Logged — ${next.workoutStreak} day workout streak`
+            ? `Logged - ${next.workoutStreak} day workout streak`
             : 'Workout logged',
       },
     });

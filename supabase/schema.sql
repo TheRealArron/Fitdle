@@ -20,7 +20,7 @@ create table if not exists public.fitdle_progress (
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row level security.
 --
--- This is the actual protection, not the anon key — that key is public by
+-- This is the actual protection, not the anon key - that key is public by
 -- design and ships in the client bundle. Without these policies every user
 -- could read every other user's row.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +75,6 @@ create trigger fitdle_progress_touch
 -- The client computes and uploads its own streak, so a determined user can
 -- upload any number they like. This schema does not pretend otherwise. Making
 -- streaks authoritative would mean moving the answer and the scoring server
--- side — a Postgres function that owns the daily word and validates each guess
--- — which is a different product decision, not a policy tweak.
+-- side - a Postgres function that owns the daily word and validates each guess
+-- - which is a different product decision, not a policy tweak.
 -- ─────────────────────────────────────────────────────────────────────────────

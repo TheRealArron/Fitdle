@@ -3,10 +3,10 @@ import { daysBetweenSeeds } from '@/lib/daily';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * THREAT MODEL — read this before trusting the word "secure".
+ * THREAT MODEL - read this before trusting the word "secure".
  * ─────────────────────────────────────────────────────────────────────────────
- * Everything here runs on the player's machine and every byte of it — the
- * digest function, the key, the record format — ships inside the JS bundle. A
+ * Everything here runs on the player's machine and every byte of it - the
+ * digest function, the key, the record format - ships inside the JS bundle. A
  * determined user can therefore always forge a valid save. That is not a bug in
  * this file; it is a property of client-only persistence. Real tamper-proofing
  * needs a server that owns the streak.
@@ -17,14 +17,14 @@ import { daysBetweenSeeds } from '@/lib/daily';
  *      the streak on every win, and `initGame` reset the board while keeping
  *      the streak. So: win, refresh, win again, forever. Streak inflation with
  *      zero tooling. Here a puzzle can only ever pay out once, enforced by
- *      `lastSeed`, and wiping storage to retry resets the streak to zero — the
+ *      `lastSeed`, and wiping storage to retry resets the streak to zero - the
  *      cheat is strictly worse than playing.
  *   2. CLOCK-ROLLBACK RESISTANCE. `highSeed` is a monotonic high-water mark.
  *      Winding the system clock back to farm past puzzles is detected and those
  *      puzzles pay no streak.
  *   3. INTEGRITY. A keyed 128-bit digest over a canonical serialisation. Stops
  *      hand-editing `"streak":3` in devtools, which is the realistic attack.
- *      The spec's digest was a 32-bit non-keyed hash rendered as short hex —
+ *      The spec's digest was a 32-bit non-keyed hash rendered as short hex -
  *      forgeable in a one-line console expression and collision-prone besides.
  *   4. FAIL-CLOSED. A record that does not verify is discarded, not trusted.
  */
@@ -34,7 +34,7 @@ const LEGACY_KEY = 'fitdle-data';
 const SAVE_VERSION = 2;
 
 /**
- * Domain-separation key. Obfuscation, not a secret — see the threat model. It
+ * Domain-separation key. Obfuscation, not a secret - see the threat model. It
  * exists so that a digest lifted from another app or an older Fitdle build does
  * not verify here.
  */
@@ -48,7 +48,7 @@ export interface DayRecord {
   status: GameStatus;
   /**
    * The server's signed session for this day, stored so a reload resumes the
-   * same game rather than starting a fresh one. Opaque and unforgeable — the
+   * same game rather than starting a fresh one. Opaque and unforgeable - the
    * server re-verifies its HMAC on every request, so persisting it here grants
    * no authority it did not already have.
    */
@@ -72,7 +72,7 @@ export interface SaveData {
   day: DayRecord | null;
 
   /*
-   * Workout tracking — a second, independent streak for actually doing the
+   * Workout tracking - a second, independent streak for actually doing the
    * movement. Optional on purpose: these were added after people already had
    * saves, and bumping SAVE_VERSION would have failed every existing record's
    * coherence check and wiped real streaks. `normalise()` fills them in on load
@@ -392,11 +392,11 @@ export function importSave(code: string): ImportResult {
   try {
     envelope = JSON.parse(fromBase64(trimmed.slice(CODE_PREFIX.length)));
   } catch {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
 
   if (typeof envelope.p !== 'string' || typeof envelope.h !== 'string') {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
   if (digest(envelope.p) !== envelope.h) {
     return { ok: false, reason: 'The code failed its integrity check.' };
@@ -406,7 +406,7 @@ export function importSave(code: string): ImportResult {
   try {
     parsed = JSON.parse(envelope.p);
   } catch {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
   if (!isCoherent(parsed)) {
     return { ok: false, reason: 'That code contains impossible statistics.' };
@@ -490,7 +490,7 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
 
 /**
  * Marks today's mini-challenge complete. Idempotent by seed, exactly like
- * `commitResult` — you can only bank one workout per day, so spamming the
+ * `commitResult` - you can only bank one workout per day, so spamming the
  * button cannot inflate the workout streak.
  */
 export function commitWorkout(input: SaveData, seed: number): SaveData {
@@ -505,7 +505,7 @@ export function commitWorkout(input: SaveData, seed: number): SaveData {
 }
 
 /**
- * Records a finished puzzle. Idempotent by seed — the anti-replay guarantee.
+ * Records a finished puzzle. Idempotent by seed - the anti-replay guarantee.
  * Calling it twice for the same puzzle (double submit, refresh mid-animation,
  * a second tab) changes nothing the second time.
  */
