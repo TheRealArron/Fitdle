@@ -256,7 +256,13 @@ body > * {
 }
 
 .tile-perspective {
-  perspective: 1000px;
+  /*
+   * 1000px on a ~60px tile is very nearly orthographic - the near edge barely
+   * grows as it turns, so the flip reads as a vertical squash rather than a
+   * rotation. Bringing the camera in gives the turn real depth. Too tight and
+   * the tile fish-eyes, so this is deliberately at the shallow end of "obvious".
+   */
+  perspective: 560px;
   /* Makes the tile its own container so letters can size in `cqw`. Grid width
      varies 5–9 by day, so tiles must scale their own type. */
   container-type: inline-size;
@@ -264,15 +270,28 @@ body > * {
 
 .tile-3d {
   transform-style: preserve-3d;
+  /*
+   * Promote to its own compositor layer for the duration of the flip. Without
+   * it the browser rasterises the rotating element on the main thread and the
+   * turn stutters on exactly the low-end phones that need it not to.
+   */
+  will-change: transform;
 }
 
 .tile-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  /*
+   * Forces each face onto the GPU too. Without it the two faces are rasterised
+   * together and the hidden one bleeds a hairline through the visible face
+   * mid-rotation - visible as a flicker at the halfway point.
+   */
+  transform: translateZ(0);
 }
 
 .tile-face-back {
-  transform: rotateX(180deg);
+  /* Must compose with the translateZ above, not replace it. */
+  transform: rotateX(180deg) translateZ(0);
 }
 
 /*
@@ -403,6 +422,11 @@ body > * {
   .tile-3d * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+
+  /* No point holding a compositor layer for an animation that does not run. */
+  .tile-3d {
+    will-change: auto;
   }
 }
 

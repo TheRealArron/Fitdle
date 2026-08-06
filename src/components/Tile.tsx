@@ -4,9 +4,16 @@ import { motion } from 'framer-motion';
 import { memo } from 'react';
 import type { LetterState } from '@/lib/evaluate';
 
-export const FLIP_DURATION = 0.6;
-/** Per-tile stagger. The spec's `delay: i * 0.1s`. */
-export const FLIP_STAGGER = 0.1;
+/*
+ * Flip timing.
+ *
+ * 0.6s per tile with a 0.1s stagger meant a nine-wide row took 1.4s to resolve,
+ * which reads as sluggish rather than deliberate - you are waiting on the game
+ * instead of watching it. Slightly quicker per tile and a tighter stagger keeps
+ * the cascade legible while getting the whole row done in about a second.
+ */
+export const FLIP_DURATION = 0.5;
+export const FLIP_STAGGER = 0.075;
 
 interface TileProps {
   letter: string;
@@ -61,13 +68,34 @@ function TileImpl({
       <motion.div
         className="tile-3d relative h-full w-full"
         initial={false}
-        animate={{ rotateX: showBack ? 180 : 0 }}
+        /*
+         * The flip is three things moving together, not one rotation:
+         *
+         *   rotateX  the turn itself
+         *   scale    a slight swell at the halfway point, so the tile reads as
+         *            coming toward you rather than shrinking into the page
+         *   z        actual forward travel, which only means anything because
+         *            the parent supplies a perspective
+         *
+         * Rotation alone is what makes a CSS flip look like a squash. The other
+         * two are the whole difference.
+         */
+        animate={
+          revealing
+            ? { rotateX: 180, scale: [1, 1.06, 1], z: [0, 26, 0] }
+            : { rotateX: showBack ? 180 : 0, scale: 1, z: 0 }
+        }
         transition={
           revealing
             ? {
                 duration: FLIP_DURATION,
                 delay: index * FLIP_STAGGER,
-                ease: [0.4, 0, 0.2, 1],
+                // Symmetric ease-in-out. The old curve decelerated from the
+                // first frame, so the tile never appeared to gather speed -
+                // a real card accelerates into the turn and settles out of it.
+                ease: [0.45, 0.05, 0.25, 1],
+                scale: { times: [0, 0.5, 1] },
+                z: { times: [0, 0.5, 1] },
               }
             : { duration: 0 }
         }
@@ -81,6 +109,9 @@ function TileImpl({
             'tile-face absolute inset-0 flex items-center justify-center',
             // Font scales off the tile's own width (see .tile-perspective in
             // globals.css) so a 9-wide grid stays legible without a media query.
+            // Radius MUST match the back face. They were `lg` and `md`, so the
+            // corners visibly jumped at the halfway swap - the geometry has to
+            // be identical for the two faces to read as one object.
             'rounded-lg border-2 font-game text-[52cqw] leading-none font-bold uppercase',
             'transition-colors duration-150',
             filled
@@ -100,7 +131,7 @@ function TileImpl({
             'tile-face tile-face-back absolute inset-0 flex items-center justify-center',
             // Font scales off the tile's own width (see .tile-perspective in
             // globals.css) so a 9-wide grid stays legible without a media query.
-            'rounded-md border-2 font-game text-[52cqw] leading-none font-bold uppercase',
+            'rounded-lg border-2 font-game text-[52cqw] leading-none font-bold uppercase',
             state ? FACE_CLASS[state] : 'border-tile-border bg-tile-empty text-white',
           ].join(' ')}
         >
