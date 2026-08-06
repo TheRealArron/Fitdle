@@ -20,6 +20,7 @@ npm test                 # 147 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
+npm run check:size       # first-load JS budget (gzipped)
 npm run cloud:check      # verify Supabase keys, schema and RLS
 npm run build:extension  # -> extension-dist/, loadable in chrome://extensions
 ```
@@ -429,6 +430,12 @@ tests:
 - **The pool is the whole catalogue, including today's answer.** Excluding it
   would be a leak: diff the drill's vocabulary against the exercise index and
   the missing word is the answer.
+
+**You answer by tapping the muscle on the figure**, not by picking from a list.
+That is the pedagogical difference: multiple choice tests whether you recognise
+a word; pointing at a body tests whether you know where the muscle is, which is
+what the puzzle's muscle map actually asks of you. A labelled option list sits
+underneath for keyboard and screen-reader users, who cannot point at an SVG.
 
 It touches no puzzle state - no streak, no seed, no server call. The worst
 outcome of a bug in it is a wrong personal best. The badge it earns

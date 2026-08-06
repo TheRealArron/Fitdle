@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { Check, Timer, Trophy, X, Zap } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MUSCLE_LABEL, type MuscleRegion } from '@/data/muscles';
@@ -10,6 +10,13 @@ import { BodyFigure } from './BodyFigure';
 
 /**
  * The 30-second anatomy blitz.
+ *
+ * You answer by TAPPING THE MUSCLE ON THE FIGURE, not by picking from a list.
+ * That is the whole pedagogical difference: a multiple-choice question tests
+ * whether you recognise a word, while pointing at a body tests whether you know
+ * where the muscle is - which is what the puzzle's muscle map actually asks of
+ * you. A labelled option list remains underneath for keyboard and screen-reader
+ * users, who cannot point at an SVG.
  *
  * Framed as a warm-up, not brain training. It drills one specific, checkable
  * skill - which muscles an exercise works - and that is exactly the second
@@ -31,6 +38,15 @@ export function AnatomyDrill() {
   const [best, setBest] = useState(0);
   const [remaining, setRemaining] = useState(DRILL_SECONDS);
   const [picked, setPicked] = useState<MuscleRegion | null>(null);
+  /*
+   * Imperative controls rather than a changing `key`.
+   *
+   * Keying the wrapper to re-trigger the shake remounted the whole SVG on every
+   * wrong answer - the figure detached and rebuilt mid-interaction, which is
+   * both wasteful and enough to make the next tap land on a stale element.
+   * Controls replay the same animation on a stable node.
+   */
+  const shake = useAnimationControls();
   const deadline = useRef(0);
 
   useEffect(() => {
@@ -73,6 +89,7 @@ export function AnatomyDrill() {
     setPicked(region);
     const correct = region === round[index].answer;
     if (correct) setScore((s) => s + 1);
+    else void shake.start({ x: [0, -7, 6, -4, 0], transition: { duration: 0.32, ease: 'easeOut' } });
 
     // Brief pause so the figure can show where the answer actually was - the
     // teaching happens here, not in the score.
@@ -154,21 +171,36 @@ export function AnatomyDrill() {
         <p className="font-game text-sm font-bold text-white tabular-nums">{score}</p>
       </div>
 
-      <div className="h-32">
+      {/* The answer surface. Shakes on a wrong tap, then shows where it was. */}
+      <motion.div animate={shake} className="h-40">
         <BodyFigure
           shared={shared}
           missed={missed}
           category={new Set()}
           className="h-full w-full"
+          // Interactive: this is how the question is answered.
+          onSelectRegion={picked ? undefined : answer}
+          selectHint="choose as your answer" 
         />
-      </div>
+      </motion.div>
 
       <div aria-live="polite" className="text-center">
-        <p className="text-[11px] tracking-wide text-slate-500 uppercase">Which muscle?</p>
+        <p className="text-[11px] tracking-wide text-slate-500 uppercase">
+          {picked
+            ? correct
+              ? 'Correct'
+              : `That is ${MUSCLE_LABEL[q.answer]}`
+            : 'Tap the muscle it works'}
+        </p>
         <p className="font-game text-lg font-bold text-white">{q.exercise.display}</p>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      {/*
+        * Same question, reachable without a pointer. Not a hint list - it is
+        * the accessible equivalent of the figure above, and it carries the same
+        * three candidates so the difficulty matches.
+        */}
+      <div className="flex flex-col gap-1.5" aria-label="Answer options">
         {q.options.map((r) => {
           const isAnswer = picked && r === q.answer;
           const isWrongPick = picked === r && !correct;

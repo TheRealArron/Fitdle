@@ -178,6 +178,12 @@ interface BodyFigureProps {
   className?: string;
   /** Makes regions tappable. Omit for a purely decorative figure. */
   onSelectRegion?: (region: MuscleRegion) => void;
+  /**
+   * What tapping a region does, for screen readers. The figure is used both to
+   * look muscles up and to answer a drill question, and "show details" is
+   * actively wrong in the second case.
+   */
+  selectHint?: string;
   selected?: MuscleRegion | null;
 }
 
@@ -187,6 +193,7 @@ function BodyFigureImpl({
   category,
   className,
   onSelectRegion,
+  selectHint = 'show details',
   selected,
 }: BodyFigureProps) {
   const stateOf = (r: MuscleRegion): RegionState =>
@@ -253,7 +260,7 @@ function BodyFigureImpl({
             // instances in modals do not advertise interactivity they lack.
             role={onSelectRegion ? 'button' : undefined}
             tabIndex={onSelectRegion ? 0 : undefined}
-            aria-label={onSelectRegion ? `${MUSCLE_LABEL[region]} - show details` : undefined}
+            aria-label={onSelectRegion ? `${MUSCLE_LABEL[region]} - ${selectHint}` : undefined}
             style={onSelectRegion ? { cursor: 'pointer' } : undefined}
             onClick={onSelectRegion ? () => onSelectRegion(region) : undefined}
             onKeyDown={

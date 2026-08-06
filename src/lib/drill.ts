@@ -16,6 +16,12 @@ import { GROUP_OF_REGION, MUSCLE_LABEL, type MuscleRegion } from '@/data/muscles
  */
 
 export const DRILL_SECONDS = 30;
+
+/**
+ * Kept for the option-list fallback, which exists for keyboard and screen-reader
+ * users. Pointing at a muscle is the primary interaction; a labelled list is how
+ * you do the same thing without a pointer.
+ */
 export const OPTION_COUNT = 3;
 
 export interface DrillQuestion {
