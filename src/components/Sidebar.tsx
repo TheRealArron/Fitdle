@@ -9,6 +9,7 @@ import {
   Flame,
   List,
   Settings,
+  MessagesSquare,
   Shuffle,
   Zap,
   Trophy,
@@ -28,6 +29,7 @@ export interface SidebarActions {
   onOpenStats: () => void;
   onOpenDrill: () => void;
   onOpenBoard: () => void;
+  onOpenGuide: () => void;
   onOpenAccount: () => void;
   onOpenSettings: () => void;
   /** Fired after any navigation, so the mobile drawer can close itself. */
@@ -79,6 +81,7 @@ export function Sidebar({
   onOpenStats,
   onOpenDrill,
   onOpenBoard,
+  onOpenGuide,
   onOpenAccount,
   onOpenSettings,
   onNavigate,
@@ -163,6 +166,8 @@ export function Sidebar({
           hint={String(CATALOGUE.length)}
           onClick={go(onOpenIndex)}
         />
+        {/* Safe mid-round: the guide knows the rules, not the catalogue. */}
+        <NavItem icon={MessagesSquare} label="Ask the guide" onClick={go(onOpenGuide)} />
         <NavItem icon={Trophy} label="Leaderboard" onClick={go(onOpenBoard)} />
         <NavItem icon={ChartColumn} label="Statistics" onClick={go(onOpenStats)} />
         {/* A warm-up, not a second game: it drills the exercise-to-muscle

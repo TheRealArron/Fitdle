@@ -140,6 +140,11 @@ export function askCoach(
   return post('/api/coach', { question, state });
 }
 
+/** Asks the in-game guide how something works. No round gate - it knows no answers. */
+export function askGuide(question: string): Promise<ApiResult<{ status: string; text: string }>> {
+  return post('/api/guide', { question });
+}
+
 export interface BoardEntry {
   rank: number;
   name: string;

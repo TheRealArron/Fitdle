@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 165 unit tests
+npm test                 # 175 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -535,6 +535,31 @@ a **no-equipment substitute**: a backpack, a towel, a chair, a wall.
 That data lives in the catalogue, not in a model. It renders for every player on
 every deployment, with no API key and no network call beyond the one that
 revealed the answer.
+
+### Ask the guide
+
+A chat panel in the menu explaining how the game works - scoring, the muscle
+map, streaks, the hint schedule, the opening call. Available **at any point in a
+round**, unlike the form coach, and the reason it can be is the whole design.
+
+**Any chatbot that knows the exercise catalogue is an oracle.** Ask it "which
+six-letter exercise works the hamstrings?" and it performs exactly the
+intersection that made the muscle panel hand over DEADLIFT.
+
+So the guide's prompt contains **no exercise names at all** - not the answers,
+not the catalogue, no muscle-to-exercise mapping. It is safe by construction
+rather than by instruction, because telling a model not to answer something is a
+request and requests get jailbroken. Never giving it the data is not a request.
+
+Three tests keep that structural: the prompt is grepped for every answer name,
+then for every catalogue name, and the module is forbidden from importing the
+data at all. The adversarial probe adds the attacks a person would actually try -
+asking outright, asking for "just one hint", the intersection framed as blog
+research, and a roleplay bypass - and **fails the run if any reply names an
+exercise**, however it is wrapped.
+
+The rules it states are interpolated from the same constants the game runs on,
+so a prompt saying "guess 3" cannot drift from a schedule that changed.
 
 ### The form coach
 

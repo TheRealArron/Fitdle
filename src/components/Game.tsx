@@ -12,6 +12,7 @@ import { useGameStore, selectHints } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
 import { DrillModal } from './DrillModal';
+import { GuideModal } from './GuideModal';
 import { LeaderboardModal } from './LeaderboardModal';
 import { ExerciseIndex } from './ExerciseIndex';
 import { Grid } from './Grid';
@@ -82,6 +83,7 @@ export function Game() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [drillOpen, setDrillOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   /* Bumped when a round ends so the board reloads with the new standing. */
   const [boardKey, setBoardKey] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -149,6 +151,7 @@ export function Game() {
     onOpenStats: () => setStatsOpen(true),
     onOpenDrill: () => setDrillOpen(true),
     onOpenBoard: () => setBoardOpen(true),
+    onOpenGuide: () => setGuideOpen(true),
     onOpenAccount: () => setAccountOpen(true),
     onOpenSettings: () => setSettingsOpen(true),
   };
@@ -306,6 +309,7 @@ export function Game() {
       <ResultModal />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} />
       <DrillModal open={drillOpen} onClose={() => setDrillOpen(false)} />
+      <GuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
       <LeaderboardModal
         open={boardOpen}
         onClose={() => setBoardOpen(false)}
