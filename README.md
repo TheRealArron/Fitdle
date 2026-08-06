@@ -107,6 +107,10 @@ behind a loss punishes the players who engaged most.
 
 ---
 
+**[DECISIONS.md](DECISIONS.md)** covers the six decisions where the trade-off is
+the interesting part, with the measurement behind each one and an explicit list
+of what was *not* verified.
+
 ## Where this deviates from `claude.md`, and why
 
 The spec was implemented as written except for the following. Each change is
