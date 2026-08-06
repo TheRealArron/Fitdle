@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 159 unit tests
+npm test                 # 164 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -83,6 +83,20 @@ clue on your board. That one is a solver and says so: with 12 answers per length
 it will often leave a single word, which is why the plain list is the default
 and narrowing is a deliberate click.
 
+**Five themes**, including **Daylight**, a genuine light mode. The interesting
+part is how: the codebase writes text as `text-white` and `text-slate-300`
+throughout - 67 literal call sites. Tailwind 4 compiles those to
+`color: var(--color-slate-300)`, so remapping the variables under one selector
+re-points all of them at once. Remapping `--color-white` also flips every
+`bg-white/[0.06]` overlay into a subtle dark tint, which is exactly what a light
+surface wants.
+
+Two things that only surfaced by looking at it: `--color-tile-empty` does double
+duty as the empty-tile background *and* the figure's idle muscle fill, so a pure
+white value made the anatomy figure vanish; and `.label` hardcoded
+`color: #64748b`, which no theme could touch and which measured 4.4:1 on light.
+Every text sample now clears AA, checked in a browser rather than by eye.
+
 **Colourblind mode** swaps green/yellow for blue/orange across tiles, keyboard,
 figure, legend and the share grid. The game runs two colour channels
 (green/yellow on the board, green/wine on the figure) and red-green deficiency
@@ -95,11 +109,21 @@ conflating them would let one paper over the other. Marking it done is the
 honour system, deliberately: a browser cannot verify a set of squats, and
 pretending otherwise would be worse than trusting the player.
 
-**Tap any muscle** on the figure to see what else trains it. Mid-game that is a
-strategic aid - knowing three other exercises that hit the lats tells you what to
-probe. After the round it names whether the answer worked that muscle and how.
-The answer is excluded from those lists at all times, so the panel can never
-become an oracle.
+**Tap any muscle** on the figure. During the round it names the muscle and stops;
+the exercise lists unlock when the round ends.
+
+That gate is not caution, it is arithmetic. The figure already tells you which
+muscles the answer shares and the board tells you its length, so a list of
+"exercises that train this" is the third side of an intersection you did not
+earn. Measured across the answer pool, tapping one lit muscle mid-round left an
+average of **3.6 candidates out of 19+** same-length words - and in the worst
+case exactly one:
+
+```
+DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
+```
+
+A narrower solver than the shortlist panel already deleted for the same reason.
 
 **Form videos.** Every one of the 60 answers links to a real, curated coaching
 video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins

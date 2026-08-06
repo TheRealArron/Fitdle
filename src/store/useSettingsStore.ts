@@ -13,7 +13,7 @@ const KEY = 'fitdle:settings:v1';
  * the shared emoji grid would stop matching the board. So themes move the
  * background hue and the accent, and the board reads identically in all of them.
  */
-export const THEMES = ['midnight', 'graphite', 'abyss', 'plum'] as const;
+export const THEMES = ['midnight', 'graphite', 'abyss', 'plum', 'daylight'] as const;
 export type Theme = (typeof THEMES)[number];
 
 export const THEME_LABEL: Record<Theme, string> = {
@@ -21,6 +21,7 @@ export const THEME_LABEL: Record<Theme, string> = {
   graphite: 'Graphite',
   abyss: 'Abyss',
   plum: 'Plum',
+  daylight: 'Daylight',
 };
 
 export interface Settings {

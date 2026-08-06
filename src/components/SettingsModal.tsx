@@ -59,6 +59,8 @@ const THEME_SWATCH: Record<Theme, [string, string]> = {
   graphite: ['#0e1013', '#a3e635'],
   abyss: ['#04121a', '#22d3ee'],
   plum: ['#120a1b', '#c084fc'],
+  // The only light swatch, so it needs a visible edge against the panel.
+  daylight: ['#f5f7fa', '#047857'],
 };
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {

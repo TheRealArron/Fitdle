@@ -103,6 +103,91 @@
   --color-accent-dim: #33184a;
 }
 
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Daylight - the one theme that inverts rather than re-tints.
+ *
+ * The other three are one hue held across a dark ramp. This one has to flip the
+ * whole thing, and the codebase writes text as `text-white` and `text-slate-300`
+ * throughout - literal utilities, not semantic tokens.
+ *
+ * Rewriting 67 call sites was the obvious approach and the wrong one. Tailwind 4
+ * compiles `.text-slate-300 { color: var(--color-slate-300) }`, so remapping the
+ * variables under this selector re-points every one of them at once.
+ *
+ * Remapping `--color-white` also flips the translucent overlays this design
+ * leans on - `bg-white/[0.06]`, `border-white/10`, `ring-white/10` all become
+ * subtle DARK tints, which is exactly what they should be on a light surface.
+ * That single line does most of the work.
+ *
+ * The three result colours are absent here, as in every theme: a screenshot has
+ * to mean the same thing whichever theme took it, and the shared emoji grid has
+ * to keep matching the board.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+:root[data-theme='daylight'] {
+  --color-void: #e7ecf3;
+  --color-app-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef2f7;
+  /*
+   * NOT pure white, and that is deliberate.
+   *
+   * `--color-tile-empty` does double duty: the empty tile's background AND the
+   * anatomy figure's idle muscle fill. On a dark theme both read fine against
+   * their surroundings. On white, a white figure disappears entirely - the
+   * limbs vanish and only the lit muscles remain, floating.
+   *
+   * A light grey keeps the tiles reading as empty (they carry a border) while
+   * giving the figure a body to sit on.
+   */
+  --color-tile-empty: #dde5ef;
+  --color-tile-border: #9fb0c4;
+  --color-tile-filled: #64748b;
+  --color-key-idle: #dfe5ee;
+  --color-key-hover: #cbd5e1;
+  /* Darker than the dark themes' accent: #34d399 on white fails contrast. */
+  --color-accent: #047857;
+  --color-accent-dim: #d1fae5;
+
+  /*
+   * The inversion. `text-white` is this app's primary text colour, so on a
+   * light surface it has to become near-black - and every `white/x` overlay
+   * follows it automatically.
+   */
+  --color-white: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  /*
+   * #64748b - slate-500 unchanged - measures 4.43:1 against this page. That is
+   * a fail, and it fails on exactly the small uppercase labels where it is used
+   * most. Darkened until it clears AA against both the page and white cards.
+   */
+  --color-slate-500: #5b6b80;
+  --color-slate-600: #94a3b8;
+}
+
+/*
+ * The exception to the inversion: text sitting ON a saturated result colour.
+ *
+ * Those backgrounds do not change between themes, so their text must not
+ * either. Targets the SOLID utilities only - Tailwind emits `bg-state-correct`
+ * and `bg-state-correct\/15` as separate classes, so the translucent tints used
+ * for highlight rows are untouched and correctly take dark text.
+ */
+:root[data-theme='daylight'] .bg-state-correct,
+:root[data-theme='daylight'] .bg-state-absent,
+:root[data-theme='daylight'] .bg-state-excluded {
+  color: #ffffff;
+}
+
+/* A light theme needs no ambient glow; on white it reads as a smudge. */
+:root[data-theme='daylight'] body::before {
+  background: none;
+}
+
 /* The ambient wash follows the accent so the light source stays coherent. */
 :root[data-theme='graphite'] body::before {
   background:
@@ -223,7 +308,13 @@ body > * {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  /*
+   * The variable, not the literal it used to be. A hardcoded hex here ignored
+   * the theme entirely - which went unnoticed while every theme was dark, and
+   * showed up immediately on a light one as 4.4:1 on the small uppercase text
+   * that uses this class most.
+   */
+  color: var(--color-slate-500);
 }
 
 /* Numerals that must not shift width as they tick (timers, streaks, scores). */

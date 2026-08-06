@@ -179,3 +179,78 @@ test('an anonymous player never triggers the SDK load', () => {
   const load = init.indexOf('await getSupabase()');
   assert.ok(gate > 0 && load > gate, 'getSupabase runs before the stored-session gate');
 });
+
+/* ── the muscle panel is not a solver ─────────────────────────────────────── */
+
+test('the muscle panel lists nothing while the round is live', () => {
+  /*
+   * Measured before fixing: tapping ONE lit muscle mid-round and filtering to
+   * today's width left an average of 3.6 candidates out of 19+ same-length
+   * words - and in the worst case exactly one.
+   *
+   *   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
+   *
+   * The figure already says which muscles the answer shares and the board says
+   * its length; a muscle→exercises list is the third side of that intersection.
+   * A narrower solver than the shortlist panel deleted for the same reason.
+   */
+  const panel = readFileSync(new URL('../src/components/MuscleDetail.tsx', import.meta.url), 'utf8');
+  assert.match(panel, /const revealed = answer !== null/, 'no gate on the lists');
+
+  for (const list of ['others', 'assists']) {
+    const fn = panel.slice(panel.indexOf(`const ${list} = useMemo`));
+    const body = fn.slice(0, fn.indexOf('}, ['));
+    assert.match(body, /!revealed/, `${list} is computed while the round is live`);
+  }
+});
+
+/* ── the light theme ──────────────────────────────────────────────────────── */
+
+test('daylight is registered everywhere it has to be', () => {
+  const store = readFileSync(new URL('../src/store/useSettingsStore.ts', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  const settings = readFileSync(new URL('../src/components/SettingsModal.tsx', import.meta.url), 'utf8');
+
+  assert.match(store, /'daylight'/, 'not in THEMES');
+  assert.match(store, /daylight: 'Daylight'/, 'no label');
+  assert.match(settings, /daylight: \[/, 'no swatch - the picker would crash');
+  assert.match(css, /:root\[data-theme='daylight'\]/, 'no CSS block');
+});
+
+test('the light theme inverts text by remapping, not by rewriting call sites', () => {
+  /*
+   * Tailwind 4 compiles `.text-slate-300 { color: var(--color-slate-300) }`, so
+   * remapping under one selector re-points all 67 `text-white` call sites at
+   * once. Remapping `--color-white` also flips every `bg-white/[0.06]` overlay
+   * to a dark tint, which is what a light surface wants.
+   */
+  const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  const block = css.slice(css.indexOf(":root[data-theme='daylight']"));
+  assert.match(block, /--color-white: #0f172a/, 'primary text was not inverted');
+  assert.match(block, /--color-slate-500:/, 'the muted ramp was not remapped');
+});
+
+test('text on saturated result colours stays light', () => {
+  // Result colours are identical across themes, so their text must be too.
+  const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  assert.match(
+    css,
+    /:root\[data-theme='daylight'\] \.bg-state-correct[\s\S]{0,200}color: #ffffff/,
+    'inverted text would land on the green tile',
+  );
+});
+
+test('.label follows the theme instead of hardcoding a hex', () => {
+  /*
+   * It was `color: #64748b`, which no theme could touch. Invisible while every
+   * theme was dark; on the light one it measured 4.4:1 on exactly the small
+   * uppercase text that uses this class most.
+   */
+  const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  // Slice to the closing brace, not a fixed byte count - a comment inside the
+  // rule pushed the declaration past the old window.
+  const at = css.indexOf('.label {');
+  const label = css.slice(at, css.indexOf('}', at));
+  assert.match(label, /color: var\(--color-slate-500\)/);
+  assert.ok(!/color: #64748b/.test(label), 'the literal is back');
+});

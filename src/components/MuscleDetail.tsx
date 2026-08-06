@@ -27,8 +27,26 @@ interface MuscleDetailProps {
  * what to probe next. After the game it becomes the teaching payoff, naming
  * whether the answer worked that muscle and why.
  *
- * It never names the answer while the game is live. `worksIt` is null until the
- * round is over precisely so this panel cannot become an oracle.
+ * ┌─ The exercise lists are gated until the round is over ────────────────────┐
+ * │ Not naming the answer was never enough. The figure already tells you which │
+ * │ muscles the answer shares, and the board tells you its length - so a list  │
+ * │ of "exercises that train this muscle" is the third side of an intersection │
+ * │ the player did not have to earn.                                          │
+ * │                                                                          │
+ * │ Measured across the answer pool, tapping ONE lit muscle mid-round left an │
+ * │ average of 3.6 candidates out of 19+ same-length words, and in the worst  │
+ * │ case exactly one:                                                        │
+ * │                                                                          │
+ * │   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT                  │
+ * │                                                                          │
+ * │ That is a narrower solver than the shortlist panel that was already       │
+ * │ deleted for the same reason. So mid-round this names the muscle and       │
+ * │ stops. After the round it is what it was meant to be - a way to learn     │
+ * │ what else trains it.                                                     │
+ * └───────────────────────────────────────────────────────────────────────────┘
+ *
+ * `answer` is null exactly while the round is live, so it doubles as the gate:
+ * the same signal that withholds the answer withholds the lists.
  */
 export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
   /*
@@ -41,17 +59,20 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
    * mid-game listed BURPEE outright. Moving the answer server-side removes the
    * leak at the source rather than patching the symptom.
    */
+  // No answer means the round is live, which means no lists.
+  const revealed = answer !== null;
+
   const others = useMemo(() => {
-    if (!region) return [];
+    if (!region || !revealed) return [];
     return CATALOGUE.filter((e) => e.primary.includes(region) && e.name !== answer?.name).slice(0, 4);
-  }, [region, answer]);
+  }, [region, answer, revealed]);
 
   const assists = useMemo(() => {
-    if (!region) return [];
+    if (!region || !revealed) return [];
     return CATALOGUE.filter(
       (e) => e.secondary.includes(region) && !e.primary.includes(region) && e.name !== answer?.name,
     ).slice(0, 3);
-  }, [region, answer]);
+  }, [region, answer, revealed]);
 
   const worksIt =
     answer && region
@@ -95,6 +116,13 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            {!revealed && (
+              <p className="text-[11px] leading-snug text-slate-500">
+                What else trains this unlocks when the round ends - listing it now would
+                narrow today&rsquo;s answer for you.
+              </p>
+            )}
 
             {others.length > 0 && (
               <div className="mb-2">
