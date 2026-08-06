@@ -46,6 +46,31 @@ alter table public.fitdle_progress
     generated always as ((save -> 'day' ->> 'status') = 'won') stored;
 
 /*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Tier and AI quota.
+ *
+ * NOT generated columns, and not part of the save blob. The save is the
+ * player's game record, written by the guess endpoint; this is billing-adjacent
+ * state written by the AI endpoints. Mixing them would mean an AI question
+ * touching the streak row's history, and a save merge from another device
+ * potentially resurrecting a spent quota.
+ *
+ * `ai_day` is the UTC day number, so the reset lines up with the puzzle
+ * rollover and a stale row costs nothing - a different day simply reads as zero
+ * used rather than needing a sweep job.
+ *
+ * `tier` is deliberately a free-text column with a default rather than an enum:
+ * adding a tier should not require a migration. Nothing trusts a value it does
+ * not recognise - an unknown tier falls back to free limits.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+alter table public.fitdle_progress
+  add column if not exists tier text not null default 'free',
+  add column if not exists ai_day int not null default 0,
+  add column if not exists ai_count int not null default 0;
+
+/*
  * Indexes.
  *
  * The streak board is `order by streak desc, updated_at asc` - one composite

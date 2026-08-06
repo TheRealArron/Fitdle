@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Home, Loader2, MessageCircle, Send } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { askCoach } from '@/lib/api';
+import { askCoach, type QuotaState } from '@/lib/api';
 import { useGameStore } from '@/store/useGameStore';
 
 /**
@@ -38,6 +38,7 @@ export function FormCoach() {
   const [history, setHistory] = useState<Exchange[]>([]);
   const [busy, setBusy] = useState(false);
   const [disabled, setDisabled] = useState(false);
+  const [quota, setQuota] = useState<QuotaState | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   if (!reveal) return null;
@@ -61,6 +62,7 @@ export function FormCoach() {
       setDisabled(true);
       return;
     }
+    if (result.data.quota) setQuota(result.data.quota);
     setHistory((h) => [
       ...h,
       { question: trimmed, answer: result.data.text, failed: result.data.status !== 'ok' },
@@ -134,15 +136,17 @@ export function FormCoach() {
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 maxLength={400}
-                disabled={busy}
-                placeholder={`Ask about ${reveal.display}`}
+                disabled={busy || quota?.remaining === 0}
+                placeholder={
+                  quota?.remaining === 0 ? 'Back tomorrow' : `Ask about ${reveal.display}`
+                }
                 aria-label={`Ask a question about ${reveal.display}`}
                 className="w-full rounded-lg bg-white/[0.06] py-2 pr-3 pl-8 text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-state-correct/50 focus:outline-none disabled:opacity-50"
               />
             </div>
             <button
               type="submit"
-              disabled={busy || !question.trim()}
+              disabled={busy || !question.trim() || quota?.remaining === 0}
               aria-label="Send question"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.08] text-white transition-colors hover:bg-white/[0.16] disabled:opacity-40"
             >
@@ -153,6 +157,15 @@ export function FormCoach() {
               )}
             </button>
           </form>
+
+          {quota ? (
+            <p className="text-[11px] text-slate-500">
+              {quota.remaining > 0
+                ? `${quota.remaining} of ${quota.limit} questions left today`
+                : 'Out of questions until midnight UTC'}
+              {quota.tier === 'anonymous' ? ' · sign in for more' : ''}
+            </p>
+          ) : null}
 
           <p className="text-[10px] leading-snug text-slate-500">
             Coaching cues only, and it cannot see you. Anything that hurts is a question for a

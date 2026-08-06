@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 186 unit tests
+npm test                 # 199 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -570,10 +570,40 @@ limiter, so on a multi-instance deployment the effective budget multiplies.
 Treat Anthropic Console spend limits as the real backstop and this as what
 degrades gracefully before you reach them.
 
-**The bigger lever is the model.** Both surfaces use `claude-opus-5`. For
-reciting fixed rules, a smaller model would be several times cheaper and very
-likely just as good - that is a call worth making deliberately rather than
-inheriting a default.
+### The free tier
+
+A global cap protects you but on its own it is a race: one enthusiastic person
+could spend the whole day's allowance before most players opened the app. So the
+spend is divided per account.
+
+| | Questions/day | Worst case | Counter |
+|---|---|---|---|
+| Anonymous | 2 | $0.23/mo | In memory, per address |
+| Free (signed in) | 5 | $0.57/mo | On the row, service-role written |
+| Pro | 100 | $11.44/mo | Same |
+
+**The signed-in counter is durable and server-written.** An allowance you can
+refill by clearing localStorage is not an allowance. The anonymous one is
+in-memory and therefore weaker - deliberately, because the alternative is
+fingerprinting people to defend a free tier, and two questions is not worth
+that.
+
+The remaining count is shown before you hit it. A limit you only discover by
+running into it reads as broken; shown up front it reads as a policy, and it is
+the only place an upgrade is ever mentioned.
+
+`tier` is a plain text column defaulting to `free`, so adding a tier needs no
+migration, and **an unrecognised value falls back to free limits** rather than
+getting the benefit of the doubt - failing open there is someone else's API bill.
+
+**No payment provider is wired up.** Setting `tier` to `pro` is a one-line
+update, and that is the seam a checkout would write to. Choosing a processor,
+handling webhooks and holding customer money is a decision with legal and
+operational weight, not something to inherit from a default.
+
+**The bigger remaining lever is the model.** Both surfaces use `claude-opus-5`.
+For reciting fixed rules a smaller model would be several times cheaper and very
+likely just as good - a call worth making deliberately.
 
 ### Ask the guide
 

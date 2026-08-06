@@ -10,6 +10,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Tests import helpers by relative path, and the Node test loader needs the
+    // explicit .ts extension. Valid only alongside noEmit, which is already set.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

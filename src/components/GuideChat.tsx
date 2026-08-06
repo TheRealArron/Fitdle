@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Send } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { askGuide } from '@/lib/api';
+import { askGuide, type QuotaState } from '@/lib/api';
 
 /**
  * The in-game guide.
@@ -30,6 +30,7 @@ export function GuideChat() {
   const [history, setHistory] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [disabled, setDisabled] = useState(false);
+  const [quota, setQuota] = useState<QuotaState | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +55,7 @@ export function GuideChat() {
       setDisabled(true);
       return;
     }
+    if (result.data.quota) setQuota(result.data.quota);
     setHistory((h) => [
       ...h,
       { question: trimmed, answer: result.data.text, failed: result.data.status !== 'ok' },
@@ -122,6 +124,31 @@ export function GuideChat() {
         </div>
       ) : null}
 
+      {/*
+        * The counter. A limit you only discover by hitting it reads as broken;
+        * shown up front it reads as a policy, and it is the only place the
+        * upgrade is ever mentioned.
+        */}
+      {quota ? (
+        <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          {quota.remaining > 0 ? (
+            <>
+              <span className={quota.remaining <= 1 ? 'text-state-present' : undefined}>
+                {quota.remaining} of {quota.limit} questions left today
+              </span>
+              {quota.tier === 'anonymous' ? (
+                <span className="text-slate-600">· sign in for more</span>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-state-present">
+              Out of questions until midnight UTC
+              {quota.tier === 'anonymous' ? ' · sign in for more' : ''}
+            </span>
+          )}
+        </p>
+      ) : null}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -133,14 +160,14 @@ export function GuideChat() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           maxLength={300}
-          disabled={busy}
-          placeholder="How does the muscle map work?"
+          disabled={busy || quota?.remaining === 0}
+          placeholder={quota?.remaining === 0 ? 'Back tomorrow' : 'How does the muscle map work?'}
           aria-label="Ask the guide a question"
           className="flex-1 rounded-lg bg-white/[0.06] px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:ring-2 focus:ring-state-correct/50 focus:outline-none disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={busy || !question.trim()}
+          disabled={busy || !question.trim() || quota?.remaining === 0}
           aria-label="Send question"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.08] text-white transition-colors hover:bg-white/[0.16] disabled:opacity-40"
         >

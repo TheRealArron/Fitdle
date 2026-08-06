@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { askGuide } from '@/server/guide';
 import { clientKey, rateLimit } from '@/server/rateLimit';
+import { claimQuota } from '@/server/quota';
+import { userIdFromRequest } from '@/server/supabase';
 
 /**
  * The game guide.
@@ -34,8 +36,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Ask a question first.' }, { status: 400 });
   }
 
+  /*
+   * Quota before the model call. Signing in raises the allowance, which is the
+   * whole free-tier mechanism - and it also means the counter is durable rather
+   * than something a devtools user can reset.
+   */
+  const userId = await userIdFromRequest(request);
+  const quota = await claimQuota(userId, clientKey(request));
+  if (!quota.allowed) {
+    return NextResponse.json(
+      {
+        status: 'quota',
+        text: userId
+          ? `You have used today's ${quota.limit} questions. They reset at midnight UTC.`
+          : `You have used your ${quota.limit} free questions. Sign in for more.`,
+        quota,
+      },
+      { status: 200 },
+    );
+  }
+
   const reply = await askGuide(question);
-  return NextResponse.json(reply, {
+  return NextResponse.json({ ...reply, quota }, {
     status: reply.status === 'error' ? 502 : 200,
     headers: { 'Cache-Control': 'no-store' },
   });

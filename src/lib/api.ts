@@ -133,15 +133,26 @@ export function placeCall(group: string, state: string): Promise<ApiResult<Daily
 }
 
 /** Asks the coach about the day's exercise. Server refuses until the round ends. */
-export function askCoach(
-  question: string,
-  state: string,
-): Promise<ApiResult<{ status: string; text: string }>> {
+export function askCoach(question: string, state: string): Promise<ApiResult<AiReply>> {
   return post('/api/coach', { question, state });
 }
 
+export interface QuotaState {
+  allowed: boolean;
+  used: number;
+  limit: number;
+  remaining: number;
+  tier: 'free' | 'pro' | 'anonymous';
+}
+
+export interface AiReply {
+  status: string;
+  text: string;
+  quota?: QuotaState;
+}
+
 /** Asks the in-game guide how something works. No round gate - it knows no answers. */
-export function askGuide(question: string): Promise<ApiResult<{ status: string; text: string }>> {
+export function askGuide(question: string): Promise<ApiResult<AiReply>> {
   return post('/api/guide', { question });
 }
 
