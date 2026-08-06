@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 147 unit tests
+npm test                 # 155 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -337,6 +337,31 @@ Chrome extension must point at a deployment (`NEXT_PUBLIC_API_URL`) because a
 static export has no server of its own. Practice mode stays fully local - it
 touches no streak, so leaking a practice answer costs nothing and requiring a
 round trip per practice guess would make the mode worse for no gain.
+
+### The auth SDK is loaded on demand
+
+`@supabase/supabase-js` is ~59 kB gzipped and bundles gotrue and realtime - and
+this app has never opened a realtime subscription. A signed-out player calls
+none of it: they do not sync, have no session to refresh, and do not appear on a
+leaderboard.
+
+So the import is deferred, gated on a one-key localStorage probe that answers
+"is anyone signed in here?" without loading anything:
+
+```
+before  236.5 kB first-load JS
+after   178.0 kB   (-58.5 kB, -25%)
+```
+
+The first attempt only *looked* like it worked - the bundle shrank because the
+SDK moved to its own chunk, but `init()` still requested it on mount, so every
+anonymous player downloaded it anyway. A browser check comparing fetched chunks
+against `gotrue` caught that; the gate now sits before the import and the same
+check confirms zero.
+
+Reading another library's storage key is a coupling, so a test pins that the
+probe and the client agree. If supabase-js ever moves it, that test fails rather
+than every signed-in player silently appearing signed out.
 
 ### Leaderboard
 

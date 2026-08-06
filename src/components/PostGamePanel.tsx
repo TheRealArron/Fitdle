@@ -35,7 +35,9 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
   const colourblind = useSettingsStore((s) => s.colourblind);
   // Read straight from storage: a drill best is not puzzle state and has no
   // business living in the game store.
-  const drillBest = loadSave().save.drillBest ?? 0;
+  const drillSave = loadSave().save;
+  const drillBest = drillSave.drillBest ?? 0;
+  const drillFlawless = drillSave.drillFlawless ?? false;
   const [sharing, setSharing] = useState(false);
 
   const won = status === 'won';
@@ -46,7 +48,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
 
   const onShare = async () => {
     setSharing(true);
-    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind, drillBest));
+    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind, drillBest, drillFlawless));
     setSharing(false);
     setToast(
       outcome === 'shared'

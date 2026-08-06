@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Supabase client, created lazily and only if the project is configured.
@@ -13,33 +13,87 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  * Supabase project (Settings -> API), then run supabase/schema.sql in the SQL
  * editor. Both values are public by design; row-level security is what protects
  * the data, not the anon key.
+ *
+ * ┌─ Why the SDK is loaded dynamically ───────────────────────────────────────┐
+ * │ @supabase/supabase-js is ~93 kB gzipped - roughly 40% of the whole        │
+ * │ first-load payload - and it bundles gotrue AND realtime, which this app   │
+ * │ has never opened a subscription to and which does not tree-shake out.     │
+ * │                                                                          │
+ * │ A signed-out player needs none of it. They do not sync, do not have a     │
+ * │ session to refresh, and do not appear on a leaderboard. Loading it up     │
+ * │ front makes every one of them wait for a library they will never call.    │
+ * │                                                                          │
+ * │ So the import is deferred, and `hasStoredSession()` answers "is there an  │
+ * │ account here?" by reading one localStorage key - no SDK required. Only a  │
+ * │ genuinely signed-in player pays the 93 kB, and they pay it after first    │
+ * │ paint rather than before it.                                             │
+ * └───────────────────────────────────────────────────────────────────────────┘
  */
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-let client: SupabaseClient | null = null;
+/** Where supabase-js persists the session. Read directly by `hasStoredSession`. */
+const STORAGE_KEY = 'fitdle-auth';
 
+/**
+ * In flight or resolved. Cached as the PROMISE rather than the client so
+ * concurrent callers during startup share one import instead of racing to
+ * construct several clients.
+ */
+let clientPromise: Promise<SupabaseClient | null> | null = null;
+
+/** Env only - never loads the SDK. Safe to call during render. */
 export function isCloudConfigured(): boolean {
   return Boolean(url && anonKey);
 }
 
-export function getSupabase(): SupabaseClient | null {
-  if (!url || !anonKey) return null;
-  if (typeof window === 'undefined') return null;
-  if (!client) {
-    client = createClient(url, anonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        // The extension popup mounts and unmounts constantly; detecting a
-        // session in the URL there would be meaningless and slows startup.
-        detectSessionInUrl: true,
-        storageKey: 'fitdle-auth',
-      },
-    });
+/**
+ * Is there a stored session, without paying 93 kB to find out?
+ *
+ * This is the whole optimisation. Call it before `getSupabase()` on any path
+ * that only matters to signed-in players - a false answer means the SDK is
+ * never fetched.
+ *
+ * Reading another library's storage key is a coupling, so it is pinned by a
+ * test: if supabase-js ever changes where it persists, that test fails rather
+ * than this silently returning false and signing everybody out.
+ */
+export function hasStoredSession(): boolean {
+  if (!isCloudConfigured() || typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    // Storage disabled or blocked. Assume no session; the worst case is that a
+    // signed-in player looks signed out until they act, which is recoverable.
+    return false;
   }
-  return client;
+}
+
+export function getSupabase(): Promise<SupabaseClient | null> {
+  if (!url || !anonKey || typeof window === 'undefined') return Promise.resolve(null);
+
+  clientPromise ??= import('@supabase/supabase-js')
+    .then(({ createClient }) =>
+      createClient(url, anonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          // The extension popup mounts and unmounts constantly; detecting a
+          // session in the URL there would be meaningless and slows startup.
+          detectSessionInUrl: true,
+          storageKey: STORAGE_KEY,
+        },
+      }),
+    )
+    .catch(() => {
+      // A failed chunk fetch must not permanently poison the singleton - the
+      // next attempt should be allowed to retry.
+      clientPromise = null;
+      return null;
+    });
+
+  return clientPromise;
 }
 
 /** Turns Supabase's error strings into something a player should actually read. */

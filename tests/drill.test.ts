@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CATALOGUE, musclesOf } from '@/data/exercises';
 import { GROUP_OF_REGION } from '@/data/muscles';
-import { OPTION_COUNT, badgeFor, makeQuestion, makeRound } from '@/lib/drill';
+import { OPTION_COUNT, badgeFor, isFlawless, makeQuestion, makeRound } from '@/lib/drill';
 import { commitDrill, defaultSave, normalise, type SaveData } from '@/lib/secureStorage';
 import { mergeSaves } from '@/lib/cloudSync';
 import { buildShareText } from '@/lib/share';
@@ -181,4 +181,50 @@ test('the drill badge never touches the comparable score line', () => {
 test('a share with no drill history looks exactly as it did before', () => {
   const evals = [['correct', 'correct', 'correct', 'correct', 'correct']] as never;
   assert.ok(!buildShareText(20260806, evals, true, 3, false, 0).includes('anatomy'));
+});
+
+/* ── the flawless mark ────────────────────────────────────────────────────── */
+
+test('flawless needs both volume and accuracy', () => {
+  /*
+   * Volume badges say you were fast. This one says you were never wrong, which
+   * is the only claim that separates knowing the anatomy from guessing quickly.
+   * One correct answer and no misses is not evidence of anything.
+   */
+  assert.equal(isFlawless(5, 0), true);
+  assert.equal(isFlawless(9, 0), true);
+  assert.equal(isFlawless(4, 0), false, 'too few answers to mean anything');
+  assert.equal(isFlawless(9, 1), false, 'one miss is not flawless');
+  assert.equal(isFlawless(0, 0), false);
+});
+
+test('the flawless mark is kept once earned', () => {
+  // It records that you did it, not that you did it today.
+  let save = commitDrill(defaultSave(), 7, true);
+  assert.equal(save.drillFlawless, true);
+  save = commitDrill(save, 12, false);
+  assert.equal(save.drillFlawless, true, 'a later imperfect run revoked it');
+});
+
+test('the mark survives a cloud merge from either device', () => {
+  const earned = { ...defaultSave(), drillFlawless: true };
+  const not = { ...defaultSave(), drillFlawless: false };
+  assert.equal(mergeSaves(earned, not).drillFlawless, true);
+  assert.equal(mergeSaves(not, earned).drillFlawless, true);
+});
+
+test('an old save without the mark loads rather than being rejected', () => {
+  const legacy = { ...defaultSave() } as Partial<SaveData>;
+  delete legacy.drillFlawless;
+  assert.equal(normalise(legacy as SaveData).drillFlawless, false);
+});
+
+test('the mark rides the share without touching the score line', () => {
+  const evals = [['correct', 'correct', 'correct', 'correct', 'correct']] as never;
+  const plain = buildShareText(20260806, evals, true, 1, false, 0, false);
+  const marked = buildShareText(20260806, evals, true, 1, false, 0, true);
+
+  assert.equal(plain.split('\n')[0], marked.split('\n')[0], 'the comparable score line changed');
+  assert.ok(!plain.includes('🎓'));
+  assert.ok(marked.includes('🎓'));
 });

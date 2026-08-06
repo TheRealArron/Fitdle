@@ -13,7 +13,7 @@ import type { LetterState } from '@/lib/evaluate';
  * server of its own, so it must call the deployed one.
  */
 import type { SaveData } from '@/lib/secureStorage';
-import { getSupabase } from '@/lib/supabase';
+import { getSupabase, hasStoredSession } from '@/lib/supabase';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
 
@@ -70,7 +70,14 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
  * inside it, so a forged token buys nothing.
  */
 async function bearerToken(): Promise<string | null> {
-  const supabase = getSupabase();
+  /*
+   * The cheap check first. A signed-out player has no token to send, so there
+   * is no reason to fetch 93 kB of auth SDK to discover that - and signed-out
+   * is the common case on a daily puzzle.
+   */
+  if (!hasStoredSession()) return null;
+
+  const supabase = await getSupabase();
   if (!supabase) return null;
   try {
     const { data } = await supabase.auth.getSession();

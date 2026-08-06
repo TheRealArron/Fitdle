@@ -136,3 +136,46 @@ test('the response is never cached', () => {
 test('the board module is server-only', () => {
   assert.ok(board.startsWith("import 'server-only';"));
 });
+
+/* ── the deferred auth SDK ────────────────────────────────────────────────── */
+
+test('the Supabase SDK is imported dynamically, not statically', () => {
+  /*
+   * ~59 kB gzipped that a signed-out player never calls. A static import puts
+   * it in the first-load chunk for everyone; this keeps it behind a real need.
+   * `npm run check:size` enforces the resulting budget.
+   */
+  const lib = readFileSync(new URL('../src/lib/supabase.ts', import.meta.url), 'utf8');
+  assert.match(lib, /import type \{ SupabaseClient \}/, 'the type import must be erased');
+  assert.ok(
+    !/^import \{[^}]*createClient/m.test(lib),
+    'createClient is imported statically, which defeats the split',
+  );
+  assert.match(lib, /await import\('@supabase\/supabase-js'\)|import\('@supabase\/supabase-js'\)/);
+});
+
+test('the storage-key coupling is pinned', () => {
+  /*
+   * `hasStoredSession` reads supabase-js's own persistence key to answer "is
+   * anyone signed in?" without loading the SDK. That is a coupling to another
+   * library's internals, so the two must agree - if they drift, every
+   * signed-in player silently looks signed out.
+   */
+  const lib = readFileSync(new URL('../src/lib/supabase.ts', import.meta.url), 'utf8');
+  const declared = /const STORAGE_KEY = '([^']+)'/.exec(lib)?.[1];
+  assert.ok(declared, 'STORAGE_KEY is not declared');
+  assert.match(lib, new RegExp(`storageKey: STORAGE_KEY`), 'the client uses a different key');
+  assert.match(lib, /getItem\(STORAGE_KEY\)/, 'the probe reads a different key');
+});
+
+test('an anonymous player never triggers the SDK load', () => {
+  // init() must bail before touching getSupabase when there is no session.
+  const store = readFileSync(new URL('../src/store/useAuthStore.ts', import.meta.url), 'utf8');
+  // Slice from the IMPLEMENTATION, not the interface declaration above it -
+  // `signUp:` appears in both, and searching the whole file finds the wrong one.
+  const from = store.indexOf('init: async');
+  const init = store.slice(from, store.indexOf('signUp: async', from));
+  const gate = init.indexOf('hasStoredSession()');
+  const load = init.indexOf('await getSupabase()');
+  assert.ok(gate > 0 && load > gate, 'getSupabase runs before the stored-session gate');
+});

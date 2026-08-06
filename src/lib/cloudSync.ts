@@ -70,6 +70,8 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     maxWorkoutStreak: Math.max(a.maxWorkoutStreak ?? 0, b.maxWorkoutStreak ?? 0),
     // A personal best is a high-water mark, so max is the whole merge rule.
     drillBest: Math.max(a.drillBest ?? 0, b.drillBest ?? 0),
+    // Earned on either device counts.
+    drillFlawless: (a.drillFlawless ?? false) || (b.drillFlawless ?? false),
     workoutStreak: Math.min(
       ((a.lastWorkoutSeed ?? -1) >= (b.lastWorkoutSeed ?? -1) ? a : b).workoutStreak ?? 0,
       Math.max(a.workoutsDone ?? 0, b.workoutsDone ?? 0),
@@ -82,7 +84,7 @@ export type CloudResult<T> = { ok: true; data: T } | { ok: false; error: string 
 
 /** Reads this user's row. A missing row is success with `null`, not an error. */
 export async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | null>> {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   if (!supabase) return { ok: false, error: 'Cloud sync is not configured.' };
 
   const { data, error } = await supabase
@@ -111,7 +113,7 @@ export async function pushCloudSave(
   userId: string,
   save: SaveData,
 ): Promise<CloudResult<true>> {
-  const supabase = getSupabase();
+  const supabase = await getSupabase();
   if (!supabase) return { ok: false, error: 'Cloud sync is not configured.' };
 
   const { error } = await supabase

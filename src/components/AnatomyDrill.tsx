@@ -4,7 +4,14 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { Check, Timer, Trophy, X, Zap } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MUSCLE_LABEL, type MuscleRegion } from '@/data/muscles';
-import { DRILL_SECONDS, badgeFor, makeRound, type DrillQuestion } from '@/lib/drill';
+import {
+  DRILL_SECONDS,
+  FLAWLESS_BADGE,
+  badgeFor,
+  isFlawless,
+  makeRound,
+  type DrillQuestion,
+} from '@/lib/drill';
 import { commitDrill, loadSave, writeSave } from '@/lib/secureStorage';
 import { BodyFigure } from './BodyFigure';
 
@@ -35,6 +42,7 @@ export function AnatomyDrill() {
   const [round, setRound] = useState<DrillQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
+  const [wrong, setWrong] = useState(0);
   const [best, setBest] = useState(0);
   const [remaining, setRemaining] = useState(DRILL_SECONDS);
   const [picked, setPicked] = useState<MuscleRegion | null>(null);
@@ -53,10 +61,10 @@ export function AnatomyDrill() {
     setBest(loadSave().save.drillBest ?? 0);
   }, []);
 
-  const finish = useCallback((finalScore: number) => {
+  const finish = useCallback((finalScore: number, finalWrong: number) => {
     setPhase('over');
     const { save } = loadSave();
-    const next = commitDrill(save, finalScore);
+    const next = commitDrill(save, finalScore, isFlawless(finalScore, finalWrong));
     writeSave(next);
     setBest(next.drillBest ?? 0);
   }, []);
@@ -69,7 +77,7 @@ export function AnatomyDrill() {
     const id = window.setInterval(() => {
       const left = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
       setRemaining(left);
-      if (left === 0) setScore((s) => (finish(s), s));
+      if (left === 0) setScore((s) => (setWrong((w) => (finish(s, w), w)), s));
     }, 100);
     return () => window.clearInterval(id);
   }, [phase, finish]);
@@ -78,6 +86,7 @@ export function AnatomyDrill() {
     setRound(makeRound(Date.now()));
     setIndex(0);
     setScore(0);
+    setWrong(0);
     setPicked(null);
     setRemaining(DRILL_SECONDS);
     deadline.current = Date.now() + DRILL_SECONDS * 1000;
@@ -89,7 +98,7 @@ export function AnatomyDrill() {
     setPicked(region);
     const correct = region === round[index].answer;
     if (correct) setScore((s) => s + 1);
-    else void shake.start({ x: [0, -7, 6, -4, 0], transition: { duration: 0.32, ease: 'easeOut' } });
+    else { setWrong((w) => w + 1); void shake.start({ x: [0, -7, 6, -4, 0], transition: { duration: 0.32, ease: 'easeOut' } }); }
 
     // Brief pause so the figure can show where the answer actually was - the
     // teaching happens here, not in the score.
@@ -104,6 +113,7 @@ export function AnatomyDrill() {
 
   if (phase === 'idle' || phase === 'over') {
     const badge = badgeFor(score);
+    const flawless = phase === 'over' && isFlawless(score, wrong);
     return (
       <div className="flex flex-col items-center gap-4 py-6 text-center">
         {phase === 'over' ? (
@@ -113,12 +123,21 @@ export function AnatomyDrill() {
               correct in {DRILL_SECONDS} seconds
               {score > 0 && score >= best ? ' · new best' : ''}
             </p>
-            {badge ? (
-              <p className="flex items-center gap-2 rounded-full bg-state-correct/15 px-3 py-1.5 text-sm font-semibold text-state-correct ring-1 ring-inset ring-state-correct/30">
-                <span aria-hidden>{badge.emoji}</span>
-                {badge.label}
-              </p>
-            ) : null}
+            <div className="flex flex-wrap justify-center gap-2">
+              {badge ? (
+                <p className="flex items-center gap-2 rounded-full bg-state-correct/15 px-3 py-1.5 text-sm font-semibold text-state-correct ring-1 ring-inset ring-state-correct/30">
+                  <span aria-hidden>{badge.emoji}</span>
+                  {badge.label}
+                </p>
+              ) : null}
+              {flawless ? (
+                <p className="flex items-center gap-2 rounded-full bg-state-present/15 px-3 py-1.5 text-sm font-semibold text-state-present ring-1 ring-inset ring-state-present/30">
+                  <span aria-hidden>{FLAWLESS_BADGE.emoji}</span>
+                  {FLAWLESS_BADGE.label}
+                  <span className="font-normal opacity-75">· no misses</span>
+                </p>
+              ) : null}
+            </div>
           </>
         ) : (
           <>

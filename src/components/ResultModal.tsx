@@ -45,7 +45,9 @@ export function ResultModal() {
   const colourblind = useSettingsStore((s) => s.colourblind);
   // Read straight from storage: a drill best is not puzzle state and has no
   // business living in the game store.
-  const drillBest = loadSave().save.drillBest ?? 0;
+  const drillSave = loadSave().save;
+  const drillBest = drillSave.drillBest ?? 0;
+  const drillFlawless = drillSave.drillFlawless ?? false;
   const [sharing, setSharing] = useState(false);
   const [region, setRegion] = useState<MuscleRegion | null>(null);
   const won = status === 'won';
@@ -78,7 +80,7 @@ export function ResultModal() {
     // a practice grid.
     if (isPractice) return;
     setSharing(true);
-    const text = buildShareText(seed, evaluations, won, streak, colourblind, drillBest);
+    const text = buildShareText(seed, evaluations, won, streak, colourblind, drillBest, drillFlawless);
     const outcome = await shareResult(text);
     setSharing(false);
     setToast(

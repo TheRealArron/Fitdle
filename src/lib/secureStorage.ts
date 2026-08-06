@@ -77,6 +77,8 @@ export interface SaveData {
    * and wipe real streaks, so `normalise()` backfills it on load instead.
    */
   drillBest?: number;
+  /** Has the player ever completed a drill with no wrong answers? */
+  drillFlawless?: boolean;
 
   /*
    * Workout tracking - a second, independent streak for actually doing the
@@ -101,6 +103,7 @@ export function normalise(save: SaveData): SaveData {
     workoutsDone: save.workoutsDone ?? 0,
     lastWorkoutSeed: save.lastWorkoutSeed ?? null,
     drillBest: save.drillBest ?? 0,
+    drillFlawless: save.drillFlawless ?? false,
   };
 }
 
@@ -121,6 +124,7 @@ export function defaultSave(): SaveData {
     workoutsDone: 0,
     lastWorkoutSeed: null,
     drillBest: 0,
+    drillFlawless: false,
   };
 }
 
@@ -257,6 +261,7 @@ function isCoherent(d: unknown): d is SaveData {
   }
 
   if (s.drillBest !== undefined && !isInt(s.drillBest)) return false;
+  if (s.drillFlawless !== undefined && typeof s.drillFlawless !== 'boolean') return false;
 
   if (s.lastSeed !== null && !isInt(s.lastSeed)) return false;
   if (s.lastResult !== null && s.lastResult !== 'won' && s.lastResult !== 'lost') return false;
@@ -511,9 +516,10 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
  * replay, so there is nothing to protect beyond "your record should not go
  * down because you had one bad run".
  */
-export function commitDrill(save: SaveData, score: number): SaveData {
+export function commitDrill(save: SaveData, score: number, flawless = false): SaveData {
   const best = Math.max(save.drillBest ?? 0, Math.max(0, Math.floor(score)));
-  return { ...save, drillBest: best };
+  // Once earned, kept. It records that you did it, not that you did it today.
+  return { ...save, drillBest: best, drillFlawless: (save.drillFlawless ?? false) || flawless };
 }
 
 export function commitWorkout(input: SaveData, seed: number): SaveData {

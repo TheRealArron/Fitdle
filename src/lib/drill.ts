@@ -109,6 +109,20 @@ export const DRILL_BADGES: ReadonlyArray<{ at: number; emoji: string; label: str
   { at: 8, emoji: '🔥', label: 'Warmed up' },
 ];
 
+/**
+ * A flawless run: enough answers to mean something, and not one wrong.
+ *
+ * Volume badges say you were fast. This one says you were never wrong, which is
+ * the only claim that distinguishes knowing the anatomy from guessing quickly -
+ * and it is the thing worth signalling to someone reading your share.
+ */
+export const FLAWLESS_MIN = 5;
+export const FLAWLESS_BADGE = { emoji: '🎓', label: 'Flawless' } as const;
+
+export function isFlawless(correct: number, wrong: number): boolean {
+  return wrong === 0 && correct >= FLAWLESS_MIN;
+}
+
 export function badgeFor(score: number): { emoji: string; label: string } | null {
   return DRILL_BADGES.find((b) => score >= b.at) ?? null;
 }

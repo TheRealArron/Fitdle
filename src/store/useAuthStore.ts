@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { friendlyAuthError, getSupabase, isCloudConfigured } from '@/lib/supabase';
+import { friendlyAuthError, getSupabase, hasStoredSession, isCloudConfigured } from '@/lib/supabase';
 import { pushCloudSave, syncSave } from '@/lib/cloudSync';
 import { clearSave, defaultSave, loadSave, writeSave, type SaveData } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
@@ -42,7 +42,8 @@ export interface AuthState {
   syncState: SyncState;
   lastSyncedAt: number | null;
 
-  init: () => void;
+  /** Async: the auth SDK is fetched on demand. Callers fire and forget. */
+  init: () => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
@@ -64,8 +65,30 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   syncState: 'idle',
   lastSyncedAt: null,
 
-  init: () => {
-    const supabase = getSupabase();
+  init: async () => {
+    if (!isCloudConfigured()) {
+      set({ loading: false, cloudAvailable: false });
+      return;
+    }
+
+    /*
+     * The gate that makes the dynamic import worth anything.
+     *
+     * There is no session to restore, so there is nothing for the auth SDK to
+     * do - and fetching it anyway would move the 59 kB off the critical path
+     * without saving anyone the download. A signed-out player now never
+     * requests it at all.
+     *
+     * Nothing is lost by deferring: `signIn` and `signUp` load the client
+     * themselves, and this runs again once a session exists to attach the
+     * cross-tab listener.
+     */
+    if (!hasStoredSession()) {
+      set({ loading: false, user: null });
+      return;
+    }
+
+    const supabase = await getSupabase();
     if (!supabase) {
       set({ loading: false, cloudAvailable: false });
       return;
@@ -87,7 +110,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signUp: async (email, password, username) => {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     if (!supabase) return false;
     set({ busy: true, error: null, notice: null });
 
@@ -111,12 +134,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 
     set({ busy: false, user: data.user ? toUser(data.user) : null });
+
+    /*
+     * Re-run init now that a session exists.
+     *
+     * init() bails before touching the SDK when there is no stored session, so
+     * a first-time sign-in on this device never got the cross-tab listener
+     * attached. Calling it here restores that; the `unsubscribe` guard inside
+     * keeps it from doubling up.
+     */
+    void get().init();
     await get().syncNow();
     return true;
   },
 
+  /** Attaches the cross-tab listener once a session exists. */
   signIn: async (email, password) => {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     if (!supabase) return false;
     set({ busy: true, error: null, notice: null });
 
@@ -132,7 +166,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
-    const supabase = getSupabase();
+    const supabase = await getSupabase();
     if (!supabase) return;
     set({ busy: true });
 

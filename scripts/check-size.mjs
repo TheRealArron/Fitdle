@@ -30,27 +30,21 @@ const c = {
 /*
  * Gzipped kB of first-load JS.
  *
- * This is a RATCHET, not a pass mark. It sits just above where the bundle
- * actually is so that any increase fails immediately - which is the failure
- * mode worth catching, because bundles grow a few kB at a time and nobody
- * notices until the popup feels slow.
+ * A RATCHET, not a pass mark. It sits just above where the bundle actually is
+ * so any increase fails immediately - the failure mode worth catching, because
+ * bundles grow a few kB at a time and nobody notices until the popup feels slow.
  *
- * Where the current 236 kB goes, and the honest read on it:
+ * History, so the number is not mistaken for a guess:
  *
- *   ~93 kB  @supabase/supabase-js, including gotrue AND realtime. Realtime is
- *           pure dead weight - this app has never opened a subscription - but
- *           it is bundled with the client and does not tree-shake out.
- *   ~53 kB  React
- *   ~45 kB  framer-motion
- *   ~30 kB  the app itself
+ *   240 kB  @supabase/supabase-js was in the initial chunk - ~59 kB gzipped of
+ *           auth SDK that a signed-out player never calls.
+ *   185 kB  It is now imported on demand, gated on a one-key localStorage probe
+ *           that answers "is anyone signed in here?" without loading anything.
  *
- * The obvious win is loading Supabase on demand rather than up front: it is
- * only needed to sign in or sync, and an anonymous player never touches it.
- * That means making every caller async, including the token lookup on the guess
- * path, so it is a contained refactor rather than a one-line change. Lower this
- * number when that lands.
+ * What is left is mostly irreducible for this app: React, framer-motion (the
+ * tile flip and the figure), lucide icons, and the game itself.
  */
-const BUDGET_KB = 240;
+const BUDGET_KB = 185;
 
 const manifest = path.join(root, '.next', 'app-build-manifest.json');
 if (!fs.existsSync(manifest)) {

@@ -1,6 +1,6 @@
 import { MAX_GUESSES } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
-import { badgeFor } from '@/lib/drill';
+import { FLAWLESS_BADGE, badgeFor } from '@/lib/drill';
 import { evaluationToEmoji, type LetterState } from '@/lib/evaluate';
 
 /**
@@ -17,6 +17,7 @@ export function buildShareText(
   streak: number,
   colourblind = false,
   drillBest = 0,
+  drillFlawless = false,
 ): string {
   const score = won ? `${evaluations.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`;
   const grid = evaluations.map((e) => evaluationToEmoji(e, colourblind)).join('\n');
@@ -28,7 +29,13 @@ export function buildShareText(
    * players, so an achievement from a different mode cannot be folded into it.
    */
   const badge = badgeFor(drillBest);
-  const badgeLine = badge ? `\n${badge.emoji} ${badge.label} (${drillBest} anatomy)` : '';
+  const marks = [
+    // The flawless mark leads: "never wrong" is a stronger signal than "fast",
+    // and it is the one that says they know the anatomy rather than the keyboard.
+    drillFlawless ? FLAWLESS_BADGE.emoji : '',
+    badge ? `${badge.emoji} ${badge.label} (${drillBest} anatomy)` : '',
+  ].filter(Boolean);
+  const badgeLine = marks.length ? `\n${marks.join(' ')}` : '';
 
   return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}${badgeLine}\n\n${SITE_URL}`;
 }
