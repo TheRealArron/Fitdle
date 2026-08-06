@@ -14,7 +14,8 @@
     "check:bundle": "node --conditions=react-server --import ./tests/loader.mjs scripts/check-bundle.mjs",
     "smoke": "node scripts/smoke.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:bundle && npm run check:size && npm run smoke",
-    "check:size": "node scripts/check-size.mjs"
+    "check:size": "node scripts/check-size.mjs",
+    "coach:probe": "node --conditions=react-server --import ./tests/loader.mjs scripts/coach-probe.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
