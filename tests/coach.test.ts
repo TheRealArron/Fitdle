@@ -98,7 +98,9 @@ test('the prompt refuses to coach through pain', () => {
 });
 
 test('the prompt is scoped to one exercise and refuses programming', () => {
-  assert.match(coachSource, /THIS exercise only/);
+  // Wording changed when the prompt was split for caching; the property did
+  // not. Assert the property, not the sentence.
+  assert.match(coachSource, /and nothing else|THIS exercise only/);
   assert.match(coachSource, /training programme/i);
 });
 

@@ -110,3 +110,60 @@ test('refusals are handled before content is read', () => {
 test('the guide module is server-only', () => {
   assert.ok(guide.startsWith("import 'server-only';"));
 });
+
+/* ── cost control ─────────────────────────────────────────────────────────── */
+
+test('both surfaces cache their stable prompt prefix', () => {
+  /*
+   * Caching is a prefix match, so the STABLE bytes must come first. The coach
+   * originally opened with the day's exercise - volatile at position zero -
+   * which meant nothing could ever match and every request paid full price
+   * while looking perfectly healthy.
+   */
+  const coach = readFileSync(new URL('../src/server/coach.ts', import.meta.url), 'utf8');
+
+  for (const [name, src] of [['guide', guide], ['coach', coach]] as const) {
+    assert.match(src, /cache_control: \{ type: 'ephemeral'/, `${name} does not cache its prompt`);
+  }
+
+  // The coach's cached block must precede the per-exercise block, or the
+  // breakpoint sits after the volatile bytes and caches nothing.
+  const stableAt = coach.indexOf('text: STABLE_INSTRUCTIONS');
+  const briefAt = coach.indexOf('text: exerciseBrief(target)');
+  assert.ok(stableAt > 0 && briefAt > stableAt, 'the volatile block comes before the cached one');
+});
+
+test('the cached prefix clears the minimum to actually cache', () => {
+  // Below ~512 tokens a breakpoint is silently ignored - no error, no caching,
+  // and usage.cache_read_input_tokens quietly stays zero.
+  assert.ok(
+    GUIDE_SYSTEM_PROMPT.length / 4 > 512,
+    `guide prompt is ~${Math.round(GUIDE_SYSTEM_PROMPT.length / 4)} tokens - too short to cache`,
+  );
+});
+
+test('a daily budget is claimed before the model is called', () => {
+  /*
+   * Rate limiting is per-IP and per-minute. It does nothing about aggregate
+   * spend: a thousand players asking three questions each is inside every
+   * per-IP limit and still an unbounded bill.
+   *
+   * The claim has to happen BEFORE the request - a check afterwards has already
+   * spent the money it exists to prevent.
+   */
+  const coach = readFileSync(new URL('../src/server/coach.ts', import.meta.url), 'utf8');
+
+  for (const [name, src] of [['guide', guide], ['coach', coach]] as const) {
+    const claimAt = src.indexOf('claimAiBudget(');
+    const callAt = src.indexOf('messages.create(');
+    assert.ok(claimAt > 0, `${name} does not claim a budget`);
+    assert.ok(callAt > claimAt, `${name} calls the model before claiming budget`);
+  }
+});
+
+test('exhausting the budget degrades, it does not throw', () => {
+  const coach = readFileSync(new URL('../src/server/coach.ts', import.meta.url), 'utf8');
+  for (const src of [guide, coach]) {
+    assert.match(src, /daily limit\. It will be back tomorrow/);
+  }
+});

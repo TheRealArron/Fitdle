@@ -1,5 +1,6 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
+import { claimAiBudget } from '@/server/aiBudget';
 import type { Reveal } from '@/server/game';
 
 /**
@@ -30,14 +31,34 @@ export interface CoachReply {
   text: string;
 }
 
-function systemPrompt(target: Reveal): string {
+/*
+ * The stable half of the prompt, first so it can cache.
+ *
+ * Caching is a PREFIX match, and this used to open with the exercise's own
+ * details - which change daily. That put the volatile bytes at position zero,
+ * so nothing after them could ever match and every request paid full price.
+ * Instructions first, day's data last.
+ */
+const STABLE_INSTRUCTIONS = `You are a form coach inside Fitdle, a daily exercise guessing game. The player has just finished today's puzzle and is asking about the exercise they solved.
+
+SCOPE
+Answer questions about the exercise described below and nothing else: technique, common form errors, what it works, how it feels when done right, equipment substitutions, and how to scale it easier or harder. The details below are authoritative - if the player describes the movement differently, go with the description below.
+
+If asked for anything outside that - a training programme, a weekly split, diet or supplements, another exercise, or anything unrelated - say in one sentence that you only cover the day's movement, and offer what you can about the exercise below.
+
+SAFETY
+You are not a clinician and you cannot see the player. If they describe pain (not muscle burn, but joint pain, sharp pain, numbness, or an existing injury), say plainly that you cannot assess it and that a physio or doctor should, then stop. Do not suggest a workaround, a modification, or a way to train through it. Never diagnose.
+
+STYLE
+Two to four sentences. Plain, specific, and practical - the kind of correction a good coach gives on the gym floor, not a paragraph of caveats. Give the cue that fixes the problem rather than a list of everything that could be wrong. No markdown headers, no bullet lists, no emoji. Address the player as "you".`;
+
+/** The volatile half: today's exercise. Must come AFTER the cached prefix. */
+function exerciseBrief(target: Reveal): string {
   const home = target.homeVersion
     ? `\nNo-equipment substitute (use this if they lack the kit):\n  ${target.homeVersion.name} - ${target.homeVersion.howTo}`
     : '\nThis is a bodyweight movement; it needs no substitute.';
 
-  return `You are a form coach inside Fitdle, a daily exercise guessing game. The player has just finished today's puzzle and is asking about the exercise they solved.
-
-THE EXERCISE
+  return `THE EXERCISE
   Name: ${target.display}
   Muscle group: ${target.group}
   Equipment: ${target.equipment}
@@ -48,29 +69,7 @@ THE EXERCISE
 
   How to perform it:
 ${target.howTo.map((s, i) => `  ${i + 1}. ${s}`).join('\n')}${home}
-
-SCOPE
-Answer questions about THIS exercise only: technique, common form errors, what
-it works, how it feels when done right, equipment substitutions, and how to
-scale it easier or harder. The details above are authoritative - if the player
-describes the movement differently, go with the description above.
-
-If asked for anything outside that - a training programme, a weekly split, diet
-or supplements, another exercise, or anything unrelated - say in one sentence
-that you only cover the day's movement, and offer what you can about ${target.display}.
-
-SAFETY
-You are not a clinician and you cannot see the player. If they describe pain
-(not muscle burn, but joint pain, sharp pain, numbness, or an existing injury),
-say plainly that you cannot assess it and that a physio or doctor should, then
-stop. Do not suggest a workaround, a modification, or a way to train through it.
-Never diagnose.
-
-STYLE
-Two to four sentences. Plain, specific, and practical - the kind of correction a
-good coach gives on the gym floor, not a paragraph of caveats. Give the cue that
-fixes the problem rather than a list of everything that could be wrong. No
-markdown headers, no bullet lists, no emoji. Address the player as "you".`;
+`;
 }
 
 /**
@@ -91,6 +90,17 @@ export async function askCoach(question: string, target: Reveal): Promise<CoachR
   const trimmed = question.trim().slice(0, MAX_QUESTION_CHARS);
   if (!trimmed) return { status: 'error', text: 'Ask a question first.' };
 
+  /*
+   * Claimed BEFORE the request, not after - a check that runs afterwards has
+   * already spent the money it exists to prevent.
+   */
+  if (!claimAiBudget('coach').allowed) {
+    return {
+      status: 'error',
+      text: 'The coach has hit its daily limit. It will be back tomorrow.',
+    };
+  }
+
   try {
     const client = new Anthropic({ apiKey });
 
@@ -101,7 +111,15 @@ export async function askCoach(question: string, target: Reveal): Promise<CoachR
       // movement whose details are already in the prompt. Deep reasoning buys
       // nothing here and costs the player latency on a result screen.
       output_config: { effort: 'low' },
-      system: systemPrompt(target),
+      /*
+       * Two blocks: the cached instructions, then the day's exercise. The
+       * breakpoint sits on the first block, so the ~350-token instruction
+       * prefix is shared by every request for every exercise, all day.
+       */
+      system: [
+        { type: 'text' as const, text: STABLE_INSTRUCTIONS, cache_control: { type: 'ephemeral' as const } },
+        { type: 'text' as const, text: exerciseBrief(target) },
+      ],
       messages: [{ role: 'user', content: trimmed }],
     });
 

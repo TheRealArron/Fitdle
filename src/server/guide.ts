@@ -1,5 +1,6 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
+import { claimAiBudget } from '@/server/aiBudget';
 import { CATEGORY_HINT_AT, EQUIPMENT_HINT_AT, MAX_GUESSES } from '@/data/exercises';
 
 /**
@@ -89,6 +90,17 @@ export async function askGuide(question: string): Promise<GuideReply> {
   const trimmed = question.trim().slice(0, MAX_QUESTION_CHARS);
   if (!trimmed) return { status: 'error', text: 'Ask a question first.' };
 
+  /*
+   * Claimed BEFORE the request, not after - a check that runs afterwards has
+   * already spent the money it exists to prevent.
+   */
+  if (!claimAiBudget('guide').allowed) {
+    return {
+      status: 'error',
+      text: 'The guide has hit its daily limit. It will be back tomorrow.',
+    };
+  }
+
   try {
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
@@ -96,7 +108,17 @@ export async function askGuide(question: string): Promise<GuideReply> {
       max_tokens: 512,
       // The rules are already in the prompt; there is nothing to reason out.
       output_config: { effort: 'low' },
-      system: SYSTEM,
+      /*
+       * Cached. This prompt is byte-identical on every request and is ~875
+       * tokens - comfortably over Opus 5's 512-token cache minimum - so it is
+       * the single biggest lever on cost here. Cache reads bill at roughly a
+       * tenth of the input rate, which takes the input side of a question from
+       * the dominant cost to a rounding error.
+       *
+       * Nothing volatile may be appended after this block, or the prefix stops
+       * matching and every request pays full price again while looking fine.
+       */
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: trimmed }],
     });
 

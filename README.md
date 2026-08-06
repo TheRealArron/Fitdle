@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 175 unit tests
+npm test                 # 186 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -535,6 +535,45 @@ a **no-equipment substitute**: a backpack, a towel, a chair, a wall.
 That data lives in the catalogue, not in a model. It renders for every player on
 every deployment, with no API key and no network call beyond the one that
 revealed the answer.
+
+### What the AI costs you
+
+Both AI surfaces call your Anthropic key, so every question is your money. That
+is worth stating in numbers rather than hand-waving:
+
+```
+per question, uncached   $0.0078   ->  1,000 users x 3 questions = $698/month
+per question, cached      $0.0038   ->  the same traffic          = $343/month
+```
+
+Two things bring that down, and one of them is a hard stop:
+
+**Prompt caching.** Both system prompts are cached, which halves the cost. The
+coach's prompt had to be reordered first: caching is a prefix match, and it
+opened with the day's exercise - volatile bytes at position zero, so nothing
+after them could ever match. Stable instructions now come first, the day's data
+last.
+
+**A daily budget.** `AI_DAILY_BUDGET` (default 500) is a hard ceiling on model
+calls per UTC day across all users. Per-IP rate limiting caps how fast *one*
+person can ask and says nothing about what everybody costs together - a thousand
+players asking three questions each sits inside every per-IP limit and is still
+an unbounded bill. When the budget is gone the AI says so and switches off until
+midnight; the game, drill, leaderboard and home substitutions are untouched,
+because none of them were ever load-bearing on the model.
+
+At the default that is roughly **$57/month worst case**. Set it to `0` to ship
+with the key present and the feature off.
+
+Honest caveat: the counter is in-memory and per-instance, exactly like the rate
+limiter, so on a multi-instance deployment the effective budget multiplies.
+Treat Anthropic Console spend limits as the real backstop and this as what
+degrades gracefully before you reach them.
+
+**The bigger lever is the model.** Both surfaces use `claude-opus-5`. For
+reciting fixed rules, a smaller model would be several times cheaper and very
+likely just as good - that is a call worth making deliberately rather than
+inheriting a default.
 
 ### Ask the guide
 
