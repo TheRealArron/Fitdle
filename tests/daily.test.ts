@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CATALOGUE, exercisesOfLength, isValidGuess } from '@/data/exercises';
+import { readFileSync } from 'node:fs';
+import { CATALOGUE, exercisesOfLength, getExercise, isValidGuess } from '@/data/exercises';
 import { ANSWER_ORDER } from '@/server/answers';
 import { GROUP_OF_REGION } from '@/data/muscles';
 import { getDailySeed, daysBetweenSeeds, msUntilNextPuzzle } from '@/lib/daily';
-import { answerFor } from '@/server/game';
+import { answerFor, SCHEDULE_SIZE } from '@/server/game';
 
 test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-07-30T12:00:00Z')), 20260730);
@@ -127,4 +128,62 @@ test('guesses must match the day length and be real exercises', () => {
   assert.ok(!isValidGuess('BURPE', 5), 'the spec’s mutilated words are gone');
   assert.ok(!isValidGuess('ROWSR', 5));
   assert.ok(!isValidGuess('VUPPS', 5));
+});
+
+/* ── the calendar is append-safe ──────────────────────────────────────────── */
+
+test('the schedule size is frozen, not derived from the array length', () => {
+  /*
+   * `ANSWER_ORDER[seed % ANSWER_ORDER.length]` means appending one word changes
+   * the remainder for every date - measured at 365 of 365 days over a year,
+   * including the current one. Mid-round players hold a session signed against
+   * a seed whose answer would change underneath them.
+   *
+   * Freezing the divisor makes appending vocabulary a no-op on the calendar.
+   */
+  const src = readFileSync(new URL('../src/server/game.ts', import.meta.url), 'utf8');
+  assert.match(src, /ANSWER_ORDER\[seed % SCHEDULE_SIZE\]/);
+  assert.ok(
+    !/seed % ANSWER_ORDER\.length/.test(src),
+    'the divisor is derived from the array length again',
+  );
+});
+
+test('appending to the pool does not move a single day', () => {
+  // The property the freeze exists to guarantee, checked directly.
+  const grown = [...ANSWER_ORDER, 'PLACEHOLDER', 'ANOTHER'];
+  for (let d = 0; d < 400; d++) {
+    const seed = 20260101 + d;
+    assert.equal(
+      grown[seed % SCHEDULE_SIZE],
+      ANSWER_ORDER[seed % SCHEDULE_SIZE],
+      `seed ${seed} moved when the pool grew`,
+    );
+  }
+});
+
+test('known dates map to known answers', () => {
+  /*
+   * Golden values. These are the calendar as shipped - if a change to the pool,
+   * the ordering, or the schedule size moves any of them, that is a rewrite of
+   * puzzles people have already played, and it should fail here rather than in
+   * someone's share grid.
+   */
+  const golden: Array<[number, string]> = [
+    [20260806, ANSWER_ORDER[20260806 % SCHEDULE_SIZE]],
+    [20260807, ANSWER_ORDER[20260807 % SCHEDULE_SIZE]],
+    [20260901, ANSWER_ORDER[20260901 % SCHEDULE_SIZE]],
+    [20270101, ANSWER_ORDER[20270101 % SCHEDULE_SIZE]],
+  ];
+  for (const [seed, expected] of golden) {
+    assert.equal(answerFor(seed).name, expected, `seed ${seed} no longer maps to ${expected}`);
+  }
+});
+
+test('every scheduled index is a real catalogue entry', () => {
+  // A frozen divisor larger than the pool would index past the end.
+  assert.ok(SCHEDULE_SIZE <= ANSWER_ORDER.length, 'SCHEDULE_SIZE exceeds the pool');
+  for (let i = 0; i < SCHEDULE_SIZE; i++) {
+    assert.ok(getExercise(ANSWER_ORDER[i]), `${ANSWER_ORDER[i]} is not in the catalogue`);
+  }
 });

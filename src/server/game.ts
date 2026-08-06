@@ -25,11 +25,35 @@ export function dailySeed(now: Date = new Date()): number {
 }
 
 /**
+ * How many entries of ANSWER_ORDER the calendar actually cycles through.
+ *
+ * ─ Why this is a frozen constant and not `ANSWER_ORDER.length` ──────────────
+ *
+ * The daily answer is `ANSWER_ORDER[seed % N]`. If N is the array length, then
+ * appending a single word changes N, which changes the remainder for EVERY
+ * date - measured: 365 of 365 days over a year, including today's.
+ *
+ * That is not a gradual rollout. Mid-round players hold a session signed
+ * against a seed whose answer just changed underneath them, their board stops
+ * matching their feedback, and every share grid already posted becomes wrong.
+ *
+ * Freezing N makes appending SAFE: new words land at index 60+ and are simply
+ * never scheduled, so you can add vocabulary any time without touching the
+ * calendar. Bringing them into rotation is then a deliberate act - raise this
+ * number - rather than a side effect of editing a list.
+ *
+ * Raising it still reshuffles every future date. Do it before launch, or
+ * accept the reshuffle knowingly. `tests/daily.test.ts` pins specific
+ * date→answer pairs so any change fails loudly rather than silently.
+ */
+export const SCHEDULE_SIZE = 60;
+
+/**
  * The one line that used to be in the browser. `ANSWER_ORDER` is server-only,
  * so this mapping cannot be read out of the bundle.
  */
 export function answerFor(seed: number): Exercise {
-  const name = ANSWER_ORDER[seed % ANSWER_ORDER.length];
+  const name = ANSWER_ORDER[seed % SCHEDULE_SIZE];
   const exercise = getExercise(name);
   if (!exercise) throw new Error(`answer ${name} is not in the catalogue`);
   return exercise;

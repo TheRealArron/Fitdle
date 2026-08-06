@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 155 unit tests
+npm test                 # 159 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -125,10 +125,20 @@ Answers now run **5–9 letters at their natural spelling**, and the grid width
 changes daily, which is itself a strong clue. The pool is 60 answers (12 per
 length) inside a 99-exercise catalogue.
 
-One caveat stated plainly in the source: the daily index is `seed % ANSWERS.length`,
-so **changing the pool size reshuffles the whole calendar**, not just future
-days. Growing the pool is safe before launch and not after - at that point
-either freeze the size or move to a pinned date→answer schedule.
+The daily index is `seed % SCHEDULE_SIZE`, and **`SCHEDULE_SIZE` is a frozen
+constant, not `ANSWER_ORDER.length`.** That distinction is load-bearing.
+
+With the array length as the divisor, appending one word changes the remainder
+for every date - measured at **365 of 365 days over a year, including the
+current one**. Mid-round players hold a session signed against a seed whose
+answer would change underneath them, their board stops matching its feedback,
+and every share grid already posted becomes wrong.
+
+Frozen, appending is a no-op on the calendar: new words land beyond the schedule
+and are simply never drawn. Adding vocabulary is safe at any time; bringing it
+into rotation is a deliberate act (raise the number), and that still reshuffles
+every future date. Golden date→answer pairs are pinned by tests so any reshuffle
+fails loudly rather than quietly rewriting puzzles people have played.
 
 ### 2. "What do I even guess?" needed an answer inside the product
 
