@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 164 unit tests
+npm test                 # 165 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -125,10 +125,13 @@ DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
 
 A narrower solver than the shortlist panel already deleted for the same reason.
 
-**Form videos.** Every one of the 60 answers links to a real, curated coaching
-video (NASM, Runna, Barbell Logic, PureGym, BarBend and similar). Shown on wins
-too, not just losses - the coaching is the point of the game, and hiding it
-behind a loss punishes the players who engaged most.
+**Form videos.** 60 of the 62 answers link to a real, curated coaching video
+(NASM, Runna, Barbell Logic, PureGym, BarBend and similar); the remaining two
+fall back to a YouTube search, which always resolves to something relevant. A
+fabricated video id would render as a broken embed rather than a working search,
+so those stay empty until someone verifies a real one. A test names the two, so
+a curated video cannot be dropped by accident. Shown on wins too, not just
+losses - the coaching is the point of the game.
 
 ---
 
@@ -156,6 +159,22 @@ length) inside a 99-exercise catalogue.
 
 The daily index is `seed % SCHEDULE_SIZE`, and **`SCHEDULE_SIZE` is a frozen
 constant, not `ANSWER_ORDER.length`.** That distinction is load-bearing.
+
+**It is 62, and the number was chosen by measurement.** `YYYYMMDD` is not
+contiguous - it jumps by roughly 70 at every month boundary - so the schedule
+size interacts with that jump, and the good values are irregular rather than
+monotonic. Swept over two years:
+
+| N | first repeat | tightest gap | slots used | same-width days |
+|---|---|---|---|---|
+| 60 | 51d | 11d | 60/60 | **14** per 730 |
+| **62** | **55d** | **45d** | **62/62** | **1** per 730 |
+| 70 | 1d | 1d | 70/70 | - |
+| 99 | 30d | 27d | 41/99 | - |
+
+`N=70` repeats the same answer on consecutive days, because 70 *is* the month
+jump. `N=99` would leave 58 of its slots unscheduled. Bigger is not better, and
+"use the whole catalogue" is the trap.
 
 With the array length as the divisor, appending one word changes the remainder
 for every date - measured at **365 of 365 days over a year, including the

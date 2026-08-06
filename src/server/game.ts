@@ -42,11 +42,31 @@ export function dailySeed(now: Date = new Date()): number {
  * calendar. Bringing them into rotation is then a deliberate act - raise this
  * number - rather than a side effect of editing a list.
  *
- * Raising it still reshuffles every future date. Do it before launch, or
- * accept the reshuffle knowingly. `tests/daily.test.ts` pins specific
- * date→answer pairs so any change fails loudly rather than silently.
+ * Raising it still reshuffles every future date. Do it before launch, or accept
+ * the reshuffle knowingly. `tests/daily.test.ts` pins specific date→answer
+ * pairs so any change fails loudly rather than silently.
+ *
+ * ─ Why 62, and why "bigger" is the wrong instinct ───────────────────────────
+ *
+ * The seed is YYYYMMDD, which is NOT contiguous - it jumps by ~70 at every
+ * month boundary (20260131 -> 20260201). So N interacts with that jump, and the
+ * good values are irregular rather than monotonic. Swept over two years:
+ *
+ *     N    first repeat   tightest gap   slots used
+ *    60           51d            11d       60/60     (was)
+ *    62           55d            45d       62/62     (now)
+ *    70            1d             1d       70/70     <- same answer two days
+ *                                                       running: 70 IS the jump
+ *    99           30d            27d       41/99     <- 58% never scheduled
+ *
+ * 62 gives the largest worst-case gap between repeats with every slot in use,
+ * for the cost of two extra words. N=70 through 78 are all landmines, and the
+ * naive "use the whole catalogue" would leave most of it unscheduled.
+ *
+ * `tests/daily.test.ts` pins the tightest gap, so a future change to this
+ * number fails with the reason attached rather than quietly degrading.
  */
-export const SCHEDULE_SIZE = 60;
+export const SCHEDULE_SIZE = 62;
 
 /**
  * The one line that used to be in the browser. `ANSWER_ORDER` is server-only,

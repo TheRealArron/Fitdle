@@ -25,7 +25,10 @@ export const ANSWER_ORDER: readonly string[] = [
   "SNATCH", "LEGCURL", "SUPERMAN", "SIDEPLANK", "SHRUG", "BRIDGE", "ARMCURL", "THRUSTER", "BACKSQUAT",
   "FLYES", "STEPUP", "BENTROW", "LEGRAISE", "PUSHPRESS", "RAISE", "SPRINT", "FARMERS", "SKIPROPE",
   "HANGCLEAN", "TWIST", "SKATER", "JUMPING", "FACEPULL", "HANDSTAND", "SWING", "ROWING", "LATPULL",
-  "PUSHDOWN", "KNEERAISE", "HINGE", "HOLLOW", "PISTOLS", "INCHWORM", "ARMCIRCLE"
+  "PUSHDOWN", "KNEERAISE", "HINGE", "HOLLOW", "PISTOLS", "INCHWORM", "ARMCIRCLE",
+  // Added to take SCHEDULE_SIZE from 60 to 62. See src/server/game.ts for why
+  // 62 specifically - it is not "more is better".
+  "MARCH", "GOBLET"
 ];
 
 export interface Coaching {
@@ -671,5 +674,33 @@ export const COACHING: Record<string, Coaching> = {
     videoQuery: "arm circles warm up proper form",
     videoId: "tYo5ghpLksg",
     challenge: "2 × 20 each way",
+  },
+
+  MARCH: {
+    howTo: [
+      'Stand tall, feet hip-width, arms bent at your sides.',
+      'Drive one knee up to hip height, keeping your standing leg straight and your torso upright.',
+      'Swap legs as the first foot lands, staying on the balls of your feet.',
+      'Keep the rhythm even. Height and posture matter more than speed.',
+    ],
+    videoQuery: 'high knee march exercise form',
+    videoId: null,
+    challenge: '3 × 40 seconds High March',
+  },
+  GOBLET: {
+    howTo: [
+      'Hold a dumbbell vertically against your chest, both hands cupping the top head.',
+      'Feet shoulder-width, toes turned out slightly.',
+      'Sit straight down between your hips, keeping your chest up and elbows inside your knees.',
+      'Go until your elbows touch the inside of your knees, then drive up through your heels.',
+    ],
+    videoQuery: 'goblet squat proper form',
+    videoId: null,
+    challenge: '4 × 10 Goblet Squat',
+    homeVersion: {
+      name: 'Backpack goblet squat',
+      howTo:
+        'Load a backpack with books and hug it to your chest with both arms. Squat the same way - chest tall, elbows tracking inside the knees, weight through the heels. The load being in front is what keeps you upright, so hold it high.',
+    },
   },
 };

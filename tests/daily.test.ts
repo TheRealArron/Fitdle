@@ -56,26 +56,54 @@ test('countdown lands on the next UTC midnight', () => {
 /* ── answer pool integrity ────────────────────────────────────────────────── */
 
 test('ANSWERS order is load-bearing and must stay pinned', () => {
-  // Reordering silently rewrites every past and future puzzle. So does changing
-  // the pool size, since the index is a modulus - see the caveat in exercises.ts.
-  assert.equal(ANSWER_ORDER.length, 60);
+  // Reordering silently rewrites every past and future puzzle. Appending is
+  // safe (SCHEDULE_SIZE is frozen separately); reordering is not.
+  assert.equal(ANSWER_ORDER.length, 62);
   assert.equal(ANSWER_ORDER[0], 'SQUAT');
   assert.equal(ANSWER_ORDER[59], 'ARMCIRCLE');
+  assert.equal(ANSWER_ORDER[61], 'GOBLET');
   assert.equal(
     ANSWER_ORDER.slice(0, 5).join(','),
     'SQUAT,BURPEE,CLIMBER,DEADLIFT,HIPTHRUST',
   );
 });
 
-test('the pool divides evenly into the length cycle', () => {
-  // A pool that is not a multiple of 5 would break the 5,6,7,8,9 rotation at
-  // the wrap-around, giving two same-width days in a row.
-  assert.equal(ANSWER_ORDER.length % 5, 0);
+test('consecutive days almost never share a grid width', () => {
+  /*
+   * This replaces an assertion that `ANSWER_ORDER.length % 5 === 0`, which was
+   * a PROXY for this property and did not actually deliver it.
+   *
+   * The proxy assumed consecutive days land on consecutive indices. They do not:
+   * the seed is YYYYMMDD, so it jumps ~70 at every month boundary, and whether
+   * that jump preserves the width rotation depends on `jump % N % 5`. Measured
+   * over 730 days, the old "evenly divisible" pool of 60 produced FOURTEEN
+   * same-width pairs. The current 62 produces one, at leap-year February.
+   *
+   * So the real property is measured directly now, on real calendar dates.
+   */
+  const seedOf = (d: Date) =>
+    d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  const start = new Date(Date.UTC(2026, 7, 6));
+
+  let collisions = 0;
+  let prev: number | null = null;
+  for (let i = 0; i < 730; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const len = answerFor(seedOf(d)).name.length;
+    if (prev === len) collisions++;
+    prev = len;
+  }
+  assert.ok(collisions <= 2, `${collisions} same-width consecutive days in 730 - the rotation broke`);
+
   const perLength = new Map<number, number>();
   for (const name of ANSWER_ORDER) {
     perLength.set(name.length, (perLength.get(name.length) ?? 0) + 1);
   }
-  assert.deepEqual([...perLength.entries()].sort(), [[5, 12], [6, 12], [7, 12], [8, 12], [9, 12]]);
+  assert.deepEqual(
+    [...perLength.entries()].sort(),
+    [[5, 13], [6, 13], [7, 12], [8, 12], [9, 12]],
+  );
 });
 
 test('answer lengths cycle 5,6,7,8,9 so consecutive days differ in grid width', () => {
