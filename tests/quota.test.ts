@@ -133,3 +133,21 @@ test('the schema carries tier and the counters', () => {
   assert.match(schema, /add column if not exists ai_day int/);
   assert.match(schema, /add column if not exists ai_count int/);
 });
+
+test('a broken counter falls back to anonymous limits, not to unlimited', () => {
+  /*
+   * The migration-skipped case, and the one that fails in the expensive
+   * direction if it is got wrong.
+   *
+   * Discarding the read error means `data` is null, so the row reads as zero
+   * used; the increment then fails too, and every signed-in player has
+   * unlimited AI forever with only the global budget in the way. A broken
+   * counter must therefore grant LESS, not more.
+   */
+  assert.match(quota, /const \{ data, error \} = await client/, 'the read error is discarded');
+  assert.match(
+    quota,
+    /if \(error\) \{[\s\S]{0,400}?claimAnonymous\(`degraded:\$\{userId\}`/,
+    'a read error does not fall back to the anonymous allowance',
+  );
+});

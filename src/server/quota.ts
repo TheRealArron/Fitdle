@@ -109,11 +109,31 @@ async function claimUser(userId: string, consume: boolean): Promise<QuotaState> 
     };
   }
 
-  const { data } = await client
+  const { data, error } = await client
     .from(TABLE)
     .select('tier, ai_day, ai_count')
     .eq('user_id', userId)
     .maybeSingle();
+
+  /*
+   * A read error means the counter cannot be trusted - overwhelmingly because
+   * the migration adding these columns has not been run (Postgres 42703).
+   *
+   * Discarding it fails OPEN, and open on the one path that costs money: `data`
+   * comes back null, so the row reads as zero used, the increment then fails
+   * too, and every signed-in player has unlimited AI forever. The global budget
+   * would be the only thing left standing.
+   *
+   * So a broken counter drops to the anonymous allowance, enforced in memory.
+   * The player still gets a couple of questions rather than an error, and the
+   * bill still has a per-person ceiling. `maybeSingle` returns no error for a
+   * player who simply has no row yet, so the ordinary first-time case is
+   * unaffected.
+   */
+  if (error) {
+    console.error('[quota] cannot read counters, falling back to anonymous limits:', error.message);
+    return claimAnonymous(`degraded:${userId}`, consume);
+  }
 
   const tier = normaliseTier(data?.tier);
   const limit = QUOTA[tier];

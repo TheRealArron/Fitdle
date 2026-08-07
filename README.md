@@ -16,7 +16,7 @@ npm run verify           # ← the one that matters. Everything, in order.
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 199 unit tests
+npm test                 # 200 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -581,6 +581,14 @@ spend is divided per account.
 | Anonymous | 2 | $0.23/mo | In memory, per address |
 | Free (signed in) | 5 | $0.57/mo | On the row, service-role written |
 | Pro | 100 | $11.44/mo | Same |
+
+**If the migration is skipped, the quota fails closed.** A read error on those
+columns - almost always because `schema.sql` has not been re-run - drops the
+player to the anonymous allowance rather than granting free-tier limits with a
+counter that never increments. Discarding that error would fail *open* on the
+one path that costs money: the row would read as zero used, the write would fail
+too, and every signed-in player would have unlimited AI. `npm run cloud:check`
+now probes for the columns directly.
 
 **The signed-in counter is durable and server-written.** An allowance you can
 refill by clearing localStorage is not an allowance. The anonymous one is

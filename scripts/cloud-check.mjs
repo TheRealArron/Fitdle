@@ -227,6 +227,24 @@ if (policyProbe.error?.code === '42501') {
   );
 }
 
+/* ── 7. the AI quota columns ──────────────────────────────────────────────── */
+
+/*
+ * Without these, the per-account quota cannot be persisted. It degrades to the
+ * anonymous allowance rather than to unlimited - but that is a fallback, not
+ * the intended behaviour, and it is invisible from the UI.
+ */
+const quotaProbe = await supabase.from('fitdle_progress').select('tier, ai_day, ai_count').limit(1);
+
+if (quotaProbe.error?.code === '42703') {
+  fail(
+    'the AI quota columns are missing (tier, ai_day, ai_count)',
+    'Re-run supabase/schema.sql. Until then every signed-in player falls back to the 2-question anonymous allowance',
+  );
+} else {
+  pass('AI quota columns present', 'per-account limits can be persisted');
+}
+
 console.log();
 if (failed) {
   console.log(c.bad('Cloud sync is not ready.'), 'Fix the items above and run again.');
