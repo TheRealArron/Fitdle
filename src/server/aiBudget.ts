@@ -15,16 +15,13 @@ import 'server-only';
  * because none of it was ever load-bearing on the model.
  *
  * ── What this is not ───────────────────────────────────────────────────────
- * In-memory and per-instance, exactly like the rate limiter. On a platform that
- * runs several serverless instances the effective budget multiplies by the
- * instance count, and it resets on a cold start. That makes it a guard against
- * runaway usage, NOT a billing guarantee.
- *
- * Treat Anthropic Console spend limits as the real backstop and this as the
- * thing that degrades gracefully before you hit it. If you need a true cap,
- * this is the seam to move to Redis - the call site takes a name and returns
- * the same shape.
+ * It counts in-process. That makes it a guard against runaway usage, and
+ * explicitly NOT a billing guarantee. See `memoryCounter.ts` for why that trade
+ * was made and where to change it if it ever has to be one. Treat Anthropic Console spend limits as the real backstop
+ * and this as what degrades gracefully before you reach them.
  */
+
+import { count, secondsUntilUtcMidnight, utcDay } from '@/server/memoryCounter';
 
 /** Requests per UTC day, across all callers. Override with AI_DAILY_BUDGET. */
 const DEFAULT_BUDGET = 500;
@@ -48,18 +45,6 @@ function budget(): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_BUDGET;
 }
 
-interface DayCount {
-  day: number;
-  used: number;
-}
-
-const counters = new Map<string, DayCount>();
-
-/** UTC day number, so the reset lines up with the puzzle rollover. */
-function today(): number {
-  return Math.floor(Date.now() / 86_400_000);
-}
-
 export interface BudgetCheck {
   allowed: boolean;
   used: number;
@@ -74,24 +59,13 @@ export interface BudgetCheck {
  */
 export function claimAiBudget(name: string): BudgetCheck {
   const limit = budget();
-  const day = today();
-  const entry = counters.get(name);
-
-  if (!entry || entry.day !== day) {
-    counters.set(name, { day, used: 1 });
-    return { allowed: limit > 0, used: 1, limit };
-  }
-
-  if (entry.used >= limit) return { allowed: false, used: entry.used, limit };
-
-  entry.used += 1;
-  return { allowed: true, used: entry.used, limit };
+  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight());
+  return { allowed: r.allowed, used: r.count, limit };
 }
 
 /** Current usage without claiming. For diagnostics only. */
 export function aiBudgetUsed(name: string): BudgetCheck {
   const limit = budget();
-  const entry = counters.get(name);
-  const used = entry && entry.day === today() ? entry.used : 0;
-  return { allowed: used < limit, used, limit };
+  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight(), false);
+  return { allowed: r.allowed, used: r.count, limit };
 }

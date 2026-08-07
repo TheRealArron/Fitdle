@@ -41,21 +41,6 @@ function state(): TimeState {
   return g[KEY];
 }
 
-export interface TimeStatus {
-  /** True once a server time has been obtained at least once this session. */
-  synced: boolean;
-  /** serverTime - localTime, in ms. Positive means the local clock is behind. */
-  offsetMs: number;
-  /** Local clock is more than a day off. Almost always deliberate. */
-  suspicious: boolean;
-}
-
-const DAY_MS = 86_400_000;
-
-export function timeStatus(): TimeStatus {
-  const s = state();
-  return { synced: s.synced, offsetMs: s.offsetMs, suspicious: s.synced && Math.abs(s.offsetMs) > DAY_MS };
-}
 
 /** The current time, corrected against the server when we have an offset. */
 export function trustedNow(): Date {
@@ -83,9 +68,3 @@ export function adoptServerTime(iso: string): void {
   st.synced = true;
 }
 
-/** Test seam. */
-export function __setOffsetForTests(ms: number, isSynced = true): void {
-  const s = state();
-  s.offsetMs = ms;
-  s.synced = isSynced;
-}

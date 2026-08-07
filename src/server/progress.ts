@@ -109,7 +109,3 @@ export async function bankResult(
   return { save: next, written: true };
 }
 
-/** The authoritative record, for a client that wants to reconcile on load. */
-export async function readProgress(userId: string): Promise<SaveData | null> {
-  return readRow(userId);
-}

@@ -12,25 +12,30 @@ import type { LetterState } from '@/lib/evaluate';
  * its own origin. The Chrome extension needs it - a static export has no
  * server of its own, so it must call the deployed one.
  */
+/*
+ * Re-exported so components can keep importing response types from the module
+ * that produces them, without every component learning where the contract
+ * lives. `contracts.ts` stays the single declaration.
+ */
+export type {
+  AiReply,
+  BoardEntry,
+  LeaderboardResponse,
+  QuotaState,
+  RevealedAnswer,
+} from '@/lib/contracts';
+
+import type {
+  AiReply,
+  BoardKind,
+  LeaderboardResponse,
+  RevealedAnswer,
+} from '@/lib/contracts';
 import type { SaveData } from '@/lib/secureStorage';
 import { getSupabase, hasStoredSession } from '@/lib/supabase';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
 
-export interface RevealedAnswer {
-  name: string;
-  display: string;
-  group: MuscleGroup;
-  equipment: Equipment;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  primary: MuscleRegion[];
-  secondary: MuscleRegion[];
-  howTo: string[];
-  videoId: string | null;
-  videoQuery: string;
-  challenge: string;
-  homeVersion: { name: string; howTo: string } | null;
-}
 
 export interface DailyState {
   seed: number;
@@ -137,44 +142,15 @@ export function askCoach(question: string, state: string): Promise<ApiResult<AiR
   return post('/api/coach', { question, state });
 }
 
-export interface QuotaState {
-  allowed: boolean;
-  used: number;
-  limit: number;
-  remaining: number;
-  tier: 'free' | 'pro' | 'anonymous';
-}
-
-export interface AiReply {
-  status: string;
-  text: string;
-  quota?: QuotaState;
-}
-
 /** Asks the in-game guide how something works. No round gate - it knows no answers. */
 export function askGuide(question: string): Promise<ApiResult<AiReply>> {
   return post('/api/guide', { question });
 }
 
-export interface BoardEntry {
-  rank: number;
-  name: string;
-  value: number;
-  isYou: boolean;
-}
-
-export interface LeaderboardData {
-  board: 'streak' | 'daily';
-  seed: number;
-  top: BoardEntry[];
-  you: { rank: number; value: number; name: string } | null;
-  total: number;
-}
-
 /** Public boards. Auth is optional; signing in adds `isYou` and your standing. */
 export async function fetchBoard(
-  which: 'streak' | 'daily',
-): Promise<ApiResult<LeaderboardData>> {
+  which: BoardKind,
+): Promise<ApiResult<LeaderboardResponse>> {
   try {
     const token = await bearerToken();
     const res = await fetch(`${BASE}/api/leaderboard?board=${which}`, {
@@ -182,7 +158,7 @@ export async function fetchBoard(
       cache: 'no-store',
     });
     if (!res.ok) return { ok: false, error: `Server error (${res.status})` };
-    return { ok: true, data: (await res.json()) as LeaderboardData };
+    return { ok: true, data: (await res.json()) as LeaderboardResponse };
   } catch {
     return { ok: false, error: 'Could not reach the server.' };
   }

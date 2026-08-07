@@ -28,16 +28,9 @@ export function getDailySeed(date: Date = trustedNow()): number {
   );
 }
 
-/** `20260730` -> `2026-07-30`. Display only. */
-export function formatSeed(seed: number): string {
-  const y = Math.floor(seed / 10000);
-  const m = Math.floor((seed % 10000) / 100);
-  const d = seed % 100;
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
 
 /** UTC midnight of the day a seed refers to. */
-export function seedToUtcDate(seed: number): Date {
+function seedToUtcDate(seed: number): Date {
   const y = Math.floor(seed / 10000);
   const m = Math.floor((seed % 10000) / 100);
   const d = seed % 100;

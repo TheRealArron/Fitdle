@@ -44,13 +44,18 @@ test('"is this me" is decided server-side', () => {
   // the comparison happens here and only a boolean crosses the wire.
   assert.match(board, /row\.user_id === userId/);
 
-  const api = readFileSync(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
-  const iface = api.slice(api.indexOf('export interface BoardEntry'), api.indexOf('export interface LeaderboardData'));
-  assert.match(iface, /isYou: boolean;/, 'the client type must carry the verdict, not the inputs');
-  assert.ok(
-    !/user_?[Ii]d/.test(iface),
-    'the client type carries an id it could compare itself',
+  /*
+   * The client type now comes from the shared wire contract rather than being
+   * declared twice - which is the point: two independent copies agreed right up
+   * until the day they would not have.
+   */
+  const contracts = readFileSync(new URL('../src/lib/contracts.ts', import.meta.url), 'utf8');
+  const iface = contracts.slice(
+    contracts.indexOf('export interface BoardEntry'),
+    contracts.indexOf('export interface Board {'),
   );
+  assert.match(iface, /isYou: boolean;/, 'the client type must carry the verdict, not the inputs');
+  assert.ok(!/user_?[Ii]d/.test(iface), 'the client type carries an id it could compare itself');
 });
 
 test('usernames are shape-limited before display', () => {

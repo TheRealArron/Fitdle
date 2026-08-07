@@ -31,10 +31,6 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
-/** True when the server can write authoritative progress. */
-export function cloudWritesConfigured(): boolean {
-  return Boolean(url && anonKey && serviceKey);
-}
 
 let admin: SupabaseClient | null = null;
 

@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Signed game state.
@@ -51,11 +51,6 @@ function secret(): string {
   return s;
 }
 
-/** Present so a deployment can fail loudly at boot rather than per request. */
-export function assertSessionSecret(): void {
-  secret();
-}
-
 function sign(payload: string): string {
   return createHmac('sha256', secret()).update(payload).digest('base64url');
 }
@@ -98,7 +93,3 @@ export function openSession(token: string | undefined, expectedSeed: number): Ga
   }
 }
 
-/** Convenience for local setup; never used at runtime. */
-export function generateSecret(): string {
-  return randomBytes(48).toString('base64');
-}

@@ -64,9 +64,17 @@ test('reading usage does not consume any', () => {
   assert.equal(aiBudgetUsed(key).used, 1, 'the read incremented the counter');
 });
 
-test('the module is honest about being per-instance', () => {
-  // A billing guarantee it is not, and the comment must keep saying so.
-  const src = readFileSync(new URL('../src/server/aiBudget.ts', import.meta.url), 'utf8');
-  assert.match(src, /per-instance/);
-  assert.match(src, /NOT a billing guarantee/);
+test('the counting is honest about being per-instance', () => {
+  /*
+   * A billing guarantee it is not, and that must keep being said somewhere a
+   * reader will find it. The caveat lives in the shared counter now rather than
+   * being restated by each of its three callers - so this asserts it is stated,
+   * not which file states it.
+   */
+  const budget = readFileSync(new URL('../src/server/aiBudget.ts', import.meta.url), 'utf8');
+  const counter = readFileSync(new URL('../src/server/memoryCounter.ts', import.meta.url), 'utf8');
+
+  assert.match(budget, /NOT a billing guarantee/, 'the budget overstates what it guarantees');
+  assert.match(counter, /in the process|per-instance|instance count/i);
+  assert.match(counter, /SPEED BUMP|speed bump/i);
 });

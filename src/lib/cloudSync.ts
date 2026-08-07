@@ -83,7 +83,7 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
 export type CloudResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /** Reads this user's row. A missing row is success with `null`, not an error. */
-export async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | null>> {
+async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | null>> {
   const supabase = await getSupabase();
   if (!supabase) return { ok: false, error: 'Cloud sync is not configured.' };
 

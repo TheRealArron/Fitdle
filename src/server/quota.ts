@@ -1,4 +1,6 @@
 import 'server-only';
+import type { QuotaState, Tier } from '@/lib/contracts';
+import { count, secondsUntilUtcMidnight, utcDay } from '@/server/memoryCounter';
 import { adminClient } from '@/server/supabase';
 
 /**
@@ -26,8 +28,6 @@ import { adminClient } from '@/server/supabase';
 
 const TABLE = 'fitdle_progress';
 
-export type Tier = 'free' | 'pro';
-
 /**
  * Daily AI messages, guide and coach combined.
  *
@@ -35,6 +35,8 @@ export type Tier = 'free' | 'pro';
  * their head. Two budgets that run out independently is the kind of thing that
  * reads as broken rather than as a policy.
  */
+export type { QuotaState, Tier };
+
 export const QUOTA: Record<Tier | 'anonymous', number> = {
   // Enough to answer a real question and see it is useful. Not enough to lean on.
   anonymous: 2,
@@ -46,19 +48,6 @@ export const QUOTA: Record<Tier | 'anonymous', number> = {
   pro: 100,
 };
 
-export interface QuotaState {
-  allowed: boolean;
-  used: number;
-  limit: number;
-  remaining: number;
-  tier: Tier | 'anonymous';
-}
-
-/** UTC day number. Lines the reset up with the puzzle rollover. */
-function today(): number {
-  return Math.floor(Date.now() / 86_400_000);
-}
-
 function normaliseTier(raw: unknown): Tier {
   // An unrecognised tier gets free limits rather than the benefit of the doubt.
   return raw === 'pro' ? 'pro' : 'free';
@@ -66,21 +55,16 @@ function normaliseTier(raw: unknown): Tier {
 
 /* ── anonymous ────────────────────────────────────────────────────────────── */
 
-const anon = new Map<string, { day: number; used: number }>();
-
 function claimAnonymous(key: string, consume: boolean): QuotaState {
   const limit = QUOTA.anonymous;
-  const day = today();
-  const entry = anon.get(key);
-  const used = entry && entry.day === day ? entry.used : 0;
-
-  if (used >= limit) {
-    return { allowed: false, used, limit, remaining: 0, tier: 'anonymous' };
-  }
-  if (consume) anon.set(key, { day, used: used + 1 });
-
-  const now = consume ? used + 1 : used;
-  return { allowed: true, used: now, limit, remaining: limit - now, tier: 'anonymous' };
+  const r = count(`quota:${key}`, limit, utcDay(), secondsUntilUtcMidnight(), consume);
+  return {
+    allowed: r.allowed,
+    used: r.count,
+    limit,
+    remaining: Math.max(0, limit - r.count),
+    tier: 'anonymous',
+  };
 }
 
 /* ── signed in ────────────────────────────────────────────────────────────── */
@@ -137,7 +121,7 @@ async function claimUser(userId: string, consume: boolean): Promise<QuotaState> 
 
   const tier = normaliseTier(data?.tier);
   const limit = QUOTA[tier];
-  const day = today();
+  const day = utcDay();
   // A row from another day reads as zero used - no sweep job needed.
   const used = data?.ai_day === day ? ((data?.ai_count as number) ?? 0) : 0;
 

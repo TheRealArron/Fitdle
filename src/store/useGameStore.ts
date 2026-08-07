@@ -17,6 +17,7 @@ import {
   submitGuess as submitGuessApi,
   type RevealedAnswer,
 } from '@/lib/api';
+import type { Hints } from '@/lib/contracts';
 import { adoptServerTime } from '@/lib/trustedTime';
 import { evaluateGuess, buildKeyStates, type LetterState } from '@/lib/evaluate';
 import {
@@ -488,7 +489,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
  * Guesses whose reveal animation has finished. Everything derived reads from
  * this so nothing updates mid-flip and spoils the reveal.
  */
-export function revealedCount(state: Pick<GameState, 'guesses' | 'revealingRow'>): number {
+function revealedCount(state: Pick<GameState, 'guesses' | 'revealingRow'>): number {
   return state.revealingRow === null ? state.guesses.length : state.revealingRow;
 }
 
@@ -497,11 +498,6 @@ export function selectKeyStates(state: GameState): Record<string, LetterState> {
   return buildKeyStates(state.guesses.slice(0, upTo), state.evaluations.slice(0, upTo));
 }
 
-export interface Hints {
-  category: MuscleGroup | null;
-  equipment: Equipment | null;
-  nextHintIn: number | null;
-}
 
 /**
  * Hints are computed server-side and arrive with each response, so the browser
@@ -520,6 +516,3 @@ export function selectWinRate(state: GameState): number {
   return played === 0 ? 0 : Math.round((wins / played) * 100);
 }
 
-export function displayNameOf(name: string): string {
-  return getExercise(name)?.display ?? name;
-}

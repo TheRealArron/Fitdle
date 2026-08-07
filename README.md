@@ -139,6 +139,39 @@ losses - the coaching is the point of the game.
 the interesting part, with the measurement behind each one and an explicit list
 of what was *not* verified.
 
+## Architecture
+
+```
+src/data/       the public catalogue - 99 exercises, muscles, equipment
+src/lib/        client logic + contracts.ts, the wire types both sides share
+src/server/     everything with `import 'server-only'` - answers, scoring,
+                sessions, quotas, the two model surfaces
+src/app/api/    six route handlers, each one thin
+src/components/ the UI
+```
+
+Three rules hold it together:
+
+**The answer never crosses into `src/lib`.** `src/server/answers.ts` is the only
+place the date→answer ordering exists, `server-only` makes an accidental client
+import a build error, and `npm run check:bundle` greps the compiled chunks as a
+second line.
+
+**Response shapes are declared once, in `src/lib/contracts.ts`.** It carries no
+`server-only` marker, so the API routes and the browser import the same
+declarations. They used to be declared twice and *happened* to agree - which is
+the dangerous version, because nothing would have caught the day they stopped.
+
+**Everything that counts, counts in one place.** Rate limiting, the AI budget
+and the anonymous quota were three `Map`s with three expiry rules and three
+copies of the same caveat. They are one primitive now
+(`src/server/memoryCounter.ts`), which is also the single seam if any of them
+ever needs to be authoritative rather than a speed bump.
+
+Continuous integration runs `npm run verify` on every push - typecheck, lint,
+200 tests, build, the answer-leak scan, the size ratchet, and a smoke test in
+both dev and production. Those guards only guard if they run.
+
 ## Where this deviates from `claude.md`, and why
 
 The spec was implemented as written except for the following. Each change is

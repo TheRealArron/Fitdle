@@ -103,7 +103,7 @@ export function makeRound(seed: number, count = 40): DrillQuestion[] {
  * Thresholds are deliberately reachable: the drill exists to teach the
  * catalogue, and a reward nobody gets teaches nobody anything.
  */
-export const DRILL_BADGES: ReadonlyArray<{ at: number; emoji: string; label: string }> = [
+const DRILL_BADGES: ReadonlyArray<{ at: number; emoji: string; label: string }> = [
   { at: 20, emoji: '🧠', label: 'Anatomist' },
   { at: 14, emoji: '💪', label: 'Sharp' },
   { at: 8, emoji: '🔥', label: 'Warmed up' },
@@ -116,7 +116,7 @@ export const DRILL_BADGES: ReadonlyArray<{ at: number; emoji: string; label: str
  * the only claim that distinguishes knowing the anatomy from guessing quickly -
  * and it is the thing worth signalling to someone reading your share.
  */
-export const FLAWLESS_MIN = 5;
+const FLAWLESS_MIN = 5;
 export const FLAWLESS_BADGE = { emoji: '🎓', label: 'Flawless' } as const;
 
 export function isFlawless(correct: number, wrong: number): boolean {

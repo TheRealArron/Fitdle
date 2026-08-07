@@ -1,3 +1,4 @@
+import type { RoundStatus } from '@/lib/contracts';
 import { MAX_GUESSES } from '@/data/exercises';
 import { daysBetweenSeeds } from '@/lib/daily';
 
@@ -40,7 +41,8 @@ const SAVE_VERSION = 2;
  */
 const DIGEST_KEY = 'fitdle/v2/streak-integrity';
 
-export type GameStatus = 'playing' | 'won' | 'lost';
+/** The same three states the API reports; declared once in contracts. */
+export type GameStatus = RoundStatus;
 
 export interface DayRecord {
   seed: number;

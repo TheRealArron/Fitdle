@@ -12,8 +12,8 @@ import type { LetterState } from '@/lib/evaluate';
  * instead of watching it. Slightly quicker per tile and a tighter stagger keeps
  * the cascade legible while getting the whole row done in about a second.
  */
-export const FLIP_DURATION = 0.5;
-export const FLIP_STAGGER = 0.075;
+const FLIP_DURATION = 0.5;
+const FLIP_STAGGER = 0.075;
 
 interface TileProps {
   letter: string;

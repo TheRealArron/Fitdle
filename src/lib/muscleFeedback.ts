@@ -1,7 +1,16 @@
 import { getExercise, musclesOf } from '@/data/exercises';
 import type { MuscleRegion } from '@/data/muscles';
 
-export interface MuscleFeedback {
+/**
+ * The RENDERING shape - Sets, because the figure asks "is this region lit?" once
+ * per region per frame.
+ *
+ * Distinct from `MuscleFeedback` in contracts.ts, which is the WIRE shape and
+ * uses arrays because JSON has no Set. They were both called MuscleFeedback,
+ * which is worse than duplication: two different types sharing a name, so a
+ * mistaken import type-errors somewhere far from the mistake.
+ */
+export interface MuscleSets {
   /** Worked by one of your guesses AND by the answer. Lights green. */
   shared: Set<MuscleRegion>;
   /** Worked by one of your guesses but NOT by the answer. Lights dim red. */
@@ -24,7 +33,7 @@ export function accumulateMuscleFeedback(
   // Structural, not nominal: the daily target arrives from the API as a plain
   // reveal payload, not a catalogue Exercise, and only the muscles matter here.
   target: { primary: MuscleRegion[]; secondary: MuscleRegion[] },
-): MuscleFeedback {
+): MuscleSets {
   const targetMuscles = musclesOf(target);
   const shared = new Set<MuscleRegion>();
   const missed = new Set<MuscleRegion>();

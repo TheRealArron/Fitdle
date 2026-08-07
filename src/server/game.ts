@@ -9,6 +9,7 @@ import {
   type Exercise,
 } from '@/data/exercises';
 import type { MuscleRegion } from '@/data/muscles';
+import type { MuscleFeedback, RoundStatus } from '@/lib/contracts';
 import { evaluateGuess, type LetterState } from '@/lib/evaluate';
 import { ANSWER_ORDER, COACHING } from '@/server/answers';
 
@@ -79,10 +80,7 @@ export function answerFor(seed: number): Exercise {
   return exercise;
 }
 
-export interface MuscleFeedback {
-  shared: MuscleRegion[];
-  missed: MuscleRegion[];
-}
+export type { MuscleFeedback };
 
 /** Overlap between everything guessed so far and the answer. */
 function muscleFeedback(guesses: string[], answer: Exercise): MuscleFeedback {
@@ -98,7 +96,8 @@ function muscleFeedback(guesses: string[], answer: Exercise): MuscleFeedback {
   return { shared: [...shared], missed: [...missed] };
 }
 
-export type GameStatus = 'playing' | 'won' | 'lost';
+/** Same three states the client save uses; declared once in contracts. */
+export type GameStatus = RoundStatus;
 
 export interface Reveal {
   name: string;

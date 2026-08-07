@@ -121,10 +121,18 @@ test('a failed counter write does not deny an entitled question', () => {
 });
 
 test('the day key is UTC, matching the puzzle rollover', () => {
-  // A quota that resets at a different moment than the puzzle is confusing for
-  // no benefit, and a stale row must read as zero rather than need a sweep job.
-  assert.match(quota, /Math\.floor\(Date\.now\(\) \/ 86_400_000\)/);
+  /*
+   * A quota resetting at a different moment than the puzzle is confusing for no
+   * benefit, and a stale row must read as zero rather than need a sweep job.
+   *
+   * The day arithmetic moved to the shared counter, so this checks the quota
+   * USES it rather than checking for an inline expression it no longer has.
+   */
+  assert.match(quota, /utcDay\(\)/, 'the quota does not use the shared UTC day');
   assert.match(quota, /ai_day === day/);
+
+  const counter = readFileSync(new URL('../src/server/memoryCounter.ts', import.meta.url), 'utf8');
+  assert.match(counter, /Math\.floor\(Date\.now\(\) \/ 86_400_000\)/);
 });
 
 test('the schema carries tier and the counters', () => {

@@ -3,7 +3,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Flame, Loader2, Target, Trophy } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { fetchBoard, type LeaderboardData } from '@/lib/api';
+import { fetchBoard } from '@/lib/api';
+import type { BoardEntry, BoardKind, LeaderboardResponse } from '@/lib/contracts';
 import { useAuthStore } from '@/store/useAuthStore';
 
 /**
@@ -15,7 +16,7 @@ import { useAuthStore } from '@/store/useAuthStore';
  * leaderboard is exactly where someone would go to collect stable identifiers.
  */
 
-type Which = 'streak' | 'daily';
+type Which = BoardKind;
 
 const TABS: ReadonlyArray<{ key: Which; label: string; icon: typeof Flame; unit: string }> = [
   { key: 'streak', label: 'Streaks', icon: Flame, unit: 'day' },
@@ -28,7 +29,7 @@ function plural(n: number, unit: string) {
 
 export function Leaderboard({ refreshKey = 0 }: { refreshKey?: number }) {
   const [which, setWhich] = useState<Which>('streak');
-  const [data, setData] = useState<LeaderboardData | null>(null);
+  const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const user = useAuthStore((s) => s.user);
@@ -122,7 +123,7 @@ export function Leaderboard({ refreshKey = 0 }: { refreshKey?: number }) {
             exit={{ opacity: 0 }}
             className="flex flex-col gap-1"
           >
-            {data.top.map((e) => (
+            {data.top.map((e: BoardEntry) => (
               <li
                 key={`${e.rank}-${e.name}`}
                 className={[

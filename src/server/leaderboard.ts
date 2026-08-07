@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Board, BoardEntry } from '@/lib/contracts';
 import { adminClient } from '@/server/supabase';
 
 /**
@@ -32,22 +33,6 @@ function displayName(raw: unknown): string {
   if (typeof raw !== 'string') return ANONYMOUS;
   const clean = raw.replace(/\s+/g, ' ').trim().slice(0, 20);
   return clean || ANONYMOUS;
-}
-
-export interface BoardEntry {
-  rank: number;
-  name: string;
-  /** Streak for the streak board; guess count for the daily board. */
-  value: number;
-  isYou: boolean;
-}
-
-export interface Board {
-  top: BoardEntry[];
-  /** The caller's standing when they are not in the top N. */
-  you: { rank: number; value: number; name: string } | null;
-  /** Total ranked players, so the UI can say "of 1,240". */
-  total: number;
 }
 
 interface Row {
