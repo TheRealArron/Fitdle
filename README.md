@@ -642,9 +642,19 @@ update, and that is the seam a checkout would write to. Choosing a processor,
 handling webhooks and holding customer money is a decision with legal and
 operational weight, not something to inherit from a default.
 
-**The bigger remaining lever is the model.** Both surfaces use `claude-opus-5`.
-For reciting fixed rules a smaller model would be several times cheaper and very
-likely just as good - a call worth making deliberately.
+**The model is the biggest remaining lever, and it is now a setting.**
+`FITDLE_GUIDE_MODEL` and `FITDLE_COACH_MODEL` both default to `claude-opus-5`.
+Per question that is ~$0.0038; `claude-haiku-4-5` is ~$0.0008. The guide recites
+rules already in its prompt, so a smaller model loses little there; the coach
+gives form advice, where the answer is the product. Haiku for the guide and Opus
+for the coach is a reasonable split.
+
+**Players cannot bring their own plan, and that is not a gap.** A Claude.ai
+subscription is not an API plan, and Anthropic has no flow for a third-party app
+to bill against someone's subscription. Asking for a pasted API key works only
+for an audience that has one, which a fitness game does not. Absorbing the cost
+behind a quota is what consumer apps do, and the quota is what makes it
+survivable.
 
 ### Ask the guide
 

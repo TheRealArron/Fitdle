@@ -19,7 +19,12 @@ import type { Reveal } from '@/server/game';
  * being invented.
  */
 
-const MODEL = 'claude-opus-5';
+/*
+ * Overridable, because the model is the single biggest lever on what this costs
+ * you and the right choice depends on your budget rather than on the code.
+ * See .env.example for the trade.
+ */
+const MODEL = process.env.FITDLE_COACH_MODEL?.trim() || 'claude-opus-5';
 
 /** Hard ceiling on what a caller can spend per question. */
 const MAX_QUESTION_CHARS = 400;

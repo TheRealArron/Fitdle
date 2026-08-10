@@ -167,3 +167,20 @@ test('exhausting the budget degrades, it does not throw', () => {
     assert.match(src, /daily limit\. It will be back tomorrow/);
   }
 });
+
+test('the model is overridable but defaults to opus', () => {
+  /*
+   * Cost is the reason this is configurable: the guide recites rules already in
+   * its prompt, so a smaller model loses little there, while the coach gives
+   * form advice where quality is the product. Defaulting to the capable one
+   * means an unset variable never quietly degrades answers.
+   */
+  const coach = readFileSync(new URL('../src/server/coach.ts', import.meta.url), 'utf8');
+  for (const [name, src, envvar] of [
+    ['guide', guide, 'FITDLE_GUIDE_MODEL'],
+    ['coach', coach, 'FITDLE_COACH_MODEL'],
+  ] as const) {
+    assert.ok(src.includes(`process.env.${envvar}`), `${name} model is hardcoded`);
+    assert.ok(src.includes("|| 'claude-opus-5'"), `${name} does not default to opus`);
+  }
+});

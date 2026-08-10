@@ -26,7 +26,12 @@ import { CATEGORY_HINT_AT, EQUIPMENT_HINT_AT, MAX_GUESSES } from '@/data/exercis
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 
-const MODEL = 'claude-opus-5';
+/*
+ * Overridable, because the model is the single biggest lever on what this costs
+ * you and the right choice depends on your budget rather than on the code.
+ * See .env.example for the trade.
+ */
+const MODEL = process.env.FITDLE_GUIDE_MODEL?.trim() || 'claude-opus-5';
 const MAX_QUESTION_CHARS = 300;
 
 export type GuideStatus = 'ok' | 'unconfigured' | 'refused' | 'error';
