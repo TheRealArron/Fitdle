@@ -45,7 +45,16 @@ export function daysBetweenSeeds(a: number, b: number): number {
 }
 
 /** Puzzle number, counting from the launch date. Used in share text. */
-const LAUNCH_SEED = 20260101;
+/*
+ * Puzzle #1. Set NEXT_PUBLIC_LAUNCH_DATE=YYYY-MM-DD to your deploy date and the
+ * numbering starts there. Changing it later renumbers every puzzle, including
+ * ones already shared - set it once, before launch.
+ */
+const LAUNCH_SEED = (() => {
+  const raw = process.env.NEXT_PUBLIC_LAUNCH_DATE?.trim();
+  const m = raw ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw) : null;
+  return m ? Number(m[1] + m[2] + m[3]) : 20260101;
+})();
 export function getPuzzleNumber(seed: number): number {
   return daysBetweenSeeds(LAUNCH_SEED, seed) + 1;
 }

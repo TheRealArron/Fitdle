@@ -117,13 +117,6 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
               </button>
             </div>
 
-            {!revealed && (
-              <p className="text-[11px] leading-snug text-slate-500">
-                What else trains this unlocks when the round ends - listing it now would
-                narrow today&rsquo;s answer for you.
-              </p>
-            )}
-
             {others.length > 0 && (
               <div className="mb-2">
                 <p className="label mb-1 text-[9px]">Trains it directly</p>

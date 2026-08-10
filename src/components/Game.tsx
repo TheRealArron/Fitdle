@@ -156,14 +156,18 @@ export function Game() {
     onOpenSettings: () => setSettingsOpen(true),
   };
 
+  // Tapping a muscle is a post-round feature: mid-round it narrows the answer.
+  const roundOver = gameStatus !== 'playing';
+
   const figure = (
     <BodyFigure
       shared={feedback.shared}
       missed={feedback.missed}
       category={categoryRegions}
       className="h-auto w-full"
-      onSelectRegion={(r) => setRegion((cur) => (cur === r ? null : r))}
-      selected={region}
+      onSelectRegion={roundOver ? (r) => setRegion((cur) => (cur === r ? null : r)) : undefined}
+      selectHint="show what else trains it"
+      selected={roundOver ? region : null}
     />
   );
 
@@ -256,7 +260,9 @@ export function Game() {
           <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
           {!region && (
             <p className="text-center text-[11px] leading-snug text-slate-500">
-              Tap a muscle to see what else trains it.
+              {roundOver
+                ? 'Tap a muscle to see what else trains it.'
+                : 'Muscle details unlock when the round ends.'}
             </p>
           )}
           <MuscleLegend className="w-full max-w-[13rem]" detailed />
