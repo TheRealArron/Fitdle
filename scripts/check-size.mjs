@@ -40,20 +40,47 @@ const c = {
  *           auth SDK that a signed-out player never calls.
  *   185 kB  It is now imported on demand, gated on a one-key localStorage probe
  *           that answers "is anyone signed in here?" without loading anything.
+ *   170 kB  Next 16 (Turbopack) shaved a further ~15 kB off the shared runtime.
  *
  * What is left is mostly irreducible for this app: React, framer-motion (the
  * tile flip and the figure), lucide icons, and the game itself.
  */
-const BUDGET_KB = 185;
+const BUDGET_KB = 170;
 
-const manifest = path.join(root, '.next', 'app-build-manifest.json');
-if (!fs.existsSync(manifest)) {
+/*
+ * Next moved this between majors: 15 wrote `app-build-manifest.json` with the
+ * app-router page chunks under `pages['/page']`; 16 emits `build-manifest.json`
+ * and lists the shared entry chunks in `rootMainFiles`.
+ *
+ * Both are read, newest first, so the budget keeps measuring the same thing
+ * across an upgrade instead of silently reporting "no build found" - which is
+ * how a size check quietly stops guarding anything.
+ */
+function firstLoadChunks() {
+  const app = path.join(root, '.next', 'app-build-manifest.json');
+  if (fs.existsSync(app)) {
+    const { pages } = JSON.parse(fs.readFileSync(app, 'utf8'));
+    const list = pages?.['/page'];
+    if (list?.length) return [...new Set(list)];
+  }
+
+  const build = path.join(root, '.next', 'build-manifest.json');
+  if (fs.existsSync(build)) {
+    const m = JSON.parse(fs.readFileSync(build, 'utf8'));
+    const list = [...(m.rootMainFiles ?? []), ...(m.polyfillFiles ?? [])];
+    if (list.length) return [...new Set(list)];
+  }
+
+  return null;
+}
+
+const found = firstLoadChunks();
+if (!found) {
   console.log(c.bad('✗ no build found - run `npm run build` first'));
   process.exit(1);
 }
 
-const { pages } = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-const files = [...new Set(pages['/page'] ?? [])].filter((f) => f.endsWith('.js'));
+const files = found.filter((f) => f.endsWith('.js'));
 
 let total = 0;
 const rows = [];

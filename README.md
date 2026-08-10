@@ -3,7 +3,7 @@
 A fitness-themed daily deduction game. Guess the exercise in six tries, using
 two independent feedback channels: letters, and the muscles it works.
 
-Next.js 15 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer Motion · Lucide
+Next.js 16 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer Motion · Lucide
 
 ```bash
 npm install

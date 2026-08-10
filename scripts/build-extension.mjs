@@ -48,6 +48,19 @@ const API_PARKED = path.join(root, '.api-parked');
 function run() {
   console.log('› building static export…');
 
+  /*
+   * Next 16 generates `.next/dev/types/validator.ts` importing every route it
+   * saw last time. With the API parked those modules are temporarily absent, so
+   * typechecking fails on a stale artefact describing a tree that no longer
+   * matches.
+   *
+   * Only the generated types are cleared, not the whole of `.next` - the build
+   * cache is expensive to rebuild and is not what is wrong.
+   */
+  for (const dir of ['dev/types', 'types']) {
+    fs.rmSync(path.join(root, '.next', dir), { recursive: true, force: true });
+  }
+
   const hadApi = fs.existsSync(API_DIR);
   if (hadApi) fs.renameSync(API_DIR, API_PARKED);
   try {

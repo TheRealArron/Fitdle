@@ -6,8 +6,8 @@ import { Modal } from './Modal';
 interface LeaderboardModalProps {
   open: boolean;
   onClose: () => void;
-  /** Bumped after a win so the board reloads and the player sees themselves move. */
-  refreshKey?: number;
+  /** Changes when the round ends, so the board reloads with the new standing. */
+  refreshKey?: string;
 }
 
 export function LeaderboardModal({ open, onClose, refreshKey }: LeaderboardModalProps) {

@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Flame, Loader2, Target, Trophy } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchBoard } from '@/lib/api';
 import type { BoardEntry, BoardKind, LeaderboardResponse } from '@/lib/contracts';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -27,31 +27,42 @@ function plural(n: number, unit: string) {
   return `${n} ${unit}${n === 1 ? '' : 's'}`;
 }
 
-export function Leaderboard({ refreshKey = 0 }: { refreshKey?: number }) {
+export function Leaderboard({ refreshKey = '' }: { refreshKey?: string }) {
   const [which, setWhich] = useState<Which>('streak');
-  const [data, setData] = useState<LeaderboardResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  /*
+   * One state value carrying which request it answers, so `loading` is DERIVED
+   * rather than stored. Storing it meant setting it synchronously inside the
+   * effect, which re-renders just to say "I am about to fetch" - and the result
+   * still has to be compared against the current tab anyway, or a slow response
+   * for the streaks board can land after you have switched to today's.
+   */
+  const [result, setResult] = useState<
+    { for: string; data: LeaderboardResponse | null; error: string | null } | null
+  >(null);
   const user = useAuthStore((s) => s.user);
 
-  const load = useCallback(async (board: Which) => {
-    setLoading(true);
-    setError(null);
-    const result = await fetchBoard(board);
-    setLoading(false);
-    if (!result.ok) {
-      setError(result.error);
-      setData(null);
-      return;
-    }
-    setData(result.data);
-  }, []);
+  const request = `${which}:${refreshKey}`;
+  const loading = result?.for !== request;
+  const data = loading ? null : result.data;
+  const error = loading ? null : result.error;
 
-  // `refreshKey` changes after a win, so the player watches their own name move
-  // rather than having to reopen the panel.
   useEffect(() => {
-    void load(which);
-  }, [which, refreshKey, load]);
+    let live = true;
+    void (async () => {
+      const r = await fetchBoard(which);
+      // Only the newest request may write; an earlier one resolving late must
+      // not overwrite it.
+      if (!live) return;
+      setResult({
+        for: request,
+        data: r.ok ? r.data : null,
+        error: r.ok ? null : r.error,
+      });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [which, request]);
 
   const tab = TABS.find((t) => t.key === which)!;
 

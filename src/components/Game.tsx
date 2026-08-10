@@ -67,10 +67,18 @@ export function Game() {
    * sends the new overlap with the guess response, so the previous value is
    * kept and shown until the animation completes.
    */
+  /*
+   * Adjusted during render, not in an effect - React's documented pattern for
+   * "state derived from a prop change". An effect would paint the new map for
+   * one frame before correcting itself, which is the flicker this exists to
+   * prevent; a ref would be impure. Setting state here re-renders before paint.
+   */
   const [previousMuscles, setPreviousMuscles] = useState(muscles);
-  useEffect(() => {
+  const [lastRevealing, setLastRevealing] = useState(revealingRow);
+  if (lastRevealing !== revealingRow) {
+    setLastRevealing(revealingRow);
     if (revealingRow === null) setPreviousMuscles(muscles);
-  }, [revealingRow, muscles]);
+  }
 
   /*
    * The daily is over AND the player has dismissed the result. Practice is
@@ -84,8 +92,6 @@ export function Game() {
   const [drillOpen, setDrillOpen] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  /* Bumped when a round ends so the board reloads with the new standing. */
-  const [boardKey, setBoardKey] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
   const [indexOpen, setIndexOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -137,13 +143,11 @@ export function Game() {
   );
 
   /*
-   * The server banks the result as the round ends, so the board is already
-   * stale by the time the player looks at it. Bumping the key on that
-   * transition means they open it to their new rank rather than their old one.
+   * Derived, not stored. The server banks the result as the round ends, so the
+   * board is stale the moment the status changes - and a value computed from
+   * that status says so without an effect that re-renders to announce it.
    */
-  useEffect(() => {
-    if (mode === 'daily' && gameStatus !== 'playing') setBoardKey((k) => k + 1);
-  }, [mode, gameStatus]);
+  const boardKey = `${mode}:${gameStatus}`;
 
   const sidebarActions = {
     onOpenHelp: () => setHelpOpen(true),

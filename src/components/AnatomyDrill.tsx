@@ -43,7 +43,9 @@ export function AnatomyDrill() {
   const [index, setIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [wrong, setWrong] = useState(0);
-  const [best, setBest] = useState(0);
+  // Lazy initialiser rather than an effect: the value is known at first render,
+  // and setting it afterwards forced a second one.
+  const [best, setBest] = useState(() => loadSave().save.drillBest ?? 0);
   const [remaining, setRemaining] = useState(DRILL_SECONDS);
   const [picked, setPicked] = useState<MuscleRegion | null>(null);
   /*
@@ -56,10 +58,6 @@ export function AnatomyDrill() {
    */
   const shake = useAnimationControls();
   const deadline = useRef(0);
-
-  useEffect(() => {
-    setBest(loadSave().save.drillBest ?? 0);
-  }, []);
 
   const finish = useCallback((finalScore: number, finalWrong: number) => {
     setPhase('over');

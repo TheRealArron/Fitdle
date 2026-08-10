@@ -15,11 +15,7 @@
 
 ## Known and accepted
 
-**`sharp` / `postcss` advisories (npm audit, 3 high).** Transitive through Next
-15.5.23, the latest in that line; patching needs a Next 16 major. Not reachable
-here: `sharp` only runs for `next/image`, which this app does not use (plain
-`<img>` for one CDN thumbnail), and `postcss` is build-time only. Re-check on
-the next Next major.
+`npm audit` reports **0 vulnerabilities** on Next 16.3.0.
 
 **In-process counters.** Rate limits, the global AI budget and the anonymous
 quota count per instance, so they multiply across instances and reset on cold
