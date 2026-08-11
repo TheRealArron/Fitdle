@@ -19,12 +19,12 @@ interface Row {
 
 const ROWS: Row[] = [
   {
-    swatch: 'bg-state-correct',
+    swatch: 'bg-figure-shared',
     title: 'Shared',
     detail: 'Your guess and the answer both work this muscle.',
   },
   {
-    swatch: 'bg-state-excluded',
+    swatch: 'bg-figure-missed',
     title: 'Ruled out',
     detail: 'Your guess works it, the answer does not.',
   },

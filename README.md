@@ -21,6 +21,7 @@ npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
 npm run check:size       # first-load JS budget (gzipped)
+npm run check:contrast   # WCAG contrast across all 10 theme combinations
 npm run cloud:check      # verify Supabase keys, schema and RLS
 npm run coach:probe      # adversarial test of the coach's safety guardrail
 npm run build:extension  # -> extension-dist/, loadable in chrome://extensions

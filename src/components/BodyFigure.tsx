@@ -155,11 +155,11 @@ export type RegionState = 'shared' | 'missed' | 'idle';
 
 const FILL: Record<RegionState, string> = {
   // Your guess and the answer both work this muscle.
-  shared: 'var(--color-state-correct)',
+  shared: 'var(--color-figure-shared)',
   // Your guess works it; the answer does not. Must be the variable, not the
   // literal - the legend reads the variable, so a hardcoded hex here meant
   // colourblind mode recoloured the key while leaving the figure unchanged.
-  missed: 'var(--color-state-excluded)',
+  missed: 'var(--color-figure-missed)',
   idle: 'var(--color-tile-empty)',
 };
 

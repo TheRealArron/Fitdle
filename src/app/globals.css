@@ -34,6 +34,35 @@
      wine rather than a true red: it must read as "ruled out", not "error". */
   --color-state-excluded: #7f1d3a;
 
+  /*
+   * The ANATOMY FIGURE's own state colours, separate from the board's.
+   *
+   * The board's three colours are theme-invariant so a screenshot means the
+   * same thing everywhere. The figure cannot use them unchanged: they are
+   * mid-tone, and the figure paints them onto a body whose lightness flips with
+   * the theme. Measured against the body, green and amber came out at 1.79:1
+   * and 1.51:1 on the light theme, and the wine at 1.74:1 on the dark ones -
+   * all far below the 3:1 that non-text UI needs to read as a state at all.
+   *
+   * No single palette fixes both: the three states span the luminance range, so
+   * any body colour that separates from the wine sits on top of the green.
+   * Splitting them lets each theme pick values that clear 3:1 against its own
+   * body, while the board keeps its invariant colours. The legend reads from
+   * these, so the key always matches what is drawn.
+   */
+  --color-figure-shared: #22c55e;
+  --color-figure-missed: #e11d48;
+
+  /*
+   * Muted text, one step lighter than Tailwind's slate-500.
+   *
+   * #64748b measured 3.99:1 on the darkest theme - a fail, and on exactly the
+   * small uppercase labels that use it most. The light theme had already been
+   * corrected in isolation, which is how the dark ones stayed broken: fixing a
+   * colour in the theme you happen to have open says nothing about the others.
+   */
+  --color-slate-500: #72839c;
+
   /* ── accent: used for focus, links and the brand mark only ── */
   --color-accent: #34d399;
   --color-accent-dim: #0f3d31;
@@ -167,6 +196,21 @@
    */
   --color-slate-500: #5b6b80;
   --color-slate-600: #94a3b8;
+
+  /*
+   * The rose scale, used for error text on a tinted background.
+   *
+   * rose-200/300 are near-white pinks chosen to sit on a DARK tint. On a light
+   * surface the same tint comes out pale and the text disappears into it -
+   * measured at 1.12:1, which is invisible rather than merely low. Inverting
+   * them the way the slate ramp is inverted fixes every use at once.
+   */
+  --color-rose-200: #881337;
+  --color-rose-300: #9f1239;
+
+  /* Against a light body the mid-tone green vanishes; the wine already works. */
+  --color-figure-shared: #15803d;
+  --color-figure-missed: #7f1d3a;
 }
 
 /*
@@ -227,6 +271,24 @@
   --color-state-excluded: #7c2d12;
   --color-accent: #60a5fa;
   --color-accent-dim: #14304f;
+
+  /*
+   * The figure has its own pair, and colourblind mode has to override both or
+   * the map keeps painting green and wine while the board turns blue and orange.
+   * The board's #7c2d12 is far too dark to read against a dark body (1.82:1), so
+   * the figure takes a brighter orange.
+   */
+  --color-figure-shared: #3b82f6;
+  --color-figure-missed: #ea580c;
+}
+
+/*
+ * Colourblind ON a light theme. Both pairs flip again: the mid blue drops to
+ * 2.89:1 against a light body, and the bright orange is worse.
+ */
+:root[data-colourblind][data-theme='daylight'] {
+  --color-figure-shared: #1d4ed8;
+  --color-figure-missed: #9a3412;
 }
 
 :root[data-colourblind] .tile-glow-correct {
