@@ -102,16 +102,42 @@ async function check(mode) {
     execSync('npx next build', { cwd: root, stdio: 'pipe' });
   }
 
+  /*
+   * Output is captured, not discarded.
+   *
+   * Next 16 refuses to start a second dev server for the same directory - it
+   * exits with an explanation naming the PID of the one already running. With
+   * stdio ignored, all of that was invisible and the script reported a bare
+   * "server never came up", which is true and useless. The common case for this
+   * script failing locally is that you have `npm run dev` open in another
+   * terminal, and it should say so.
+   */
+  let output = '';
   const server = spawn(mode.cmd[0], mode.cmd.slice(1), {
     cwd: root,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
     env: { ...process.env, NODE_ENV: mode.name === 'dev' ? 'development' : 'production' },
   });
+  server.stdout?.on('data', (d) => (output += d));
+  server.stderr?.on('data', (d) => (output += d));
 
   try {
     if (!(await waitForServer(mode.port))) {
-      console.log(c.bad(`✗ server never came up on :${mode.port}`));
+      const already = /Another next dev server is already running[\s\S]*?PID:\s*(\d+)/.exec(output);
+      if (already) {
+        console.log(c.bad('✗ a dev server is already running for this directory'));
+        console.log(
+          c.dim(
+            `  Next only allows one per project. Stop it and re-run:  kill ${already[1]}\n` +
+              `  Or check just production:  npm run smoke -- prod`,
+          ),
+        );
+      } else {
+        console.log(c.bad(`✗ server never came up on :${mode.port}`));
+        const tail = output.trim().split('\n').slice(-3).join('\n      ');
+        if (tail) console.log(c.dim(`      ${tail}`));
+      }
       failures++;
       return;
     }
