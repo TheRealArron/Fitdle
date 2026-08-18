@@ -1,7 +1,16 @@
-import { getExercise, musclesOf, type Exercise } from '@/data/exercises';
+import { getExercise, musclesOf } from '@/data/exercises';
 import type { MuscleRegion } from '@/data/muscles';
 
-export interface MuscleFeedback {
+/**
+ * The RENDERING shape - Sets, because the figure asks "is this region lit?" once
+ * per region per frame.
+ *
+ * Distinct from `MuscleFeedback` in contracts.ts, which is the WIRE shape and
+ * uses arrays because JSON has no Set. They were both called MuscleFeedback,
+ * which is worse than duplication: two different types sharing a name, so a
+ * mistaken import type-errors somewhere far from the mistake.
+ */
+export interface MuscleSets {
   /** Worked by one of your guesses AND by the answer. Lights green. */
   shared: Set<MuscleRegion>;
   /** Worked by one of your guesses but NOT by the answer. Lights dim red. */
@@ -13,7 +22,7 @@ export interface MuscleFeedback {
  *
  * Crucially this only ever reports on muscles you have *probed*. The answer's
  * untouched muscles stay dark, so the figure narrows the search space without
- * handing over the category — that is what the guess-3 hint is for.
+ * handing over the category - that is what the guess-3 hint is for.
  *
  * A region is `shared` if any guess so far shares it with the answer, and
  * `missed` only if it has been hit by a guess and is not in the answer. The two
@@ -21,8 +30,10 @@ export interface MuscleFeedback {
  */
 export function accumulateMuscleFeedback(
   guesses: string[],
-  target: Exercise,
-): MuscleFeedback {
+  // Structural, not nominal: the daily target arrives from the API as a plain
+  // reveal payload, not a catalogue Exercise, and only the muscles matter here.
+  target: { primary: MuscleRegion[]; secondary: MuscleRegion[] },
+): MuscleSets {
   const targetMuscles = musclesOf(target);
   const shared = new Set<MuscleRegion>();
   const missed = new Set<MuscleRegion>();
@@ -40,7 +51,10 @@ export function accumulateMuscleFeedback(
 }
 
 /** How much of the answer's muscle map you have uncovered, 0–1. */
-export function discoveryRatio(shared: ReadonlySet<MuscleRegion>, target: Exercise): number {
+export function discoveryRatio(
+  shared: ReadonlySet<MuscleRegion>,
+  target: { primary: MuscleRegion[]; secondary: MuscleRegion[] },
+): number {
   const total = musclesOf(target).size;
   return total === 0 ? 0 : shared.size / total;
 }

@@ -5,7 +5,7 @@
  * DESIGN SYSTEM
  * ─────────────────────────────────────────────────────────────────────────────
  * Built around one decision: the three tile states are the only saturated
- * colours in the product. Everything else — surfaces, text, borders, chrome —
+ * colours in the product. Everything else - surfaces, text, borders, chrome -
  * is a cool neutral ramp, so the eye goes straight to the board and the muscle
  * figure and nothing competes with them.
  *
@@ -34,6 +34,35 @@
      wine rather than a true red: it must read as "ruled out", not "error". */
   --color-state-excluded: #7f1d3a;
 
+  /*
+   * The ANATOMY FIGURE's own state colours, separate from the board's.
+   *
+   * The board's three colours are theme-invariant so a screenshot means the
+   * same thing everywhere. The figure cannot use them unchanged: they are
+   * mid-tone, and the figure paints them onto a body whose lightness flips with
+   * the theme. Measured against the body, green and amber came out at 1.79:1
+   * and 1.51:1 on the light theme, and the wine at 1.74:1 on the dark ones -
+   * all far below the 3:1 that non-text UI needs to read as a state at all.
+   *
+   * No single palette fixes both: the three states span the luminance range, so
+   * any body colour that separates from the wine sits on top of the green.
+   * Splitting them lets each theme pick values that clear 3:1 against its own
+   * body, while the board keeps its invariant colours. The legend reads from
+   * these, so the key always matches what is drawn.
+   */
+  --color-figure-shared: #22c55e;
+  --color-figure-missed: #e11d48;
+
+  /*
+   * Muted text, one step lighter than Tailwind's slate-500.
+   *
+   * #64748b measured 3.99:1 on the darkest theme - a fail, and on exactly the
+   * small uppercase labels that use it most. The light theme had already been
+   * corrected in isolation, which is how the dark ones stayed broken: fixing a
+   * colour in the theme you happen to have open says nothing about the others.
+   */
+  --color-slate-500: #72839c;
+
   /* ── accent: used for focus, links and the brand mark only ── */
   --color-accent: #34d399;
   --color-accent-dim: #0f3d31;
@@ -48,6 +77,247 @@
 
   /* ── motion ── */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/*
+ * Themes.
+ *
+ * Surfaces and accent only - the three result colours are deliberately absent
+ * from every block below. A screenshot has to mean the same thing whichever
+ * theme took it, and the shared emoji grid has to keep matching the board.
+ *
+ * Each theme is one hue held across the whole surface ramp, exactly as the
+ * default is, so they stay internally consistent rather than becoming a pile of
+ * unrelated greys.
+ */
+:root[data-theme='graphite'] {
+  --color-void: #08090b;
+  --color-app-bg: #0e1013;
+  --color-surface: #16181d;
+  --color-surface-2: #1e2127;
+  --color-tile-empty: #191c21;
+  --color-tile-border: #2c3038;
+  --color-tile-filled: #4a505c;
+  --color-key-idle: #343941;
+  --color-key-hover: #424852;
+  --color-accent: #a3e635;
+  --color-accent-dim: #2c3a12;
+}
+
+:root[data-theme='abyss'] {
+  --color-void: #01080c;
+  --color-app-bg: #04121a;
+  --color-surface: #071c27;
+  --color-surface-2: #0b2634;
+  --color-tile-empty: #08202c;
+  --color-tile-border: #133849;
+  --color-tile-filled: #2b6076;
+  --color-key-idle: #17475c;
+  --color-key-hover: #1e5871;
+  --color-accent: #22d3ee;
+  --color-accent-dim: #0b3b45;
+}
+
+:root[data-theme='plum'] {
+  --color-void: #0a050f;
+  --color-app-bg: #120a1b;
+  --color-surface: #1b1027;
+  --color-surface-2: #241634;
+  --color-tile-empty: #1d1129;
+  --color-tile-border: #372348;
+  --color-tile-filled: #614080;
+  --color-key-idle: #3d2954;
+  --color-key-hover: #4b3366;
+  --color-accent: #c084fc;
+  --color-accent-dim: #33184a;
+}
+
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Daylight - the one theme that inverts rather than re-tints.
+ *
+ * The other three are one hue held across a dark ramp. This one has to flip the
+ * whole thing, and the codebase writes text as `text-white` and `text-slate-300`
+ * throughout - literal utilities, not semantic tokens.
+ *
+ * Rewriting 67 call sites was the obvious approach and the wrong one. Tailwind 4
+ * compiles `.text-slate-300 { color: var(--color-slate-300) }`, so remapping the
+ * variables under this selector re-points every one of them at once.
+ *
+ * Remapping `--color-white` also flips the translucent overlays this design
+ * leans on - `bg-white/[0.06]`, `border-white/10`, `ring-white/10` all become
+ * subtle DARK tints, which is exactly what they should be on a light surface.
+ * That single line does most of the work.
+ *
+ * The three result colours are absent here, as in every theme: a screenshot has
+ * to mean the same thing whichever theme took it, and the shared emoji grid has
+ * to keep matching the board.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+:root[data-theme='daylight'] {
+  --color-void: #e7ecf3;
+  --color-app-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef2f7;
+  /*
+   * NOT pure white, and that is deliberate.
+   *
+   * `--color-tile-empty` does double duty: the empty tile's background AND the
+   * anatomy figure's idle muscle fill. On a dark theme both read fine against
+   * their surroundings. On white, a white figure disappears entirely - the
+   * limbs vanish and only the lit muscles remain, floating.
+   *
+   * A light grey keeps the tiles reading as empty (they carry a border) while
+   * giving the figure a body to sit on.
+   */
+  --color-tile-empty: #dde5ef;
+  --color-tile-border: #9fb0c4;
+  --color-tile-filled: #64748b;
+  --color-key-idle: #dfe5ee;
+  --color-key-hover: #cbd5e1;
+  /* Darker than the dark themes' accent: #34d399 on white fails contrast. */
+  --color-accent: #047857;
+  --color-accent-dim: #d1fae5;
+
+  /*
+   * The inversion. `text-white` is this app's primary text colour, so on a
+   * light surface it has to become near-black - and every `white/x` overlay
+   * follows it automatically.
+   */
+  --color-white: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  /*
+   * #64748b - slate-500 unchanged - measures 4.43:1 against this page. That is
+   * a fail, and it fails on exactly the small uppercase labels where it is used
+   * most. Darkened until it clears AA against both the page and white cards.
+   */
+  --color-slate-500: #5b6b80;
+  --color-slate-600: #94a3b8;
+
+  /*
+   * The rose scale, used for error text on a tinted background.
+   *
+   * rose-200/300 are near-white pinks chosen to sit on a DARK tint. On a light
+   * surface the same tint comes out pale and the text disappears into it -
+   * measured at 1.12:1, which is invisible rather than merely low. Inverting
+   * them the way the slate ramp is inverted fixes every use at once.
+   */
+  --color-rose-200: #881337;
+  --color-rose-300: #9f1239;
+
+  /* Against a light body the mid-tone green vanishes; the wine already works. */
+  --color-figure-shared: #15803d;
+  --color-figure-missed: #7f1d3a;
+}
+
+/*
+ * The exception to the inversion: text sitting ON a saturated result colour.
+ *
+ * Those backgrounds do not change between themes, so their text must not
+ * either. Targets the SOLID utilities only - Tailwind emits `bg-state-correct`
+ * and `bg-state-correct\/15` as separate classes, so the translucent tints used
+ * for highlight rows are untouched and correctly take dark text.
+ */
+:root[data-theme='daylight'] .bg-state-correct,
+:root[data-theme='daylight'] .bg-state-absent,
+:root[data-theme='daylight'] .bg-state-excluded {
+  color: #ffffff;
+}
+
+/* A light theme needs no ambient glow; on white it reads as a smudge. */
+:root[data-theme='daylight'] body::before {
+  background: none;
+}
+
+/* The ambient wash follows the accent so the light source stays coherent. */
+:root[data-theme='graphite'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(163, 230, 53, 0.05), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(255, 255, 255, 0.03), transparent 60%);
+}
+
+:root[data-theme='abyss'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(14, 116, 144, 0.06), transparent 60%);
+}
+
+:root[data-theme='plum'] body::before {
+  background:
+    radial-gradient(80rem 50rem at 50% -10%, rgba(192, 132, 252, 0.08), transparent 60%),
+    radial-gradient(60rem 40rem at 50% 110%, rgba(129, 60, 200, 0.05), transparent 60%);
+}
+
+/*
+ * Colourblind-safe palette.
+ *
+ * The whole game is two colour channels - green/yellow on the tiles and
+ * keyboard, green/wine on the muscle figure - and red-green deficiency is the
+ * common one, so both channels fail together for roughly 1 in 12 men. Swapping
+ * to blue/orange keeps the same hue *distance* while separating on a axis that
+ * deuteranopes and protanopes can still read, and orange stays distinguishable
+ * from blue for tritanopes too.
+ *
+ * Overriding the variables rather than the components means tiles, keys, the
+ * figure, the legend, the chips and the share emoji all change together - there
+ * is no surface that can be forgotten.
+ */
+:root[data-colourblind] {
+  --color-state-correct: #3b82f6;
+  --color-state-present: #f97316;
+  --color-state-excluded: #7c2d12;
+  --color-accent: #60a5fa;
+  --color-accent-dim: #14304f;
+
+  /*
+   * The figure has its own pair, and colourblind mode has to override both or
+   * the map keeps painting green and wine while the board turns blue and orange.
+   * The board's #7c2d12 is far too dark to read against a dark body (1.82:1), so
+   * the figure takes a brighter orange.
+   */
+  --color-figure-shared: #3b82f6;
+  --color-figure-missed: #ea580c;
+}
+
+/*
+ * Colourblind ON a light theme. Both pairs flip again: the mid blue drops to
+ * 2.89:1 against a light body, and the bright orange is worse.
+ */
+:root[data-colourblind][data-theme='daylight'] {
+  --color-figure-shared: #1d4ed8;
+  --color-figure-missed: #9a3412;
+}
+
+:root[data-colourblind] .tile-glow-correct {
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 4px 20px -4px rgba(59, 130, 246, 0.45);
+}
+
+:root[data-colourblind] .tile-glow-present {
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.5), 0 4px 20px -4px rgba(249, 115, 22, 0.4);
+}
+
+:root[data-colourblind] .btn-primary {
+  color: #04121f;
+  background-image: linear-gradient(180deg, #60a5fa, #3b82f6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 18px -6px rgba(59, 130, 246, 0.65);
+}
+
+/* Orange holds white text where the default yellow could not. */
+:root[data-colourblind] .on-present {
+  color: #ffffff;
+}
+
+:root[data-reduce-motion] *,
+:root[data-reduce-motion] *::before,
+:root[data-reduce-motion] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }
 
 html,
@@ -67,7 +337,7 @@ body {
 
 /*
  * A single very large, very dim radial wash behind the board. It gives the
- * page a light source so flat panels read as surfaces rather than blocks —
+ * page a light source so flat panels read as surfaces rather than blocks -
  * the cheapest way to make a dark UI feel deliberate. Fixed and non-scrolling,
  * so it costs one paint.
  */
@@ -90,7 +360,7 @@ body > * {
 /* ── typography helpers ─────────────────────────────────────────────────── */
 
 /*
- * Section labels. Small, wide-tracked, low-contrast — the standard way to make
+ * Section labels. Small, wide-tracked, low-contrast - the standard way to make
  * a label recede so the value beside it can carry the hierarchy. Applied via a
  * class because it is used in a dozen places and must stay identical.
  */
@@ -100,7 +370,13 @@ body > * {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  /*
+   * The variable, not the literal it used to be. A hardcoded hex here ignored
+   * the theme entirely - which went unnoticed while every theme was dark, and
+   * showed up immediately on a light one as 4.4:1 on the small uppercase text
+   * that uses this class most.
+   */
+  color: var(--color-slate-500);
 }
 
 /* Numerals that must not shift width as they tick (timers, streaks, scores). */
@@ -133,7 +409,13 @@ body > * {
 }
 
 .tile-perspective {
-  perspective: 1000px;
+  /*
+   * 1000px on a ~60px tile is very nearly orthographic - the near edge barely
+   * grows as it turns, so the flip reads as a vertical squash rather than a
+   * rotation. Bringing the camera in gives the turn real depth. Too tight and
+   * the tile fish-eyes, so this is deliberately at the shallow end of "obvious".
+   */
+  perspective: 560px;
   /* Makes the tile its own container so letters can size in `cqw`. Grid width
      varies 5–9 by day, so tiles must scale their own type. */
   container-type: inline-size;
@@ -141,15 +423,28 @@ body > * {
 
 .tile-3d {
   transform-style: preserve-3d;
+  /*
+   * Promote to its own compositor layer for the duration of the flip. Without
+   * it the browser rasterises the rotating element on the main thread and the
+   * turn stutters on exactly the low-end phones that need it not to.
+   */
+  will-change: transform;
 }
 
 .tile-face {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  /*
+   * Forces each face onto the GPU too. Without it the two faces are rasterised
+   * together and the hidden one bleeds a hairline through the visible face
+   * mid-rotation - visible as a flicker at the halfway point.
+   */
+  transform: translateZ(0);
 }
 
 .tile-face-back {
-  transform: rotateX(180deg);
+  /* Must compose with the translateZ above, not replace it. */
+  transform: rotateX(180deg) translateZ(0);
 }
 
 /*
@@ -280,6 +575,11 @@ body > * {
   .tile-3d * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+
+  /* No point holding a compositor layer for an animation that does not run. */
+  .tile-3d {
+    will-change: auto;
   }
 }
 

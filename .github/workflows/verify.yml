@@ -1,0 +1,46 @@
+# The guards only guard if they run.
+#
+# check:bundle proves the answer schedule is not in the shipped JS, check:size
+# holds the payload ratchet, and smoke boots the app in BOTH dev and production
+# because two dead-page regressions passed every other check. All of that was
+# opt-in until this file existed, which is the wrong shape for exactly the class
+# of bug they exist to catch - a leak, a silent bundle creep, a calendar
+# reshuffle. Nobody notices those by hand.
+name: verify
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# A newer push makes an in-flight run pointless; cancel it rather than queue.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # `npm run smoke` boots a production server, and session.ts refuses to
+      # start without a secret - correctly, since an unsigned token looks like a
+      # guarantee and is not one. This value is CI-only and signs nothing real.
+      FITDLE_SESSION_SECRET: ci-only-not-a-real-secret-000000000000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Chromium only. smoke drives a real browser; the other engines are not
+      # used and would triple the install.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run verify

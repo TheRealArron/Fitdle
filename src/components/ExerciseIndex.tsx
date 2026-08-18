@@ -16,7 +16,7 @@ interface ExerciseIndexProps {
  * The fix for "players will never know what to guess".
  *
  * Wordle works because every player already carries the answer space in their
- * head — common English. Nobody carries a list of exercise names, so the game
+ * head - common English. Nobody carries a list of exercise names, so the game
  * has to hand it over. This is the full vocabulary, defaulting to today's
  * length so it doubles as the candidate list for the puzzle in front of you.
  */
@@ -52,7 +52,7 @@ export function ExerciseIndex({ open, onClose }: ExerciseIndexProps) {
     <Modal open={open} onClose={onClose} title="Exercise list">
       <div className="flex flex-col gap-4">
         <p className="text-sm leading-relaxed text-slate-400">
-          Every exercise you can type. Names are letters only — no spaces or hyphens, and
+          Every exercise you can type. Names are letters only - no spaces or hyphens, and
           singular. Pull-ups is <span className="font-game text-slate-200">PULLUP</span>.
         </p>
 

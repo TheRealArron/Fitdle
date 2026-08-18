@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  ANSWERS,
-  formVideoId,
-  formVideoUrl,
-  searchVideoUrl,
-  videoThumbnailUrl,
-} from '@/data/exercises';
+import { searchVideoUrl, videoThumbnailUrl } from '@/data/exercises';
+import { readFileSync } from 'node:fs';
+import { ANSWER_ORDER, COACHING } from '@/server/answers';
+
+const formVideoId = (name: string): string | null => COACHING[name]?.videoId ?? null;
 
 /**
  * These are offline shape checks. Liveness was verified separately against
@@ -14,33 +12,77 @@ import {
  * test must not depend on the network.
  */
 
-test('every answer has a curated form video', () => {
-  for (const a of ANSWERS) {
-    assert.ok(formVideoId(a.name), `${a.name} has no pinned video`);
+/**
+ * Answers deliberately shipped without a pinned video.
+ *
+ * They fall back to a YouTube search, which always resolves to something
+ * relevant. Listing them by name rather than allowing "any number of gaps"
+ * keeps the guarantee real: a curated video cannot be dropped by accident, only
+ * by editing this list.
+ *
+ * A fabricated id would be worse than the fallback - it renders as a broken
+ * embed rather than a working search - so these stay null until someone
+ * verifies a real one.
+ */
+const SEARCH_FALLBACK = new Set(['MARCH', 'GOBLET']);
+
+test('every answer has a curated video, or a deliberate search fallback', () => {
+  for (const name of ANSWER_ORDER) {
+    if (SEARCH_FALLBACK.has(name)) {
+      assert.equal(formVideoId(name), null, `${name} is listed as a fallback but has an id`);
+      continue;
+    }
+    assert.ok(formVideoId(name), `${name} has no pinned video and is not a declared fallback`);
   }
 });
 
+test('the search fallback stays the exception', () => {
+  // If this grows, the "curated coaching video" claim stops being true.
+  const missing = ANSWER_ORDER.filter((n) => !formVideoId(n));
+  assert.ok(
+    missing.length <= 2,
+    `${missing.length} answers have no curated video: ${missing.join(', ')}`,
+  );
+});
+
 test('video ids are well-formed YouTube ids', () => {
-  for (const a of ANSWERS) {
-    const id = formVideoId(a.name)!;
-    assert.match(id, /^[A-Za-z0-9_-]{11}$/, `${a.name} -> "${id}" is not a valid video id`);
+  for (const name of ANSWER_ORDER) {
+    const id = formVideoId(name);
+    if (id === null) continue;
+    assert.match(id, /^[A-Za-z0-9_-]{11}$/, `${name} -> "${id}" is not a valid video id`);
   }
 });
 
 test('no two exercises share a video', () => {
   // A duplicate almost always means a copy-paste slip in the table.
   const seen = new Map<string, string>();
-  for (const a of ANSWERS) {
-    const id = formVideoId(a.name)!;
+  for (const name of ANSWER_ORDER) {
+    const id = formVideoId(name);
+    // Two nulls are not a duplicate - they are two search fallbacks.
+    if (id === null) continue;
     const prev = seen.get(id);
-    assert.ok(!prev, `${a.name} reuses the video pinned to ${prev}`);
-    seen.set(id, a.name);
+    assert.ok(!prev, `${name} reuses the video pinned to ${prev}`);
+    seen.set(id, name);
   }
 });
 
-test('formVideoUrl points at the curated watch page', () => {
-  const squat = ANSWERS.find((a) => a.name === 'SQUAT')!;
-  assert.equal(formVideoUrl(squat), `https://www.youtube.com/watch?v=${formVideoId('SQUAT')}`);
+test('the client module carries no answer ordering or coaching payload', () => {
+  /*
+   * Scans CODE, not prose. The file's own header documents what must never be
+   * added, and a naive substring search matched that comment - a false positive
+   * that would have trained everyone to ignore this test.
+   *
+   * `npm run check:bundle` is the authoritative version: it greps the compiled
+   * JavaScript that actually ships. This is the fast guard that runs on save.
+   */
+  const raw = readFileSync('src/data/exercises.ts', 'utf8');
+  const code = raw
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  for (const forbidden of ['howTo', 'videoId', 'challenge', 'ANSWER_ORDER']) {
+    assert.ok(!code.includes(forbidden), `${forbidden} leaked into the client module`);
+  }
 });
 
 test('unknown exercises fall back to a search that cannot 404', () => {
@@ -51,8 +93,8 @@ test('unknown exercises fall back to a search that cannot 404', () => {
 });
 
 test('every answer keeps a usable search query as the fallback', () => {
-  for (const a of ANSWERS) {
-    assert.ok(a.videoQuery.length > 3, `${a.name} has no usable search fallback`);
+  for (const name of ANSWER_ORDER) {
+    assert.ok(COACHING[name].videoQuery.length > 3, `${name} has no usable search fallback`);
   }
 });
 
@@ -61,6 +103,9 @@ test('thumbnail urls are https and id-scoped', () => {
   assert.equal(url, 'https://i.ytimg.com/vi/otzWCWpuW-A/mqdefault.jpg');
 });
 
-test('lookup is case-insensitive', () => {
-  assert.equal(formVideoId('squat'), formVideoId('SQUAT'));
+test('the coaching map is keyed by the exact uppercase name', () => {
+  // Unlike the old client helper this is not case-insensitive: every caller is
+  // server-side and already holds the canonical name from ANSWER_ORDER.
+  assert.ok(formVideoId('SQUAT'));
+  assert.equal(formVideoId('squat'), null);
 });

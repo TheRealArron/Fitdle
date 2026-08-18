@@ -1,17 +1,43 @@
 import { MAX_GUESSES } from '@/data/exercises';
 import { getPuzzleNumber } from '@/lib/daily';
+import { FLAWLESS_BADGE, badgeFor } from '@/lib/drill';
 import { evaluationToEmoji, type LetterState } from '@/lib/evaluate';
+
+/**
+ * Where the share text points people. Override with NEXT_PUBLIC_SITE_URL once
+ * the real domain is live - the link is the whole growth mechanism, so it must
+ * not silently point at nothing.
+ */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://fitdle.app';
 
 export function buildShareText(
   seed: number,
   evaluations: LetterState[][],
   won: boolean,
   streak: number,
+  colourblind = false,
+  drillBest = 0,
+  drillFlawless = false,
 ): string {
   const score = won ? `${evaluations.length}/${MAX_GUESSES}` : `X/${MAX_GUESSES}`;
-  const grid = evaluations.map(evaluationToEmoji).join('\n');
+  const grid = evaluations.map((e) => evaluationToEmoji(e, colourblind)).join('\n');
   const streakLine = streak > 1 ? `\n🔥 ${streak} day streak` : '';
-  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}`;
+
+  /*
+   * The drill badge, earned in the anatomy warm-up rather than the puzzle.
+   * Deliberately a separate line: the score line has to stay comparable between
+   * players, so an achievement from a different mode cannot be folded into it.
+   */
+  const badge = badgeFor(drillBest);
+  const marks = [
+    // The flawless mark leads: "never wrong" is a stronger signal than "fast",
+    // and it is the one that says they know the anatomy rather than the keyboard.
+    drillFlawless ? FLAWLESS_BADGE.emoji : '',
+    badge ? `${badge.emoji} ${badge.label} (${drillBest} anatomy)` : '',
+  ].filter(Boolean);
+  const badgeLine = marks.length ? `\n${marks.join(' ')}` : '';
+
+  return `Fitdle #${getPuzzleNumber(seed)} ${score}\n\n${grid}${streakLine}${badgeLine}\n\n${SITE_URL}`;
 }
 
 export type ShareOutcome = 'shared' | 'copied' | 'failed';
@@ -27,7 +53,7 @@ export async function shareResult(text: string): Promise<ShareOutcome> {
       await navigator.share({ text });
       return 'shared';
     } catch (err) {
-      // User dismissed the sheet — do not fall through to a surprise copy.
+      // User dismissed the sheet - do not fall through to a surprise copy.
       if (err instanceof DOMException && err.name === 'AbortError') return 'failed';
     }
   }

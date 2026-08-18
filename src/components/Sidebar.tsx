@@ -3,11 +3,15 @@
 import {
   ChartColumn,
   CircleHelp,
+  CloudCheck,
   CircleUser,
   Dumbbell,
   Flame,
   List,
+  Settings,
+  MessagesSquare,
   Shuffle,
+  Zap,
   Trophy,
   Undo2,
 } from 'lucide-react';
@@ -23,12 +27,16 @@ export interface SidebarActions {
   onOpenHelp: () => void;
   onOpenIndex: () => void;
   onOpenStats: () => void;
+  onOpenDrill: () => void;
+  onOpenBoard: () => void;
+  onOpenGuide: () => void;
   onOpenAccount: () => void;
+  onOpenSettings: () => void;
   /** Fired after any navigation, so the mobile drawer can close itself. */
   onNavigate?: () => void;
   /**
    * The desktop rail sits opposite the figure, which carries its own key.
-   * Only the drawer — where no figure rail exists — needs to repeat it.
+   * Only the drawer - where no figure rail exists - needs to repeat it.
    */
   showLegend?: boolean;
 }
@@ -71,7 +79,11 @@ export function Sidebar({
   onOpenHelp,
   onOpenIndex,
   onOpenStats,
+  onOpenDrill,
+  onOpenBoard,
+  onOpenGuide,
   onOpenAccount,
+  onOpenSettings,
   onNavigate,
   showLegend = false,
 }: SidebarActions) {
@@ -106,7 +118,7 @@ export function Sidebar({
             : /* Date-derived: blank until the client has read the real clock. */
               hydrated
               ? `Puzzle #${getPuzzleNumber(seed)}`
-              : '—'}
+              : '-'}
         </p>
         {mode === 'daily' && <Countdown />}
       </section>
@@ -154,7 +166,13 @@ export function Sidebar({
           hint={String(CATALOGUE.length)}
           onClick={go(onOpenIndex)}
         />
+        {/* Safe mid-round: the guide knows the rules, not the catalogue. */}
+        <NavItem icon={MessagesSquare} label="Ask the guide" onClick={go(onOpenGuide)} />
+        <NavItem icon={Trophy} label="Leaderboard" onClick={go(onOpenBoard)} />
         <NavItem icon={ChartColumn} label="Statistics" onClick={go(onOpenStats)} />
+        {/* A warm-up, not a second game: it drills the exercise-to-muscle
+            mapping the puzzle already scores you on. */}
+        <NavItem icon={Zap} label="Anatomy drill" hint="30s" onClick={go(onOpenDrill)} />
         {mode === 'daily' && (
           <NavItem
             icon={Shuffle}
@@ -165,12 +183,34 @@ export function Sidebar({
             onClick={go(startPractice)}
           />
         )}
-        <NavItem
-          icon={CircleUser}
-          label={authUser ? 'Account' : cloudAvailable ? 'Sign in' : 'Account & backup'}
-          hint={authUser ? 'synced' : undefined}
-          onClick={go(onOpenAccount)}
-        />
+        <NavItem icon={Settings} label="Settings" onClick={go(onOpenSettings)} />
+        {authUser ? (
+          /* Signed in: show who, not what. The sync state is the useful detail. */
+          <button
+            type="button"
+            onClick={go(onOpenAccount)}
+            className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.06]"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-dim font-game text-[10px] font-bold uppercase text-accent">
+              {authUser.username.slice(0, 2)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-white">
+                {authUser.username}
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-slate-500">
+                <CloudCheck className="h-3 w-3" aria-hidden />
+                Synced
+              </span>
+            </span>
+          </button>
+        ) : (
+          <NavItem
+            icon={CircleUser}
+            label={cloudAvailable ? 'Sign in' : 'Account & backup'}
+            onClick={go(onOpenAccount)}
+          />
+        )}
       </nav>
 
       {/*
@@ -194,7 +234,7 @@ export function Sidebar({
                       {name}
                     </p>
                     <p className="truncate text-[10px] text-slate-500">
-                      {e ? `${e.display} · ${e.group}` : '—'}
+                      {e ? `${e.display} · ${e.group}` : '-'}
                     </p>
                   </div>
                 </li>

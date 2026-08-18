@@ -1,12 +1,13 @@
+import type { RoundStatus } from '@/lib/contracts';
 import { MAX_GUESSES } from '@/data/exercises';
 import { daysBetweenSeeds } from '@/lib/daily';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * THREAT MODEL — read this before trusting the word "secure".
+ * THREAT MODEL - read this before trusting the word "secure".
  * ─────────────────────────────────────────────────────────────────────────────
- * Everything here runs on the player's machine and every byte of it — the
- * digest function, the key, the record format — ships inside the JS bundle. A
+ * Everything here runs on the player's machine and every byte of it - the
+ * digest function, the key, the record format - ships inside the JS bundle. A
  * determined user can therefore always forge a valid save. That is not a bug in
  * this file; it is a property of client-only persistence. Real tamper-proofing
  * needs a server that owns the streak.
@@ -17,14 +18,14 @@ import { daysBetweenSeeds } from '@/lib/daily';
  *      the streak on every win, and `initGame` reset the board while keeping
  *      the streak. So: win, refresh, win again, forever. Streak inflation with
  *      zero tooling. Here a puzzle can only ever pay out once, enforced by
- *      `lastSeed`, and wiping storage to retry resets the streak to zero — the
+ *      `lastSeed`, and wiping storage to retry resets the streak to zero - the
  *      cheat is strictly worse than playing.
  *   2. CLOCK-ROLLBACK RESISTANCE. `highSeed` is a monotonic high-water mark.
  *      Winding the system clock back to farm past puzzles is detected and those
  *      puzzles pay no streak.
  *   3. INTEGRITY. A keyed 128-bit digest over a canonical serialisation. Stops
  *      hand-editing `"streak":3` in devtools, which is the realistic attack.
- *      The spec's digest was a 32-bit non-keyed hash rendered as short hex —
+ *      The spec's digest was a 32-bit non-keyed hash rendered as short hex -
  *      forgeable in a one-line console expression and collision-prone besides.
  *   4. FAIL-CLOSED. A record that does not verify is discarded, not trusted.
  */
@@ -34,18 +35,26 @@ const LEGACY_KEY = 'fitdle-data';
 const SAVE_VERSION = 2;
 
 /**
- * Domain-separation key. Obfuscation, not a secret — see the threat model. It
+ * Domain-separation key. Obfuscation, not a secret - see the threat model. It
  * exists so that a digest lifted from another app or an older Fitdle build does
  * not verify here.
  */
 const DIGEST_KEY = 'fitdle/v2/streak-integrity';
 
-export type GameStatus = 'playing' | 'won' | 'lost';
+/** The same three states the API reports; declared once in contracts. */
+export type GameStatus = RoundStatus;
 
 export interface DayRecord {
   seed: number;
   guesses: string[];
   status: GameStatus;
+  /**
+   * The server's signed session for this day, stored so a reload resumes the
+   * same game rather than starting a fresh one. Opaque and unforgeable - the
+   * server re-verifies its HMAC on every request, so persisting it here grants
+   * no authority it did not already have.
+   */
+  serverState?: string;
 }
 
 export interface SaveData {
@@ -63,6 +72,41 @@ export interface SaveData {
   highSeed: number;
   /** In-progress (or finished) board for a single day. */
   day: DayRecord | null;
+
+  /**
+   * Best anatomy-drill score. Optional for the same reason the workout fields
+   * are: bumping SAVE_VERSION would fail every existing save's coherence check
+   * and wipe real streaks, so `normalise()` backfills it on load instead.
+   */
+  drillBest?: number;
+  /** Has the player ever completed a drill with no wrong answers? */
+  drillFlawless?: boolean;
+
+  /*
+   * Workout tracking - a second, independent streak for actually doing the
+   * movement. Optional on purpose: these were added after people already had
+   * saves, and bumping SAVE_VERSION would have failed every existing record's
+   * coherence check and wiped real streaks. `normalise()` fills them in on load
+   * instead, so an old save upgrades silently rather than being rejected.
+   */
+  workoutStreak?: number;
+  maxWorkoutStreak?: number;
+  workoutsDone?: number;
+  /** Seed of the last day the challenge was marked complete. Anti-replay. */
+  lastWorkoutSeed?: number | null;
+}
+
+/** Fills in fields added after this save format shipped. */
+export function normalise(save: SaveData): SaveData {
+  return {
+    ...save,
+    workoutStreak: save.workoutStreak ?? 0,
+    maxWorkoutStreak: save.maxWorkoutStreak ?? 0,
+    workoutsDone: save.workoutsDone ?? 0,
+    lastWorkoutSeed: save.lastWorkoutSeed ?? null,
+    drillBest: save.drillBest ?? 0,
+    drillFlawless: save.drillFlawless ?? false,
+  };
 }
 
 export function defaultSave(): SaveData {
@@ -77,6 +121,12 @@ export function defaultSave(): SaveData {
     lastResult: null,
     highSeed: 0,
     day: null,
+    workoutStreak: 0,
+    maxWorkoutStreak: 0,
+    workoutsDone: 0,
+    lastWorkoutSeed: null,
+    drillBest: 0,
+    drillFlawless: false,
   };
 }
 
@@ -202,6 +252,19 @@ function isCoherent(d: unknown): d is SaveData {
   if (s.maxStreak < s.streak) return false;
   if ((s.distribution as number[]).reduce((a, b) => a + b, 0) !== s.wins) return false;
 
+  for (const k of ['workoutStreak', 'maxWorkoutStreak', 'workoutsDone'] as const) {
+    if (s[k] !== undefined && !isInt(s[k])) return false;
+  }
+  if (s.lastWorkoutSeed !== undefined && s.lastWorkoutSeed !== null && !isInt(s.lastWorkoutSeed)) {
+    return false;
+  }
+  if (isInt(s.workoutStreak) && isInt(s.workoutsDone) && s.workoutStreak > s.workoutsDone) {
+    return false;
+  }
+
+  if (s.drillBest !== undefined && !isInt(s.drillBest)) return false;
+  if (s.drillFlawless !== undefined && typeof s.drillFlawless !== 'boolean') return false;
+
   if (s.lastSeed !== null && !isInt(s.lastSeed)) return false;
   if (s.lastResult !== null && s.lastResult !== 'won' && s.lastResult !== 'lost') return false;
 
@@ -220,6 +283,8 @@ function isCoherent(d: unknown): d is SaveData {
       if (!day.guesses.every((g) => (g as string).length === width)) return false;
     }
     if (day.status !== 'playing' && day.status !== 'won' && day.status !== 'lost') return false;
+    // Opaque to us; the server validates it. Only the shape is checked here.
+    if (day.serverState !== undefined && typeof day.serverState !== 'string') return false;
   }
 
   return true;
@@ -253,7 +318,7 @@ export function loadSave(): LoadResult {
     if (!isCoherent(parsed)) {
       return { save: defaultSave(), tampered: true };
     }
-    return { save: parsed, tampered: false };
+    return { save: normalise(parsed), tampered: false };
   } catch {
     return { save: defaultSave(), tampered: true };
   }
@@ -345,11 +410,11 @@ export function importSave(code: string): ImportResult {
   try {
     envelope = JSON.parse(fromBase64(trimmed.slice(CODE_PREFIX.length)));
   } catch {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
 
   if (typeof envelope.p !== 'string' || typeof envelope.h !== 'string') {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
   if (digest(envelope.p) !== envelope.h) {
     return { ok: false, reason: 'The code failed its integrity check.' };
@@ -359,7 +424,7 @@ export function importSave(code: string): ImportResult {
   try {
     parsed = JSON.parse(envelope.p);
   } catch {
-    return { ok: false, reason: 'The code is damaged — check it copied in full.' };
+    return { ok: false, reason: 'The code is damaged - check it copied in full.' };
   }
   if (!isCoherent(parsed)) {
     return { ok: false, reason: 'That code contains impossible statistics.' };
@@ -420,6 +485,11 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
     }
   }
 
+  if (save.lastWorkoutSeed != null) {
+    const gap = daysBetweenSeeds(save.lastWorkoutSeed, todaySeed);
+    if (gap > 1 && (save.workoutStreak ?? 0) > 0) save.workoutStreak = 0;
+  }
+
   const sameDay = save.day !== null && save.day.seed === todaySeed;
   const day: DayRecord = sameDay
     ? { ...save.day!, guesses: [...save.day!.guesses] }
@@ -437,7 +507,36 @@ export function reconcile(input: SaveData, todaySeed: number): Reconciled {
 }
 
 /**
- * Records a finished puzzle. Idempotent by seed — the anti-replay guarantee.
+ * Marks today's mini-challenge complete. Idempotent by seed, exactly like
+ * `commitResult` - you can only bank one workout per day, so spamming the
+ * button cannot inflate the workout streak.
+ */
+/**
+ * Records a drill score, keeping only the best.
+ *
+ * Monotonic on purpose: the drill has no streak to break and no round to
+ * replay, so there is nothing to protect beyond "your record should not go
+ * down because you had one bad run".
+ */
+export function commitDrill(save: SaveData, score: number, flawless = false): SaveData {
+  const best = Math.max(save.drillBest ?? 0, Math.max(0, Math.floor(score)));
+  // Once earned, kept. It records that you did it, not that you did it today.
+  return { ...save, drillBest: best, drillFlawless: (save.drillFlawless ?? false) || flawless };
+}
+
+export function commitWorkout(input: SaveData, seed: number): SaveData {
+  if (input.lastWorkoutSeed === seed) return input;
+
+  const save = normalise({ ...input, distribution: [...input.distribution] });
+  save.workoutsDone = (save.workoutsDone ?? 0) + 1;
+  save.workoutStreak = (save.workoutStreak ?? 0) + 1;
+  save.maxWorkoutStreak = Math.max(save.maxWorkoutStreak ?? 0, save.workoutStreak);
+  save.lastWorkoutSeed = seed;
+  return save;
+}
+
+/**
+ * Records a finished puzzle. Idempotent by seed - the anti-replay guarantee.
  * Calling it twice for the same puzzle (double submit, refresh mid-animation,
  * a second tab) changes nothing the second time.
  */

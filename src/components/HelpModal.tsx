@@ -41,7 +41,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
       <div className="flex flex-col gap-5 text-sm leading-relaxed text-slate-300">
         <p>
           Guess today&apos;s exercise in {MAX_GUESSES} tries. The grid width tells you how many
-          letters it has — that changes daily.
+          letters it has - that changes daily.
         </p>
 
         <section className="panel-raised rounded-xl p-3">
@@ -52,7 +52,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             Letters only, no spaces or hyphens, singular. Pull-ups is{' '}
             <span className="font-game text-white">PULLUP</span>, Farmer&apos;s carry is{' '}
             <span className="font-game text-white">FARMERS</span>. All {CATALOGUE.length} names are
-            in the list icon at the top — you are not expected to know them by heart.
+            in the list icon at the top - you are not expected to know them by heart.
           </p>
         </section>
 
@@ -86,7 +86,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
           </h3>
           <p className="text-xs">
             The figure beside the board reacts to every guess. Guess SQUAT against a hidden
-            DEADLIFT and the glutes light green while the quads go red — you have learned the
+            DEADLIFT and the glutes light green while the quads go red - you have learned the
             answer is a posterior-chain movement without a single letter helping you.
           </p>
           <div className="panel-raised mt-1 rounded-xl p-3">
@@ -103,14 +103,14 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             3. Hints unlock as you go
           </h3>
           <p className="text-xs">
-            Guess {CATEGORY_HINT_AT} reveals the muscle group — as a chip under the board, and as
+            Guess {CATEGORY_HINT_AT} reveals the muscle group - as a chip under the board, and as
             a <strong className="text-yellow-300">dashed amber outline</strong> around that group
             on the figure. The outline says <em>where</em> the answer lives, not which muscles it
             works, so an outlined muscle can still be unlit.
           </p>
           <p className="text-xs">
             Guess {EQUIPMENT_HINT_AT} reveals the equipment: bodyweight, barbell, dumbbell,
-            kettlebell or machine. The first two guesses are yours alone — that is where the
+            kettlebell or machine. The first two guesses are yours alone - that is where the
             deduction lives.
           </p>
         </section>
@@ -119,7 +119,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
           <h3 className="label">4. After the daily</h3>
           <p className="text-xs">
             One puzzle a day, the same one for everybody, unlocking at midnight UTC. Solve it to
-            extend your streak — miss a day and it resets.
+            extend your streak - miss a day and it resets.
           </p>
           <p className="text-xs">
             When you are done, <strong className="text-white">practice mode</strong> gives you

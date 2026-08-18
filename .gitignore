@@ -43,3 +43,8 @@ yarn-error.log*
 next-env.d.ts
 
 /extension-dist
+.api-parked
+
+# Local spec/notes - not for the public repo
+claude.md
+CLAUDE.md

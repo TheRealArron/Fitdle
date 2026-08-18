@@ -5,7 +5,7 @@ import { digest, defaultSave, type SaveData } from '@/lib/secureStorage';
 /**
  * `loadSave`/`writeSave` need localStorage, which Node has no business
  * providing. These drive the same envelope format against a stub so the
- * validation path — the part that silently wiped streaks — is covered without a
+ * validation path - the part that silently wiped streaks - is covered without a
  * browser.
  */
 function envelope(save: SaveData): string {

@@ -1,7 +1,8 @@
 'use client';
 
-import { ChartColumn, Dumbbell, Flame, Menu, Shuffle } from 'lucide-react';
+import { ChartColumn, Flame, Menu, Shuffle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Mark } from '@/components/Wordmark';
 import { useGameStore } from '@/store/useGameStore';
 
 interface HeaderProps {
@@ -29,7 +30,9 @@ export function Header({ onOpenMenu, onOpenStats }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Dumbbell className="h-5 w-5 text-accent drop-shadow-[0_0_8px_rgba(52,211,153,0.55)]" aria-hidden />
+        {/* The mark carries the glow; the word beside it stays live text, so it
+            scales, translates and reads to a screen reader. */}
+        <Mark className="h-7 w-7 text-accent drop-shadow-[0_0_8px_rgba(52,211,153,0.55)]" />
         <h1 className="font-game text-xl font-bold uppercase tracking-[0.28em] text-white">
           Fitdle
         </h1>

@@ -1,16 +1,21 @@
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { FlatCompat } from '@eslint/eslintrc';
+import coreWebVitals from 'eslint-config-next/core-web-vitals';
+import typescript from 'eslint-config-next/typescript';
 
-const compat = new FlatCompat({
-  baseDirectory: dirname(fileURLToPath(import.meta.url)),
-});
-
-const eslintConfig = [
+/*
+ * Flat config, imported directly.
+ *
+ * This used to go through `FlatCompat`, which was needed while
+ * eslint-config-next only shipped eslintrc-style configs. Next 16 exports flat
+ * configs natively, and running them through the compat layer now throws
+ * ("Converting circular structure to JSON") - the bridge is not just redundant,
+ * it breaks.
+ */
+const config = [
   {
     ignores: ['.next/**', 'out/**', 'build/**', 'extension-dist/**', 'next-env.d.ts'],
   },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...coreWebVitals,
+  ...typescript,
 ];
 
-export default eslintConfig;
+export default config;

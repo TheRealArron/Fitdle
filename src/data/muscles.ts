@@ -3,10 +3,10 @@
  *
  * Two levels of granularity, deliberately:
  *
- *   MuscleRegion — the 14 areas the body figure can light up. This is the
+ *   MuscleRegion - the 14 areas the body figure can light up. This is the
  *                  feedback channel: fine enough that SQUAT and DEADLIFT give
  *                  visibly different answers.
- *   MuscleGroup  — the 7 coarse buckets. This is the category hint revealed at
+ *   MuscleGroup  - the 7 coarse buckets. This is the category hint revealed at
  *                  guess 3, and it is what a player can actually reason about
  *                  ("it's a back exercise") without an anatomy degree.
  */
@@ -70,7 +70,7 @@ export const GROUP_OF_REGION: Record<MuscleRegion, MuscleGroup> = {
   calves: 'Legs',
 };
 
-/** Regions belonging to a coarse group — drives the category outline. */
+/** Regions belonging to a coarse group - drives the category outline. */
 export const REGIONS_IN_GROUP: Record<MuscleGroup, MuscleRegion[]> = {
   Chest: ['chest'],
   Back: ['lats', 'traps', 'lowerBack'],

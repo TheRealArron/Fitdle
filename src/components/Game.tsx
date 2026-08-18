@@ -6,20 +6,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { REGIONS_IN_GROUP, type MuscleRegion } from '@/data/muscles';
 import { getDailySeed } from '@/lib/daily';
-import { accumulateMuscleFeedback } from '@/lib/muscleFeedback';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useGameStore, selectHints, revealedCount } from '@/store/useGameStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
+import { useGameStore, selectHints } from '@/store/useGameStore';
 import { AccountModal } from './AccountModal';
 import { BodyFigure } from './BodyFigure';
+import { DrillModal } from './DrillModal';
+import { GuideModal } from './GuideModal';
+import { LeaderboardModal } from './LeaderboardModal';
 import { ExerciseIndex } from './ExerciseIndex';
 import { Grid } from './Grid';
 import { Header } from './Header';
 import { HelpModal } from './HelpModal';
 import { HintBar } from './HintBar';
 import { Keyboard } from './Keyboard';
+import { MuscleDetail } from './MuscleDetail';
 import { MuscleLegend } from './MuscleLegend';
+import { OpeningCall } from './OpeningCall';
 import { PostGamePanel, PracticeBar } from './PostGamePanel';
 import { ResultModal } from './ResultModal';
+import { SettingsModal } from './SettingsModal';
 import { Sidebar } from './Sidebar';
 import { StatsModal } from './StatsModal';
 import { Toast } from './Toast';
@@ -31,7 +37,7 @@ const EMPTY: ReadonlySet<MuscleRegion> = new Set();
  *
  * The side rails are deliberately the SAME width. An asymmetric layout would
  * push the board off the viewport centre while the header and keyboard stayed
- * centred on it, and that mismatch is what reads as "broken alignment" — it was
+ * centred on it, and that mismatch is what reads as "broken alignment" - it was
  * the bug in the previous version, where the board lived in a flex-1 column
  * beside a fixed-width figure and centred itself within that column instead.
  *
@@ -46,15 +52,33 @@ export function Game() {
   const hydrated = useGameStore((s) => s.hydrated);
   const clockRollback = useGameStore((s) => s.clockRollback);
 
-  const guesses = useGameStore((s) => s.guesses);
   const revealingRow = useGameStore((s) => s.revealingRow);
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const wordLength = useGameStore((s) => s.wordLength);
   const gameStatus = useGameStore((s) => s.status);
   const mode = useGameStore((s) => s.mode);
   const modalOpen = useGameStore((s) => s.modalOpen);
   const setModalOpen = useGameStore((s) => s.setModalOpen);
+  const muscles = useGameStore((s) => s.muscles);
   const hints = useGameStore(useShallow(selectHints));
+
+  /*
+   * The figure must not light up before the row finishes flipping. The server
+   * sends the new overlap with the guess response, so the previous value is
+   * kept and shown until the animation completes.
+   */
+  /*
+   * Adjusted during render, not in an effect - React's documented pattern for
+   * "state derived from a prop change". An effect would paint the new map for
+   * one frame before correcting itself, which is the flicker this exists to
+   * prevent; a ref would be impure. Setting state here re-renders before paint.
+   */
+  const [previousMuscles, setPreviousMuscles] = useState(muscles);
+  const [lastRevealing, setLastRevealing] = useState(revealingRow);
+  if (lastRevealing !== revealingRow) {
+    setLastRevealing(revealingRow);
+    if (revealingRow === null) setPreviousMuscles(muscles);
+  }
 
   /*
    * The daily is over AND the player has dismissed the result. Practice is
@@ -65,19 +89,28 @@ export function Game() {
     mode === 'daily' && gameStatus !== 'playing' && !modalOpen && revealingRow === null;
 
   const [statsOpen, setStatsOpen] = useState(false);
+  const [drillOpen, setDrillOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [indexOpen, setIndexOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [region, setRegion] = useState<MuscleRegion | null>(null);
 
   const initAuth = useAuthStore((s) => s.init);
+  const loadSettings = useSettingsStore((s) => s.load);
 
   useEffect(() => {
     initGame();
     // Restores a Supabase session if one exists and pulls the cloud save. A
     // no-op when the project has no keys.
     initAuth();
-  }, [initGame, initAuth]);
+    // Client-only: reads localStorage and stamps <html> attributes.
+    loadSettings();
+
+  }, [initGame, initAuth, loadSettings]);
 
   // A tab left open across midnight UTC would keep serving yesterday's word.
   useEffect(() => {
@@ -89,30 +122,46 @@ export function Game() {
   }, [initGame]);
 
   /*
-   * Derived with useMemo rather than a store selector on purpose: this returns
-   * fresh Sets every call, and Zustand v5 compares snapshots by reference —
-   * a selector would re-render forever. `guesses` is a stable array reference.
+   * Muscle feedback is computed by the SERVER and arrives with each response -
+   * the client cannot derive it any more, because deriving it needs the answer.
+   *
+   * Still wrapped in useMemo: these are Sets built from arrays, so a bare
+   * selector would return a new reference every render and Zustand v5 compares
+   * by reference. Held back during a flip so the figure cannot outrun the tiles.
    */
-  const feedback = useMemo(
-    () =>
-      accumulateMuscleFeedback(
-        guesses.slice(0, revealedCount({ guesses, revealingRow })),
-        target,
-      ),
-    [guesses, revealingRow, target],
-  );
+  const feedback = useMemo(() => {
+    const settled = revealingRow === null;
+    return {
+      shared: new Set(settled ? muscles.shared : previousMuscles.shared),
+      missed: new Set(settled ? muscles.missed : previousMuscles.missed),
+    };
+  }, [muscles, previousMuscles, revealingRow]);
 
   const categoryRegions = useMemo(
     () => (hints.category ? new Set(REGIONS_IN_GROUP[hints.category]) : EMPTY),
     [hints.category],
   );
 
+  /*
+   * Derived, not stored. The server banks the result as the round ends, so the
+   * board is stale the moment the status changes - and a value computed from
+   * that status says so without an effect that re-renders to announce it.
+   */
+  const boardKey = `${mode}:${gameStatus}`;
+
   const sidebarActions = {
     onOpenHelp: () => setHelpOpen(true),
     onOpenIndex: () => setIndexOpen(true),
     onOpenStats: () => setStatsOpen(true),
+    onOpenDrill: () => setDrillOpen(true),
+    onOpenBoard: () => setBoardOpen(true),
+    onOpenGuide: () => setGuideOpen(true),
     onOpenAccount: () => setAccountOpen(true),
+    onOpenSettings: () => setSettingsOpen(true),
   };
+
+  // Tapping a muscle is a post-round feature: mid-round it narrows the answer.
+  const roundOver = gameStatus !== 'playing';
 
   const figure = (
     <BodyFigure
@@ -120,6 +169,9 @@ export function Game() {
       missed={feedback.missed}
       category={categoryRegions}
       className="h-auto w-full"
+      onSelectRegion={roundOver ? (r) => setRegion((cur) => (cur === r ? null : r)) : undefined}
+      selectHint="show what else trains it"
+      selected={roundOver ? region : null}
     />
   );
 
@@ -130,17 +182,17 @@ export function Game() {
       {clockRollback && (
         <div className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-          <span>Your clock is behind a date you have already played — no streak credit today.</span>
+          <span>Your clock is behind a date you have already played - no streak credit today.</span>
         </div>
       )}
 
       <div className="flex min-h-0 w-full flex-1 overflow-hidden">
-        {/* Left rail — menu. */}
+        {/* Left rail - menu. */}
         <aside className={`hidden border-r border-white/10 xl:block ${RAIL}`}>
           <Sidebar {...sidebarActions} />
         </aside>
 
-        {/* Centre — board, hints, keyboard. */}
+        {/* Centre - board, hints, keyboard. */}
         <main
           className="flex min-h-0 min-w-0 flex-1 flex-col items-center transition-opacity duration-200"
           style={{ opacity: hydrated ? 1 : 0 }}
@@ -155,7 +207,7 @@ export function Game() {
             />
 
             {/*
-              Size container — see .board-area in globals.css. The hint chips
+              Size container - see .board-area in globals.css. The hint chips
               live inside the centred group rather than after it, so they stay
               attached to the board instead of drifting to the bottom of a tall
               viewport. The 3.5rem term reserves their row in the height budget.
@@ -174,7 +226,12 @@ export function Game() {
                 >
                   <Grid />
                 </div>
-                {showPostGame ? null : <HintBar />}
+                {showPostGame ? null : (
+                  <>
+                    <HintBar />
+                    <OpeningCall />
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -198,12 +255,20 @@ export function Game() {
           </div>
         </main>
 
-        {/* Right rail — the muscle map, big enough to actually read. */}
+        {/* Right rail - the muscle map, big enough to actually read. */}
         <aside
           className={`hidden flex-col items-center justify-center gap-5 border-l border-white/10 p-5 xl:flex ${RAIL}`}
         >
-          {/* No width cap — the figure should use the whole rail. */}
+          {/* No width cap - the figure should use the whole rail. */}
           <div className="w-full">{figure}</div>
+          <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
+          {!region && (
+            <p className="text-center text-[11px] leading-snug text-slate-500">
+              {roundOver
+                ? 'Tap a muscle to see what else trains it.'
+                : 'Muscle details unlock when the round ends.'}
+            </p>
+          )}
           <MuscleLegend className="w-full max-w-[13rem]" detailed />
         </aside>
       </div>
@@ -253,9 +318,17 @@ export function Game() {
       <Toast />
       <ResultModal />
       <StatsModal open={statsOpen} onClose={() => setStatsOpen(false)} />
+      <DrillModal open={drillOpen} onClose={() => setDrillOpen(false)} />
+      <GuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
+      <LeaderboardModal
+        open={boardOpen}
+        onClose={() => setBoardOpen(false)}
+        refreshKey={boardKey}
+      />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExerciseIndex open={indexOpen} onClose={() => setIndexOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

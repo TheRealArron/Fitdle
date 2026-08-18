@@ -5,7 +5,9 @@ import { ChartColumn, CirclePlay, Share2, Shuffle, Trophy, Undo2 } from 'lucide-
 import { useState } from 'react';
 import { MAX_GUESSES } from '@/data/exercises';
 import { buildShareText, shareResult } from '@/lib/share';
+import { loadSave } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { Countdown } from './Countdown';
 
 interface PostGamePanelProps {
@@ -17,33 +19,43 @@ interface PostGamePanelProps {
  * Replaces the board once the day is finished and the result modal is dismissed.
  *
  * Without this the player is left staring at a dead board with a keyboard that
- * does nothing — the single most common complaint about daily word games. The
+ * does nothing - the single most common complaint about daily word games. The
  * obvious next action (another round) is offered right here, and it is a
  * practice round, so nothing on offer can affect the streak.
  */
 export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProps) {
   const status = useGameStore((s) => s.status);
-  const target = useGameStore((s) => s.target);
+  const target = useGameStore((s) => s.reveal);
   const guesses = useGameStore((s) => s.guesses);
   const evaluations = useGameStore((s) => s.evaluations);
   const streak = useGameStore((s) => s.streak);
   const seed = useGameStore((s) => s.seed);
   const startPractice = useGameStore((s) => s.startPractice);
   const setToast = useGameStore((s) => s.setToast);
+  const colourblind = useSettingsStore((s) => s.colourblind);
+  // Read straight from storage: a drill best is not puzzle state and has no
+  // business living in the game store.
+  const drillSave = loadSave().save;
+  const drillBest = drillSave.drillBest ?? 0;
+  const drillFlawless = drillSave.drillFlawless ?? false;
   const [sharing, setSharing] = useState(false);
 
   const won = status === 'won';
 
+  // Only rendered once the round is over, at which point the server has sent
+  // the answer. Guarded rather than asserted so a race cannot crash the page.
+  if (!target) return null;
+
   const onShare = async () => {
     setSharing(true);
-    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak));
+    const outcome = await shareResult(buildShareText(seed, evaluations, won, streak, colourblind, drillBest, drillFlawless));
     setSharing(false);
     setToast(
       outcome === 'shared'
         ? 'Shared'
         : outcome === 'copied'
           ? 'Result copied to clipboard'
-          : 'Could not share — copy manually',
+          : 'Could not share - copy manually',
     );
   };
 
@@ -87,7 +99,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
           Play a practice round
         </button>
         <p className="-mt-1 text-center text-[11px] leading-snug text-slate-500">
-          Unlimited, random, and never counted — your streak is safe.
+          Unlimited, random, and never counted - your streak is safe.
         </p>
 
         <div className="mt-1 grid grid-cols-3 gap-2">

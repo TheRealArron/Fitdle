@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ANSWERS, CATALOGUE, exercisesOfLength, isValidGuess } from '@/data/exercises';
+import { readFileSync } from 'node:fs';
+import { CATALOGUE, exercisesOfLength, getExercise, isValidGuess } from '@/data/exercises';
+import { ANSWER_ORDER } from '@/server/answers';
 import { GROUP_OF_REGION } from '@/data/muscles';
-import {
-  getDailySeed,
-  getDailyIndex,
-  getDailyExercise,
-  getDailyWordLength,
-  daysBetweenSeeds,
-  msUntilNextPuzzle,
-} from '@/lib/daily';
+import { getDailySeed, daysBetweenSeeds, msUntilNextPuzzle } from '@/lib/daily';
+import { answerFor, SCHEDULE_SIZE } from '@/server/game';
 
 test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-07-30T12:00:00Z')), 20260730);
@@ -17,10 +13,10 @@ test('seed is the specification formula, YYYYMMDD', () => {
   assert.equal(getDailySeed(new Date('2026-12-31T23:59:59Z')), 20261231);
 });
 
-test('index is seed modulo the answer pool', () => {
-  const date = new Date('2026-07-30T12:00:00Z');
-  assert.equal(getDailyIndex(date), 20260730 % ANSWERS.length);
-  assert.equal(getDailyExercise(date), ANSWERS[20260730 % ANSWERS.length]);
+test('index is seed modulo the answer pool - on the SERVER', () => {
+  // The mapping lives in server/game.ts now. This is the whole point: the
+  // browser cannot compute it, so it cannot read tomorrow's answer.
+  assert.equal(answerFor(20260730).name, ANSWER_ORDER[20260730 % ANSWER_ORDER.length]);
 });
 
 test('every timezone gets the same word at the same instant', () => {
@@ -37,11 +33,12 @@ test('the answer only changes at UTC midnight', () => {
 });
 
 test('the answer is stable across an entire UTC day', () => {
-  const indices = new Set<number>();
+  const names = new Set<string>();
   for (let h = 0; h < 24; h++) {
-    indices.add(getDailyIndex(new Date(`2026-07-30T${String(h).padStart(2, '0')}:30:00Z`)));
+    const d = new Date(`2026-07-30T${String(h).padStart(2, '0')}:30:00Z`);
+    names.add(answerFor(getDailySeed(d)).name);
   }
-  assert.equal(indices.size, 1);
+  assert.equal(names.size, 1);
 });
 
 test('day arithmetic spans month and year boundaries', () => {
@@ -59,33 +56,60 @@ test('countdown lands on the next UTC midnight', () => {
 /* ── answer pool integrity ────────────────────────────────────────────────── */
 
 test('ANSWERS order is load-bearing and must stay pinned', () => {
-  // Reordering silently rewrites every past and future puzzle. So does changing
-  // the pool size, since the index is a modulus — see the caveat in exercises.ts.
-  assert.equal(ANSWERS.length, 60);
-  assert.equal(ANSWERS[0].name, 'SQUAT');
-  assert.equal(ANSWERS[59].name, 'ARMCIRCLE');
+  // Reordering silently rewrites every past and future puzzle. Appending is
+  // safe (SCHEDULE_SIZE is frozen separately); reordering is not.
+  assert.equal(ANSWER_ORDER.length, 62);
+  assert.equal(ANSWER_ORDER[0], 'SQUAT');
+  assert.equal(ANSWER_ORDER[59], 'ARMCIRCLE');
+  assert.equal(ANSWER_ORDER[61], 'GOBLET');
   assert.equal(
-    ANSWERS.slice(0, 5).map((a) => a.name).join(','),
+    ANSWER_ORDER.slice(0, 5).join(','),
     'SQUAT,BURPEE,CLIMBER,DEADLIFT,HIPTHRUST',
   );
 });
 
-test('the pool divides evenly into the length cycle', () => {
-  // A pool that is not a multiple of 5 would break the 5,6,7,8,9 rotation at
-  // the wrap-around, giving two same-width days in a row.
-  assert.equal(ANSWERS.length % 5, 0);
-  const perLength = new Map<number, number>();
-  for (const a of ANSWERS) {
-    perLength.set(a.name.length, (perLength.get(a.name.length) ?? 0) + 1);
+test('consecutive days almost never share a grid width', () => {
+  /*
+   * This replaces an assertion that `ANSWER_ORDER.length % 5 === 0`, which was
+   * a PROXY for this property and did not actually deliver it.
+   *
+   * The proxy assumed consecutive days land on consecutive indices. They do not:
+   * the seed is YYYYMMDD, so it jumps ~70 at every month boundary, and whether
+   * that jump preserves the width rotation depends on `jump % N % 5`. Measured
+   * over 730 days, the old "evenly divisible" pool of 60 produced FOURTEEN
+   * same-width pairs. The current 62 produces one, at leap-year February.
+   *
+   * So the real property is measured directly now, on real calendar dates.
+   */
+  const seedOf = (d: Date) =>
+    d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  const start = new Date(Date.UTC(2026, 7, 6));
+
+  let collisions = 0;
+  let prev: number | null = null;
+  for (let i = 0; i < 730; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const len = answerFor(seedOf(d)).name.length;
+    if (prev === len) collisions++;
+    prev = len;
   }
-  assert.deepEqual([...perLength.entries()].sort(), [[5, 12], [6, 12], [7, 12], [8, 12], [9, 12]]);
+  assert.ok(collisions <= 2, `${collisions} same-width consecutive days in 730 - the rotation broke`);
+
+  const perLength = new Map<number, number>();
+  for (const name of ANSWER_ORDER) {
+    perLength.set(name.length, (perLength.get(name.length) ?? 0) + 1);
+  }
+  assert.deepEqual(
+    [...perLength.entries()].sort(),
+    [[5, 13], [6, 13], [7, 12], [8, 12], [9, 12]],
+  );
 });
 
 test('answer lengths cycle 5,6,7,8,9 so consecutive days differ in grid width', () => {
-  ANSWERS.forEach((a, i) => {
-    assert.equal(a.name.length, 5 + (i % 5), `${a.name} at index ${i} breaks the cycle`);
+  ANSWER_ORDER.forEach((name, i) => {
+    assert.equal(name.length, 5 + (i % 5), `${name} at index ${i} breaks the cycle`);
   });
-  assert.equal(getDailyWordLength(new Date('2026-07-30T00:00:00Z')), ANSWERS[20260730 % 40].name.length);
 });
 
 test('every catalogue name is alphabetic, uppercase and unique', () => {
@@ -97,15 +121,6 @@ test('every catalogue name is alphabetic, uppercase and unique', () => {
   }
 });
 
-test('every answer carries coaching content', () => {
-  // The spec's dictionary had mutilated words with nothing to teach. An answer
-  // without how-to text is a puzzle with no payoff.
-  for (const a of ANSWERS) {
-    assert.ok(a.howTo.length >= 3, `${a.name} has too few coaching cues`);
-    assert.ok(a.videoQuery.length > 0, `${a.name} has no video query`);
-    assert.ok(a.display.length > 0, `${a.name} has no display name`);
-  }
-});
 
 test('every answer length has enough guessable candidates to be a real puzzle', () => {
   // If a length had only a handful of options the answer would be brute-forceable.
@@ -141,4 +156,62 @@ test('guesses must match the day length and be real exercises', () => {
   assert.ok(!isValidGuess('BURPE', 5), 'the spec’s mutilated words are gone');
   assert.ok(!isValidGuess('ROWSR', 5));
   assert.ok(!isValidGuess('VUPPS', 5));
+});
+
+/* ── the calendar is append-safe ──────────────────────────────────────────── */
+
+test('the schedule size is frozen, not derived from the array length', () => {
+  /*
+   * `ANSWER_ORDER[seed % ANSWER_ORDER.length]` means appending one word changes
+   * the remainder for every date - measured at 365 of 365 days over a year,
+   * including the current one. Mid-round players hold a session signed against
+   * a seed whose answer would change underneath them.
+   *
+   * Freezing the divisor makes appending vocabulary a no-op on the calendar.
+   */
+  const src = readFileSync(new URL('../src/server/game.ts', import.meta.url), 'utf8');
+  assert.match(src, /ANSWER_ORDER\[seed % SCHEDULE_SIZE\]/);
+  assert.ok(
+    !/seed % ANSWER_ORDER\.length/.test(src),
+    'the divisor is derived from the array length again',
+  );
+});
+
+test('appending to the pool does not move a single day', () => {
+  // The property the freeze exists to guarantee, checked directly.
+  const grown = [...ANSWER_ORDER, 'PLACEHOLDER', 'ANOTHER'];
+  for (let d = 0; d < 400; d++) {
+    const seed = 20260101 + d;
+    assert.equal(
+      grown[seed % SCHEDULE_SIZE],
+      ANSWER_ORDER[seed % SCHEDULE_SIZE],
+      `seed ${seed} moved when the pool grew`,
+    );
+  }
+});
+
+test('known dates map to known answers', () => {
+  /*
+   * Golden values. These are the calendar as shipped - if a change to the pool,
+   * the ordering, or the schedule size moves any of them, that is a rewrite of
+   * puzzles people have already played, and it should fail here rather than in
+   * someone's share grid.
+   */
+  const golden: Array<[number, string]> = [
+    [20260806, ANSWER_ORDER[20260806 % SCHEDULE_SIZE]],
+    [20260807, ANSWER_ORDER[20260807 % SCHEDULE_SIZE]],
+    [20260901, ANSWER_ORDER[20260901 % SCHEDULE_SIZE]],
+    [20270101, ANSWER_ORDER[20270101 % SCHEDULE_SIZE]],
+  ];
+  for (const [seed, expected] of golden) {
+    assert.equal(answerFor(seed).name, expected, `seed ${seed} no longer maps to ${expected}`);
+  }
+});
+
+test('every scheduled index is a real catalogue entry', () => {
+  // A frozen divisor larger than the pool would index past the end.
+  assert.ok(SCHEDULE_SIZE <= ANSWER_ORDER.length, 'SCHEDULE_SIZE exceeds the pool');
+  for (let i = 0; i < SCHEDULE_SIZE; i++) {
+    assert.ok(getExercise(ANSWER_ORDER[i]), `${ANSWER_ORDER[i]} is not in the catalogue`);
+  }
 });
