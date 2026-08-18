@@ -16,7 +16,8 @@
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:bundle && npm run check:size && npm run check:contrast && npm run smoke",
     "check:size": "node scripts/check-size.mjs",
     "coach:probe": "node --conditions=react-server --import ./tests/loader.mjs scripts/coach-probe.mjs",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "logo": "node scripts/build-logo.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

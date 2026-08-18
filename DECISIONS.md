@@ -224,3 +224,41 @@ where every case refuses is a broken run, not a passing one.
 
 `npm run verify` runs typecheck, lint, tests, build, the answer-leak scan, the
 size budget, and a smoke test in both dev and production. It exits 0.
+
+## The logo is one file, cropped by a script
+
+The mark appears in six places at five sizes: the header, the browser tab, the
+iOS home screen, the link-preview card, and three extension icons. Cut by hand
+that is six files to remember, and the one that gets forgotten is always the
+tab icon - nobody looks at their own favicon.
+
+So `scripts/build-logo.mjs` takes `assets/logo-source.png` and derives all of
+them. Re-export the logo, run `npm run logo`, commit. It also finds the crops
+itself rather than taking hardcoded coordinates: the figure and the wordmark are
+separated by a band of blank rows, so the widest such band is the seam, and the
+figure alone is what goes in a 16px icon where "FITDLE" would be a smudge.
+
+Two things this had to survive, both of which came up immediately:
+
+**The source was a screenshot**, background grid included. Faint grey lines are
+still a colour difference, so a naive "differs from the background" test called
+every row inked, the seam disappeared, and the tab icon became the whole canvas.
+Fixed with a two-point threshold - the measured gap between grid (~48) and
+silhouette (~676) is wide enough that the cutoff is not a judgement call.
+
+**The mark is near-black and four of the five themes are dark.** Baking a colour
+means one file per theme, and a wrong one the next time a theme is added. So the
+in-app mark ships as alpha only and the page uses it as a CSS mask filled with
+`currentColor`. One file, correct in every theme including colourblind, and
+correct in advance for any theme added later. Verified in a browser: emerald on
+midnight, dark green on daylight, purple on plum.
+
+Standalone assets cannot mask against anything, so the favicon and OG card bake
+their colours. That is also why the OG card carries a caption - the link preview
+is the entire pitch for anyone deciding whether to click, and a bare logo does
+not say what the thing is.
+
+Deleted on the way: the extension build's hand-rolled PNG encoder (~80 lines
+drawing an approximate dumbbell). It was the right call when the alternative was
+a binary asset in git and no image dependency. There is a real logo now.
+
