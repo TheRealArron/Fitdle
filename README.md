@@ -1,4 +1,4 @@
-# Fitdle Pro
+# Fitdle 
 
 A fitness-themed daily deduction game. Guess the exercise in six tries, using
 two independent feedback channels: letters, and the muscles it works.
