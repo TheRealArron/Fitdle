@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Guess the five-to-nine letter exercise in six tries. A new one every day.",
   "action": {
-    "default_popup": "index.html",
+    "default_popup": "play.html",
     "default_title": "Fitdle"
   },
   "permissions": [

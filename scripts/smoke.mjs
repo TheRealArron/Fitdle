@@ -155,7 +155,24 @@ async function check(mode) {
     });
     page.on('pageerror', (e) => errors.push(e.message.slice(0, 120)));
 
-    await page.goto(`http://localhost:${mode.port}`, { waitUntil: 'networkidle' });
+    /*
+     * The landing page owns `/` and the game moved to `/play`. Both are checked:
+     * the landing page is the first thing a cold visitor loads, and it is a
+     * server component with no client JavaScript, so "it rendered" is the whole
+     * of its contract - but a broken link from it to the game would be
+     * invisible to every other check in this repo.
+     */
+    await page.goto(`http://localhost:${mode.port}/`, { waitUntil: 'networkidle' });
+    const landing = await page.evaluate(() => ({
+      heading: document.querySelector('h1')?.textContent?.trim() ?? '',
+      // Relative, since the origin differs between the two modes.
+      play: [...document.querySelectorAll('a')].filter((a) =>
+        a.getAttribute('href') === '/play',
+      ).length,
+      shots: [...document.querySelectorAll('img')].length,
+    }));
+
+    await page.goto(`http://localhost:${mode.port}/play`, { waitUntil: 'networkidle' });
     await page.evaluate(() => localStorage.clear());
     await page.reload({ waitUntil: 'networkidle' });
     await sleep(2500);
@@ -174,6 +191,9 @@ async function check(mode) {
       ['board rendered', dom.cols >= 5 && dom.cols <= 9, `${dom.cols} columns`],
       ['keyboard present', dom.keyboard === 1],
       ['puzzle number resolved from the server', dom.puzzle],
+      ['landing page renders its headline', landing.heading.length > 10, `"${landing.heading}"`],
+      ['landing page links to the game', landing.play >= 1, `${landing.play} link(s) to /play`],
+      ['landing page screenshots load', landing.shots >= 3, `${landing.shots} image(s)`],
       ['no CSP violations', violations.length === 0, violations[0] ?? ''],
       ['no console errors', errors.length === 0, errors[0] ?? ''],
     ];

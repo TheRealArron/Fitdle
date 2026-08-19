@@ -1,4 +1,3 @@
-'use client';
 
 /**
  * The Fitdle mark.
@@ -34,3 +33,31 @@ export function Mark({ className = 'h-5 w-5' }: { className?: string }) {
     />
   );
 }
+
+/**
+ * The full lockup: figure above the FITDLE wordmark.
+ *
+ * Same alpha-only asset and the same reason for it. Used where the mark has to
+ * introduce the product rather than sit beside a heading that already names it.
+ */
+export function Lockup({ className = 'h-32 w-32' }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Fitdle"
+      className={className}
+      style={{
+        backgroundColor: 'currentColor',
+        maskImage: 'url(/logo.png)',
+        WebkitMaskImage: 'url(/logo.png)',
+        maskSize: 'contain',
+        WebkitMaskSize: 'contain',
+        maskRepeat: 'no-repeat',
+        WebkitMaskRepeat: 'no-repeat',
+        maskPosition: 'center',
+        WebkitMaskPosition: 'center',
+      }}
+    />
+  );
+}
+

@@ -262,3 +262,37 @@ Deleted on the way: the extension build's hand-rolled PNG encoder (~80 lines
 drawing an approximate dumbbell). It was the right call when the alternative was
 a binary asset in git and no image dependency. There is a real logo now.
 
+## The landing page is a server component, and its numbers are not typed
+
+The game moved from `/` to `/play` so a landing page could own the root. Two
+choices in it are worth keeping.
+
+**No client JavaScript at all.** No framer-motion, no state, no store -
+everything that moves is CSS. This is the page a cold visitor loads before
+deciding whether they care, and every kilobyte is spent ahead of that decision.
+The shared bundle went 164.5 kB to 164.9 kB for the whole page.
+
+**Every number is read from the data.** The first version of this copy, written
+by a page generator from a brief, claimed 100 exercises when there were 99 - a
+number I had put in the brief myself from a bad grep. It also said "five themes
+including colourblind mode" when the truth is five themes *and* a colourblind
+mode that layers on any of them, which is the better claim and the one that got
+lost. So the page imports `CATALOGUE`, `MAX_GUESSES`, `SCHEDULE_SIZE` and
+`CATEGORY_HINT_AT`, and a test fails on any literal count sitting next to the
+word "exercises".
+
+Two couplings that would otherwise have broken silently, both now tested:
+
+- The browser extension's popup opens a file out of the static export, so moving
+  the game moved its entry point. A manifest still pointing at `index.html`
+  builds, installs and opens - it just shows a marketing page in a 400px popup.
+- The static export refuses to build with a dynamic route in the tree, and a
+  metadata route is dynamic unless it says otherwise. `manifest.ts` needed
+  `export const dynamic = 'force-static'` or `build:extension` failed outright.
+
+The hero ships two crops rather than one responsive image. The desktop capture
+scaled to a phone is a picture of a layout, not of a game - the tiles go
+illegible and the anatomy panel becomes a smudge. Neither is marked `priority`:
+the LCP element is the headline, and preloading an image the other breakpoint
+hides spends bandwidth on something nobody sees.
+

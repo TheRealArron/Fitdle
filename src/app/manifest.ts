@@ -13,6 +13,15 @@ import type { MetadataRoute } from 'next';
  * rather than a bookmark, which also reclaims the address bar's height on a
  * phone - the board is tall and that space is worth having.
  */
+/*
+ * The manifest never varies, so say so explicitly.
+ *
+ * Next treats a metadata route as dynamic unless told otherwise, and the static
+ * export used for the browser extension refuses to build with a dynamic route
+ * in the tree. Without this line `npm run build:extension` fails outright.
+ */
+export const dynamic = 'force-static';
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Fitdle - Daily Exercise Deduction Game',
