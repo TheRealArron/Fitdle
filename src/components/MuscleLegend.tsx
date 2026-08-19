@@ -52,11 +52,11 @@ export function MuscleLegend({
             aria-hidden
           />
           <div className="min-w-0">
-            <span className="text-[11px] font-semibold leading-tight text-slate-300">
+            <span className="text-xs font-semibold leading-tight text-slate-300">
               {r.title}
             </span>
             {detailed && (
-              <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{r.detail}</p>
+              <p className="mt-0.5 text-xs leading-snug text-slate-500">{r.detail}</p>
             )}
           </div>
         </li>
@@ -70,10 +70,10 @@ export function MuscleLegend({
           aria-hidden
         />
         <div className="min-w-0">
-          <span className="text-[11px] font-semibold leading-tight text-slate-300">
+          <span className="text-xs font-semibold leading-tight text-slate-300">
             Target area
           </span>
-          <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+          <p className="mt-0.5 text-xs leading-snug text-slate-500">
             {detailed
               ? `From guess ${CATEGORY_HINT_AT}, a dashed amber ring marks the answer's muscle group. It only appears on muscles you have not probed yet, so it always tells you something new. An outlined muscle is not necessarily worked.`
               : `Unprobed muscles in the target group, from guess ${CATEGORY_HINT_AT}`}

@@ -79,7 +79,7 @@ export function OpeningCall() {
             exit={{ opacity: 0 }}
             className="panel-raised flex max-w-md flex-col gap-2 rounded-xl p-3"
           >
-            <p className="text-center text-[11px] leading-snug text-slate-400">
+            <p className="text-center text-xs leading-snug text-slate-400">
               Right and the equipment hint unlocks now. Wrong and you lose the guess-3 category
               hint.
             </p>
@@ -103,7 +103,7 @@ export function OpeningCall() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="rounded-lg px-3 py-1.5 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
+              className="rounded-lg px-3 py-1.5 text-xs text-slate-500 transition-colors hover:text-slate-300"
             >
               Skip, play it safe
             </button>

@@ -37,7 +37,7 @@ export function StatsModal({ open, onClose }: StatsModalProps) {
           {cells.map((c) => (
             <div key={c.label} className="flex flex-col items-center gap-1">
               <span className="font-game text-2xl font-bold text-white tabular-nums">{c.value}</span>
-              <span className="text-center text-[10px] uppercase leading-tight tracking-wider text-slate-500">
+              <span className="text-center text-[11px] uppercase leading-tight tracking-wider text-slate-500">
                 {c.label}
               </span>
             </div>

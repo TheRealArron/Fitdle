@@ -12,6 +12,7 @@ import {
   Target,
   Trophy,
 } from 'lucide-react';
+import { AnatomyDrill } from '@/components/AnatomyDrill';
 import { Lockup, Mark } from '@/components/Wordmark';
 import { CATALOGUE, CATEGORY_HINT_AT, MAX_GUESSES } from '@/data/exercises';
 import { SCHEDULE_SIZE } from '@/server/game';
@@ -368,6 +369,37 @@ export default function Landing() {
             </div>
           </Section>
         </div>
+
+        {/* ── try it ── */}
+        <Section eyebrow="Try it" title="Thirty seconds. No account, no puzzle spent.">
+          <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
+            <div className="flex flex-col gap-4">
+              {/* The card beside this already states what the drill is and why
+                  it helps, so this says the part the card cannot: it is real,
+                  and it costs you nothing to try. */}
+              <p className="text-base leading-relaxed text-slate-300">
+                The muscle map with the word puzzle removed. An exercise appears, you tap the
+                muscle it works, and thirty seconds later you find out how well you read a body.
+              </p>
+              <p className="text-base leading-relaxed text-slate-300">
+                This one is live, not a picture. Nothing you do in it touches a streak or
+                today&rsquo;s answer, and you do not need an account.
+              </p>
+            </div>
+            {/*
+              * A client island in an otherwise server-rendered page. The drill
+              * was built to touch no puzzle state - no streak, no seed, no
+              * server call - which is exactly what makes it safe to drop in
+              * front of someone who has not started a round.
+              */}
+            {/* Capped, not full-width. The drill was built for a sidebar, and
+                given a wide column the two figures float in the middle of it
+                with the answer buttons stretched to arm's length either side. */}
+            <div className="mx-auto w-full max-w-md rounded-xl border border-tile-border bg-surface p-5 sm:p-6">
+              <AnatomyDrill />
+            </div>
+          </div>
+        </Section>
 
         {/* ── do the exercise ── */}
         <Section eyebrow="After the round" title="You actually have to do it.">

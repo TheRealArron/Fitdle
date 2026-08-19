@@ -95,7 +95,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                 <h4 className="text-sm font-semibold text-white">{MUSCLE_LABEL[region]}</h4>
                 {worksIt !== null && answer && (
                   <p
-                    className={`text-[11px] leading-snug ${
+                    className={`text-xs leading-snug ${
                       worksIt ? 'text-state-correct' : 'text-slate-500'
                     }`}
                   >
@@ -125,7 +125,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                     <span
                       key={e.name}
                       title={e.display}
-                      className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-game text-[10px] font-bold text-slate-200"
+                      className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-game text-[11px] font-bold text-slate-200"
                     >
                       {e.name}
                     </span>
@@ -142,7 +142,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                     <span
                       key={e.name}
                       title={e.display}
-                      className="rounded-md bg-white/[0.03] px-1.5 py-0.5 font-game text-[10px] text-slate-400"
+                      className="rounded-md bg-white/[0.03] px-1.5 py-0.5 font-game text-[11px] text-slate-400"
                     >
                       {e.name}
                     </span>
@@ -152,7 +152,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
             )}
 
             {others.length === 0 && assists.length === 0 && (
-              <p className="text-[11px] text-slate-500">
+              <p className="text-xs text-slate-500">
                 Nothing in the list targets this directly.
               </p>
             )}

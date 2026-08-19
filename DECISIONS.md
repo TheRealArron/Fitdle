@@ -267,10 +267,13 @@ a binary asset in git and no image dependency. There is a real logo now.
 The game moved from `/` to `/play` so a landing page could own the root. Two
 choices in it are worth keeping.
 
-**No client JavaScript at all.** No framer-motion, no state, no store -
-everything that moves is CSS. This is the page a cold visitor loads before
-deciding whether they care, and every kilobyte is spent ahead of that decision.
-The shared bundle went 164.5 kB to 164.9 kB for the whole page.
+**The page is not a client component.** Almost all of it is text that never
+changes, and marking the file `'use client'` would ship every word of that copy
+to the browser as JavaScript. Interactivity is allowed, but as an island: the
+anatomy drill is embedded and playable, and only it crosses the boundary. That
+was cheap because the drill was already built to touch no puzzle state - no
+streak, no seed, no server call - which is exactly what makes it safe to put in
+front of someone who has not started a round. Shared bundle 164.5 to 164.9 kB.
 
 **Every number is read from the data.** The first version of this copy, written
 by a page generator from a brief, claimed 100 exercises when there were 99 - a
@@ -296,3 +299,30 @@ illegible and the anatomy panel becomes a smudge. Neither is marked `priority`:
 the LCP element is the headline, and preloading an image the other breakpoint
 hides spends bandwidth on something nobody sees.
 
+## `body { overflow: hidden }` outlived the assumption it was built on
+
+The game is a fixed viewport - board and keyboard, never scrolling - so the
+stylesheet locked the body. Correct, for exactly as long as the game was the
+only page.
+
+The landing page is several screens tall, and the lock silently disabled
+scrolling on it. Nothing failed: the page rendered perfectly and simply refused
+to move. It went unnoticed here because every check in the repo either measures
+the game (which is supposed to be unscrollable) or measures markup rather than
+behaviour.
+
+The fix is that the lock was never the body's job. The game's own root is
+`h-dvh overflow-hidden`, so it already locks itself; the body just needed to
+stop making that decision for every page that would ever exist.
+
+The same shape of bug, found the same day: the physical-keyboard listener was on
+`window` and suspended only for modals. The guide chat is not a modal, so typing
+a question filled in the guess grid at the same time, and Backspace was
+`preventDefault()`ed before it reached the input - you could type into the chat
+but not correct a typo. The fix is not another flag per feature but a rule about
+origin: ignore any key whose target is a text field. Every input added later
+inherits it.
+
+Both are the same lesson. A global that encodes "there is only one screen here"
+stops being true the first time that is false, and neither a type checker nor a
+DOM assertion can see it.

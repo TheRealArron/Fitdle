@@ -188,7 +188,7 @@ export function ResultModal() {
           <ol className="mb-3 flex flex-col gap-2">
             {target.howTo.map((step, i) => (
               <li key={i} className="flex gap-3 text-sm leading-relaxed text-slate-300">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 font-game text-[11px] font-bold text-slate-400">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/5 font-game text-xs font-bold text-slate-400">
                   {i + 1}
                 </span>
                 {step}

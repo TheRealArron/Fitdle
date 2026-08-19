@@ -263,7 +263,7 @@ export function Game() {
           <div className="w-full">{figure}</div>
           <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
           {!region && (
-            <p className="text-center text-[11px] leading-snug text-slate-500">
+            <p className="text-center text-xs leading-snug text-slate-500">
               {roundOver
                 ? 'Tap a muscle to see what else trains it.'
                 : 'Muscle details unlock when the round ends.'}

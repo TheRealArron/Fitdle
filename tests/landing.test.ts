@@ -59,15 +59,31 @@ test('the extension popup opens the game, not the landing page', () => {
   assert.equal(manifest.action.default_popup, 'play.html');
 });
 
-test('the landing page ships no client JavaScript of its own', () => {
+test('the landing page itself stays a server component', () => {
   // readCode, not readSource: the comment below names framer-motion, and an
   // absence check that reads comments matches its own explanation.
   const src = readCode(new URL('../src/app/page.tsx', import.meta.url));
   /*
-   * It is the first thing a cold visitor loads and it has nothing to interact
-   * with, so it stays a server component. 'use client' here would pull the
-   * whole page into the browser bundle to render text that never changes.
+   * The page is the first thing a cold visitor loads, and almost all of it is
+   * text that never changes. Marking the whole file 'use client' would ship
+   * every word of that copy to the browser as JavaScript.
+   *
+   * Interactivity is allowed, but as an island: the anatomy drill is its own
+   * client component and only it crosses the boundary. That is the distinction
+   * this guards - not "no interactivity", but "the page is not the client
+   * component".
    */
-  assert.ok(!/^'use client'/m.test(src), "the landing page must not be a client component");
-  assert.ok(!/framer-motion/.test(src), 'animate with CSS here, not a runtime');
+  assert.ok(!/^'use client'/m.test(src), 'the landing page must not be a client component');
+  assert.ok(!/framer-motion/.test(src), 'animate with CSS here; let islands own their runtimes');
+});
+
+test('the embedded drill cannot touch puzzle state', () => {
+  /*
+   * The drill sits in front of people who have not started a round, so it must
+   * not be able to spend a guess, move a streak, or reveal a seed. It was built
+   * that way deliberately; this keeps it that way.
+   */
+  const drill = readCode(new URL('../src/components/AnatomyDrill.tsx', import.meta.url));
+  assert.ok(!/useGameStore/.test(drill), 'the drill must not read or write puzzle state');
+  assert.ok(!/\/api\//.test(drill), 'the drill must not call the game API');
 });

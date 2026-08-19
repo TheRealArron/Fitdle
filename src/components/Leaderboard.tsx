@@ -89,7 +89,7 @@ export function Leaderboard({ refreshKey = '' }: { refreshKey?: string }) {
         ))}
       </div>
 
-      <p className="text-[11px] leading-snug text-slate-500">
+      <p className="text-xs leading-snug text-slate-500">
         {which === 'streak'
           ? 'Longest current streaks. Ties go to whoever got there first.'
           : "Everyone who solved today's puzzle, fewest guesses first."}
@@ -158,7 +158,7 @@ export function Leaderboard({ refreshKey = '' }: { refreshKey?: string }) {
                 </span>
                 <span className="shrink-0 font-game text-sm font-bold tabular-nums">
                   {e.value}
-                  <span className="ml-1 text-[11px] font-normal text-slate-400">
+                  <span className="ml-1 text-xs font-normal text-slate-400">
                     {which === 'streak' ? 'd' : `/6`}
                   </span>
                 </span>
@@ -183,7 +183,7 @@ export function Leaderboard({ refreshKey = '' }: { refreshKey?: string }) {
       ) : null}
 
       {!user ? (
-        <p className="text-[11px] leading-snug text-slate-500">
+        <p className="text-xs leading-snug text-slate-500">
           Sign in to appear on the board. Only the name you choose is ever shown.
         </p>
       ) : null}

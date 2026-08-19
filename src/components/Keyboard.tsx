@@ -38,6 +38,27 @@ export function Keyboard() {
       if (modalOpen) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+      /*
+       * Never take a key that belongs to something you are typing into.
+       *
+       * This listener is on `window`, so it fired for every keystroke anywhere
+       * on the page - including inside the guide chat's input. Typing a
+       * question there filled in the guess grid at the same time, and
+       * Backspace was preventDefault()ed here so it never reached the input at
+       * all: you could type into the chat but not correct a typo.
+       *
+       * Checking the event's origin rather than adding a flag per feature is
+       * what makes this stay fixed. Any input added later - a username field,
+       * a search box - inherits it without touching this file.
+       */
+      const el = e.target as HTMLElement | null;
+      if (
+        el &&
+        (el.isContentEditable || /^(input|textarea|select)$/i.test(el.tagName))
+      ) {
+        return;
+      }
+
       if (e.key === 'Enter') {
         e.preventDefault();
         submitGuess();

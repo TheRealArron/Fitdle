@@ -60,7 +60,7 @@ function NavItem({
     >
       <Icon className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-accent" />
       <span className="flex-1">{label}</span>
-      {hint && <span className="numeric text-[11px] text-slate-600">{hint}</span>}
+      {hint && <span className="numeric text-xs text-slate-600">{hint}</span>}
     </button>
   );
 }
@@ -191,14 +191,14 @@ export function Sidebar({
             onClick={go(onOpenAccount)}
             className="group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/[0.06]"
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-dim font-game text-[10px] font-bold uppercase text-accent">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-dim font-game text-[11px] font-bold uppercase text-accent">
               {authUser.username.slice(0, 2)}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-white">
                 {authUser.username}
               </span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-500">
+              <span className="flex items-center gap-1 text-[11px] text-slate-500">
                 <CloudCheck className="h-3 w-3" aria-hidden />
                 Synced
               </span>
@@ -228,12 +228,12 @@ export function Sidebar({
                   key={name}
                   className="panel-raised flex items-baseline gap-2 rounded-lg px-2.5 py-1.5"
                 >
-                  <span className="numeric text-[10px] text-slate-600">{i + 1}</span>
+                  <span className="numeric text-[11px] text-slate-600">{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-game text-xs font-bold tracking-wide text-white">
                       {name}
                     </p>
-                    <p className="truncate text-[10px] text-slate-500">
+                    <p className="truncate text-[11px] text-slate-500">
                       {e ? `${e.display} · ${e.group}` : '-'}
                     </p>
                   </div>
@@ -251,7 +251,7 @@ export function Sidebar({
             Muscle key
           </h3>
           <MuscleLegend />
-          <p className="text-[10px] leading-relaxed text-slate-600">
+          <p className="text-[11px] leading-relaxed text-slate-600">
             The figure only reacts to muscles your guesses have touched.
           </p>
         </section>

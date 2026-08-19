@@ -202,7 +202,7 @@ export function AnatomyDrill() {
       </motion.div>
 
       <div aria-live="polite" className="text-center">
-        <p className="text-[11px] tracking-wide text-slate-500 uppercase">
+        <p className="text-xs tracking-wide text-slate-500 uppercase">
           {picked
             ? correct
               ? 'Correct'
