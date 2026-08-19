@@ -1,23 +1,30 @@
 import 'server-only';
 
 /**
- * Fixed-window rate limiter, in process memory.
+ * Fixed-window rate limiter.
  *
- * A fixed window over the shared in-process counter. The per-instance caveat
- * and the Redis escape hatch are documented once, in `memoryCounter.ts` - this
- * is one caller of it rather than its own hand-rolled Map.
+ * A fixed window over the shared counter in `counter.ts`, which is backed by
+ * Redis when one is configured and by process memory when it is not. This file
+ * does not know which, and must not: the whole reason the fallback lives in one
+ * place is so no call site can get the decision wrong.
  */
 
-import { count } from '@/server/memoryCounter';
+import { count } from '@/server/counter';
 
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
   /** Seconds until the window resets. For the Retry-After header. */
   retryAfter: number;
+  /** True when the limit was enforced across instances rather than locally. */
+  shared: boolean;
 }
 
-export function rateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
+export async function rateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
   const now = Date.now();
   /*
    * Fixed windows, not sliding: the window id is the period number, so every
@@ -28,11 +35,12 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   const window = Math.floor(now / windowMs);
   const resetsIn = Math.ceil((windowMs - (now % windowMs)) / 1000);
 
-  const r = count(key, limit, window, resetsIn);
+  const r = await count(key, limit, window, resetsIn);
   return {
     allowed: r.allowed,
     remaining: Math.max(0, limit - r.count),
     retryAfter: r.allowed ? 0 : r.retryAfter,
+    shared: r.shared,
   };
 }
 

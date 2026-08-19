@@ -21,7 +21,7 @@ import 'server-only';
  * and this as what degrades gracefully before you reach them.
  */
 
-import { count, secondsUntilUtcMidnight, utcDay } from '@/server/memoryCounter';
+import { count, secondsUntilUtcMidnight, utcDay } from '@/server/counter';
 
 /** Requests per UTC day, across all callers. Override with AI_DAILY_BUDGET. */
 const DEFAULT_BUDGET = 500;
@@ -57,15 +57,15 @@ export interface BudgetCheck {
  * Call it immediately before the model request, not after: a check that runs
  * afterwards has already spent the money it was meant to prevent.
  */
-export function claimAiBudget(name: string): BudgetCheck {
+export async function claimAiBudget(name: string): Promise<BudgetCheck> {
   const limit = budget();
-  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight());
+  const r = await count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight());
   return { allowed: r.allowed, used: r.count, limit };
 }
 
 /** Current usage without claiming. For diagnostics only. */
-export function aiBudgetUsed(name: string): BudgetCheck {
+export async function aiBudgetUsed(name: string): Promise<BudgetCheck> {
   const limit = budget();
-  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight(), false);
+  const r = await count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight(), false);
   return { allowed: r.allowed, used: r.count, limit };
 }

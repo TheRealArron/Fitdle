@@ -156,3 +156,90 @@ create trigger fitdle_progress_touch
 -- side - a Postgres function that owns the daily word and validates each guess
 -- - which is a different product decision, not a policy tweak.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Atomic AI quota claim.
+--
+-- The server used to do this as read-modify-write over the REST API: SELECT the
+-- count, compare it to the limit, UPDATE it. Two requests arriving together
+-- both read the same number, both decide there is room, and both write it - so
+-- the counter advances by one while two messages were spent. On the one path in
+-- this app that costs actual money.
+--
+-- This is the same decision expressed as a single UPDATE. The limit test lives
+-- in the WHERE clause, so Postgres evaluates it against the row it is about to
+-- lock: if the row does not qualify, no update happens and no message is
+-- granted. There is no window between the check and the write because they are
+-- the same statement.
+--
+-- The limits are PARAMETERS, not literals. They belong to the application - see
+-- QUOTA in src/server/quota.ts - and duplicating them here would create two
+-- sources of truth that drift the first time one is tuned.
+--
+-- SECURITY DEFINER because it is called with the service-role key from the
+-- server and must be able to write a row the caller does not own. `search_path`
+-- is pinned: a definer function that resolves unqualified names through the
+-- caller's search_path can be tricked into running someone else's table.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.fitdle_claim_ai(
+  p_user    uuid,
+  p_day     int,
+  p_free    int,
+  p_pro     int,
+  p_consume boolean
+)
+returns table (allowed boolean, used int, quota int, tier text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tier  text;
+  v_used  int;
+  v_quota int;
+begin
+  -- A player who has never saved has no row yet, and asking the AI a question
+  -- should not be the thing that fails. `save` has no default, so it is seeded
+  -- empty; the generated leaderboard columns read null out of it, which is
+  -- correct for someone who has not played.
+  insert into public.fitdle_progress (user_id, save)
+  values (p_user, '{}'::jsonb)
+  on conflict (user_id) do nothing;
+
+  if p_consume then
+    update public.fitdle_progress p
+       set ai_day   = p_day,
+           -- A row left over from an earlier day restarts at one rather than
+           -- continuing, so no sweep job is needed to reset anybody.
+           ai_count = case when p.ai_day = p_day then p.ai_count + 1 else 1 end
+     where p.user_id = p_user
+       and (
+         p.ai_day <> p_day
+         or p.ai_count < case when p.tier = 'pro' then p_pro else p_free end
+       )
+    returning p.ai_count, p.tier into v_used, v_tier;
+
+    if found then
+      v_quota := case when v_tier = 'pro' then p_pro else p_free end;
+      return query select true, v_used, v_quota, v_tier;
+      return;
+    end if;
+  end if;
+
+  -- Reached either because this is a read-only peek, or because the update
+  -- above did not qualify - which means the allowance is already spent.
+  select p.tier, case when p.ai_day = p_day then p.ai_count else 0 end
+    into v_tier, v_used
+    from public.fitdle_progress p
+   where p.user_id = p_user;
+
+  v_quota := case when v_tier = 'pro' then p_pro else p_free end;
+  return query select (v_used < v_quota), v_used, v_quota, v_tier;
+end;
+$$;
+
+-- Only the server may call it. The service-role key bypasses RLS, but the
+-- function is reachable by anyone who can reach PostgREST unless this is said.
+revoke all on function public.fitdle_claim_ai(uuid, int, int, int, boolean) from public, anon, authenticated;
+

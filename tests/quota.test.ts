@@ -97,7 +97,7 @@ test('the signed-in counter is durable, not client-held', () => {
    * browser does not have.
    */
   assert.match(quota, /adminClient\(\)/);
-  assert.match(quota, /\.update\(\{ ai_day: day, ai_count: used \+ 1 \}\)/);
+  assert.match(quota, /rpc\('fitdle_claim_ai'/, 'the durable claim must go through Postgres');
   assert.ok(!/localStorage/.test(quotaCode), 'the quota touches client storage');
 });
 
@@ -115,9 +115,47 @@ test('quota is claimed before the model call, on both surfaces', () => {
   }
 });
 
-test('a failed counter write does not deny an entitled question', () => {
-  // One uncharged message is the right way round to fail.
-  assert.match(quota, /console\.error\('\[quota\] write failed'/);
+test('the claim is atomic, so two requests cannot both spend the last message', () => {
+  /*
+   * The bug this replaced: SELECT the count, compare it in JavaScript, UPDATE
+   * it. Two requests arriving together both read the same number, both decide
+   * there is room, and both write it - the counter advances by one while two
+   * messages are spent, on the only path here that costs money.
+   *
+   * The fix is that the limit test is inside the UPDATE's WHERE clause, so
+   * Postgres evaluates it against the row it is about to lock. This asserts the
+   * shape, because a read-modify-write reintroduced later would look perfectly
+   * reasonable in review.
+   */
+  assert.ok(
+    !/\.select\('tier, ai_day, ai_count'\)/.test(quotaCode),
+    'the quota is reading then writing again; that race is what the RPC removed',
+  );
+
+  const schema = readFileSync(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  const fn = schema.slice(schema.indexOf('function public.fitdle_claim_ai'));
+  assert.match(fn, /update public\.fitdle_progress/, 'the claim must be an UPDATE');
+  assert.match(
+    fn,
+    /where[\s\S]{0,200}?ai_count < case when p\.tier = 'pro'/,
+    'the limit test must be in the WHERE clause, not decided by the caller',
+  );
+});
+
+test('the SQL owns no limits of its own', () => {
+  /*
+   * The numbers belong to QUOTA in the application. Writing them in SQL as well
+   * creates two sources of truth that drift the first time one is tuned, and
+   * the drift is invisible until someone is charged for it.
+   */
+  const schema = readFileSync(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  const fn = schema.slice(schema.indexOf('function public.fitdle_claim_ai'));
+  const body = fn.slice(0, fn.indexOf('$$;'));
+  for (const n of [QUOTA.free, QUOTA.pro, QUOTA.anonymous]) {
+    assert.ok(!new RegExp(`\\b${n}\\b`).test(body), `${n} is hardcoded in the SQL`);
+  }
+  assert.match(body, /p_free/);
+  assert.match(body, /p_pro/);
 });
 
 test('the day key is UTC, matching the puzzle rollover', () => {
@@ -129,7 +167,11 @@ test('the day key is UTC, matching the puzzle rollover', () => {
    * USES it rather than checking for an inline expression it no longer has.
    */
   assert.match(quota, /utcDay\(\)/, 'the quota does not use the shared UTC day');
-  assert.match(quota, /ai_day === day/);
+
+  // Postgres decides whether a row belongs to today, so the comparison moved
+  // into the function with the rest of the claim.
+  const schema = readFileSync(new URL('../supabase/schema.sql', import.meta.url), 'utf8');
+  assert.match(schema, /when p\.ai_day = p_day then p\.ai_count \+ 1 else 1 end/);
 
   const counter = readFileSync(new URL('../src/server/memoryCounter.ts', import.meta.url), 'utf8');
   assert.match(counter, /Math\.floor\(Date\.now\(\) \/ 86_400_000\)/);
@@ -152,10 +194,10 @@ test('a broken counter falls back to anonymous limits, not to unlimited', () => 
    * unlimited AI forever with only the global budget in the way. A broken
    * counter must therefore grant LESS, not more.
    */
-  assert.match(quota, /const \{ data, error \} = await client/, 'the read error is discarded');
+  assert.match(quota, /const \{ data, error \} = await client\.rpc/, 'the error is discarded');
   assert.match(
     quota,
-    /if \(error\) \{[\s\S]{0,400}?claimAnonymous\(`degraded:\$\{userId\}`/,
-    'a read error does not fall back to the anonymous allowance',
+    /if \(error \|\| !row\) \{[\s\S]{0,500}?claimAnonymous\(`degraded:\$\{userId\}`/,
+    'a failed claim does not fall back to the anonymous allowance',
   );
 });

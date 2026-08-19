@@ -14,7 +14,7 @@ import { clientKey, rateLimit } from '@/server/rateLimit';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`call:${clientKey(request)}`, 20, 60_000);
+  const limit = await rateLimit(`call:${clientKey(request)}`, 20, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests' },

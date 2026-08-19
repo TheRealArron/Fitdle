@@ -19,7 +19,7 @@ import { userIdFromRequest } from '@/server/supabase';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`coach:${clientKey(request)}`, 10, 60_000);
+  const limit = await rateLimit(`coach:${clientKey(request)}`, 10, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many questions. Give it a minute.' },

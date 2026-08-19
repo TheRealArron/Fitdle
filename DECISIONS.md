@@ -326,3 +326,55 @@ inherits it.
 Both are the same lesson. A global that encodes "there is only one screen here"
 stops being true the first time that is false, and neither a type checker nor a
 DOM assertion can see it.
+
+## The two documented races are now closed
+
+Two things in here were honest caveats rather than working code: the rate limits
+counted in process, and the AI quota was a read-modify-write. Both were written
+up as deliberate trades, and both were the kind of trade that is only defensible
+until someone asks you to fix it.
+
+**Rate limiting is now shared.** `sharedCounter.ts` puts the counter in Upstash
+Redis over its REST API - no connection pool, which is the wrong shape for a
+function that may be frozen between requests and may never run on the same
+instance twice. `counter.ts` is the seam: Redis when it answers, the in-process
+map when it does not, and no caller knows which.
+
+The increment is one Lua script rather than two commands, because both obvious
+two-command versions are wrong. `INCR` then `EXPIRE` every time pushes the
+expiry out on each request, so a key under steady load never expires and the
+window stops being a window. `INCR` then `EXPIRE` only when the count is 1 is
+correct in principle, but the test happens on the client between two round
+trips, so two requests racing on a fresh key can both see 1 and neither may set
+the TTL. Redis runs a script atomically, so the test belongs inside it - and it
+is one round trip, which matters when it sits in front of every limited request.
+
+It fails OPEN. If Redis is unreachable the request falls back to in-process
+counting rather than being refused, because an outage in the thing that limits
+abuse must not become an outage of the game. The limit degrades to what it was
+before rather than disappearing.
+
+Proved end to end rather than asserted: two independent `next start` processes
+pointed at one counter, hitting a 60-per-minute route. The first took 40
+requests, the second was allowed 20 and then refused 10. Sixty across the fleet.
+Before the change the second process had its own counter and would have allowed
+all thirty.
+
+**The AI quota is now atomic.** It used to SELECT the count, compare it in
+JavaScript, and UPDATE - so two requests arriving together both read the same
+number, both concluded there was room, and both wrote it. The counter advanced
+by one while two messages were spent, on the only path in this app that costs
+money. `fitdle_claim_ai` is the same decision as a single UPDATE whose WHERE
+clause carries the limit test, so Postgres evaluates it against the row it is
+about to lock and there is no window between the check and the write.
+
+The limits are parameters to that function, not literals in it. They belong to
+`QUOTA` in the application, and writing them in SQL as well would create two
+sources of truth that drift the first time one is tuned - invisibly, until
+somebody is charged for the difference. A test asserts none of the numbers
+appear in the function body.
+
+Both keep their old behaviour as the fallback, which is what made this safe to
+land before either service is provisioned: with no Redis and no migration run,
+the app behaves exactly as it did yesterday.
+

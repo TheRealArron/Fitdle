@@ -18,7 +18,7 @@ import { userIdFromRequest } from '@/server/supabase';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const limit = rateLimit(`board:${clientKey(request)}`, 30, 60_000);
+  const limit = await rateLimit(`board:${clientKey(request)}`, 30, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests' },

@@ -99,7 +99,7 @@ export async function askCoach(question: string, target: Reveal): Promise<CoachR
    * Claimed BEFORE the request, not after - a check that runs afterwards has
    * already spent the money it exists to prevent.
    */
-  if (!claimAiBudget('coach').allowed) {
+  if (!(await claimAiBudget('coach')).allowed) {
     return {
       status: 'error',
       text: 'The coach has hit its daily limit. It will be back tomorrow.',

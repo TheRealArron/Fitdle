@@ -1,6 +1,6 @@
 import 'server-only';
 import type { QuotaState, Tier } from '@/lib/contracts';
-import { count, secondsUntilUtcMidnight, utcDay } from '@/server/memoryCounter';
+import { count, secondsUntilUtcMidnight, utcDay } from '@/server/counter';
 import { adminClient } from '@/server/supabase';
 
 /**
@@ -26,7 +26,6 @@ import { adminClient } from '@/server/supabase';
  * is small enough that the leak does not matter.
  */
 
-const TABLE = 'fitdle_progress';
 
 /**
  * Daily AI messages, guide and coach combined.
@@ -55,9 +54,9 @@ function normaliseTier(raw: unknown): Tier {
 
 /* ── anonymous ────────────────────────────────────────────────────────────── */
 
-function claimAnonymous(key: string, consume: boolean): QuotaState {
+async function claimAnonymous(key: string, consume: boolean): Promise<QuotaState> {
   const limit = QUOTA.anonymous;
-  const r = count(`quota:${key}`, limit, utcDay(), secondsUntilUtcMidnight(), consume);
+  const r = await count(`quota:${key}`, limit, utcDay(), secondsUntilUtcMidnight(), consume);
   return {
     allowed: r.allowed,
     used: r.count,
@@ -72,11 +71,18 @@ function claimAnonymous(key: string, consume: boolean): QuotaState {
 /**
  * Reads and optionally consumes one message from a signed-in player's day.
  *
- * Read-modify-write rather than an atomic increment, which means two requests
- * racing can both read the same count and one message goes uncharged. That is
- * a deliberate trade: the alternative is a Postgres function and a round trip
- * on every read, to defend a limit whose worst-case abuse is a handful of extra
- * questions. The global budget is the backstop for anything larger.
+ * ── Why this is one database call and not three ─────────────────────────────
+ * It used to SELECT the count, compare it in JavaScript, then UPDATE. Two
+ * requests arriving together both read the same number, both concluded there
+ * was room, and both wrote it - the counter advanced by one while two messages
+ * were spent. Small in isolation, and on the only path in this app that spends
+ * money.
+ *
+ * `fitdle_claim_ai` is the same decision as a single UPDATE whose WHERE clause
+ * carries the limit test, so Postgres evaluates it against the row it is about
+ * to lock. There is no gap between the check and the write because they are the
+ * same statement. The limits are passed IN rather than written in SQL, so QUOTA
+ * below stays the only place they are defined.
  */
 async function claimUser(userId: string, consume: boolean): Promise<QuotaState> {
   const client = adminClient();
@@ -93,55 +99,46 @@ async function claimUser(userId: string, consume: boolean): Promise<QuotaState> 
     };
   }
 
-  const { data, error } = await client
-    .from(TABLE)
-    .select('tier, ai_day, ai_count')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const { data, error } = await client.rpc('fitdle_claim_ai', {
+    p_user: userId,
+    p_day: utcDay(),
+    p_free: QUOTA.free,
+    p_pro: QUOTA.pro,
+    p_consume: consume,
+  });
 
   /*
-   * A read error means the counter cannot be trusted - overwhelmingly because
-   * the migration adding these columns has not been run (Postgres 42703).
+   * A failure here means the counter cannot be trusted - overwhelmingly because
+   * the migration adding this function has not been run yet.
    *
-   * Discarding it fails OPEN, and open on the one path that costs money: `data`
-   * comes back null, so the row reads as zero used, the increment then fails
-   * too, and every signed-in player has unlimited AI forever. The global budget
-   * would be the only thing left standing.
-   *
-   * So a broken counter drops to the anonymous allowance, enforced in memory.
-   * The player still gets a couple of questions rather than an error, and the
-   * bill still has a per-person ceiling. `maybeSingle` returns no error for a
-   * player who simply has no row yet, so the ordinary first-time case is
-   * unaffected.
+   * Discarding the error fails OPEN, and open on the path that costs money:
+   * every signed-in player would have unlimited AI and the global budget would
+   * be the only thing left standing. So a broken counter drops to the anonymous
+   * allowance, enforced in memory. The player still gets a couple of questions
+   * rather than an error, and the bill still has a per-person ceiling.
    */
-  if (error) {
-    console.error('[quota] cannot read counters, falling back to anonymous limits:', error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (error || !row) {
+    console.error(
+      '[quota] cannot claim, falling back to anonymous limits:',
+      error?.message ?? 'no row returned',
+    );
     return claimAnonymous(`degraded:${userId}`, consume);
   }
 
-  const tier = normaliseTier(data?.tier);
+  const tier = normaliseTier(row.tier);
+  const used = Number(row.used) || 0;
+  // Trust our own constants over the row for the limit, so a stale deployment
+  // of the function cannot quietly hand out a different allowance.
   const limit = QUOTA[tier];
-  const day = utcDay();
-  // A row from another day reads as zero used - no sweep job needed.
-  const used = data?.ai_day === day ? ((data?.ai_count as number) ?? 0) : 0;
 
-  if (used >= limit) {
-    return { allowed: false, used, limit, remaining: 0, tier };
-  }
-
-  if (consume) {
-    const { error } = await client
-      .from(TABLE)
-      .update({ ai_day: day, ai_count: used + 1 })
-      .eq('user_id', userId);
-
-    // A failed write must not deny a question the player is entitled to. It
-    // means one message goes uncharged, which is the right way round to fail.
-    if (error) console.error('[quota] write failed', error.message);
-  }
-
-  const now = consume ? used + 1 : used;
-  return { allowed: true, used: now, limit, remaining: limit - now, tier };
+  return {
+    allowed: Boolean(row.allowed),
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    tier,
+  };
 }
 
 /* ── public ───────────────────────────────────────────────────────────────── */
@@ -153,10 +150,10 @@ async function claimUser(userId: string, consume: boolean): Promise<QuotaState> 
  * them apart. Call immediately before the model request.
  */
 export function claimQuota(userId: string | null, key: string): Promise<QuotaState> {
-  return userId ? claimUser(userId, true) : Promise.resolve(claimAnonymous(key, true));
+  return userId ? claimUser(userId, true) : claimAnonymous(key, true);
 }
 
 /** Current standing without spending anything. For rendering the counter. */
 export function peekQuota(userId: string | null, key: string): Promise<QuotaState> {
-  return userId ? claimUser(userId, false) : Promise.resolve(claimAnonymous(key, false));
+  return userId ? claimUser(userId, false) : claimAnonymous(key, false);
 }

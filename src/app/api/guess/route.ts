@@ -19,7 +19,7 @@ import { verifiedUser } from '@/server/supabase';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`guess:${clientKey(request)}`, 20, 60_000);
+  const limit = await rateLimit(`guess:${clientKey(request)}`, 20, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Slow down - too many guesses.' },
