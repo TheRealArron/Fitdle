@@ -245,6 +245,46 @@ if (quotaProbe.error?.code === '42703') {
   pass('AI quota columns present', 'per-account limits can be persisted');
 }
 
+/* ── 8. the atomic quota claim ────────────────────────────────────────────── */
+
+/*
+ * The function that stops two simultaneous requests both spending the last AI
+ * message. Its absence is silent in exactly the wrong direction: the app falls
+ * back to the 2-question anonymous allowance for every signed-in player, which
+ * looks like a stingy free tier rather than a missing migration.
+ *
+ * Probed with a random uuid, which is safe and creates nothing: the function's
+ * first statement inserts a progress row referencing auth.users, so an id that
+ * belongs to nobody is refused by the foreign key. That refusal is the proof -
+ * to violate the constraint, the function had to exist and run.
+ */
+if (serviceKey) {
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const probe = await admin.rpc('fitdle_claim_ai', {
+    p_user: '00000000-0000-4000-8000-000000000000',
+    p_day: 0,
+    p_free: 5,
+    p_pro: 100,
+    p_consume: false,
+  });
+
+  const code = probe.error?.code ?? '';
+  const message = probe.error?.message ?? '';
+
+  if (code === '23503' || /violates foreign key/i.test(message)) {
+    pass('atomic quota claim installed', 'fitdle_claim_ai ran; the AI limit cannot be raced');
+  } else if (code === 'PGRST202' || code === '42883' || /Could not find the function/i.test(message)) {
+    fail(
+      'the function fitdle_claim_ai is missing',
+      'Re-run supabase/schema.sql. Until then every signed-in player falls back to the 2-question anonymous allowance',
+    );
+  } else if (probe.error) {
+    fail(`fitdle_claim_ai failed: ${message}`, 'Re-run supabase/schema.sql and check the SQL editor output');
+  } else {
+    pass('atomic quota claim installed', 'fitdle_claim_ai answered');
+  }
+}
+
 console.log();
 if (failed) {
   console.log(c.bad('Cloud sync is not ready.'), 'Fix the items above and run again.');
