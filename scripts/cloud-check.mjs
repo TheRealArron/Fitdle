@@ -351,6 +351,77 @@ if (serviceKey) {
   }
 }
 
+/* ── 9. the shared rate-limit counter ─────────────────────────────────────── */
+
+/*
+ * Optional. Without it every rate limit counts inside one process, so a fleet
+ * of N instances enforces N times the limit and all of them reset on a cold
+ * start. The app is built to fall back to exactly that, so an unset counter is
+ * a warning rather than a failure.
+ *
+ * Checked by actually incrementing a throwaway key twice and confirming the
+ * second call sees the first. A reachability ping would pass against a database
+ * that rejects the script, and a misconfigured counter that silently returns
+ * nothing is indistinguishable from no counter at all - which is the whole
+ * failure mode worth catching.
+ */
+const redisUrl = env.UPSTASH_REDIS_REST_URL;
+const redisToken = env.UPSTASH_REDIS_REST_TOKEN;
+
+if (!redisUrl && !redisToken) {
+  console.log(
+    `${c.warn('?')} no shared rate-limit counter ${c.dim('(limits count per instance and reset on cold start)')}`,
+  );
+  console.log(`  ${c.warn('→')} Optional. console.upstash.com → create a Redis database → copy the REST url and token`);
+} else if (!redisUrl || !redisToken) {
+  fail(
+    'only one of UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN is set',
+    'Set both or neither. Half-configured is treated as unconfigured, so the limit stays per-instance',
+  );
+} else if (/^rediss?:\/\//.test(redisUrl)) {
+  fail(
+    'UPSTASH_REDIS_REST_URL is the redis:// connection string',
+    'That is the TCP endpoint. Copy the REST URL instead - it starts with https://',
+  );
+} else {
+  const probeKey = `fitdle:cloudcheck:${Date.now()}`;
+  const script = `local n = redis.call('INCR', KEYS[1])\nif n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\nreturn n`;
+
+  const call = () =>
+    fetch(`${redisUrl.replace(/\/+$/, '')}/eval`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([script, 1, probeKey, '30']),
+      signal: AbortSignal.timeout(5_000),
+    });
+
+  try {
+    const first = await call();
+    if (first.status === 401 || first.status === 403) {
+      fail('Upstash rejected the token', 'Copy the REST token that belongs to this database');
+    } else if (!first.ok) {
+      fail(`Upstash responded ${first.status}`, 'Check the REST URL belongs to the same database as the token');
+    } else {
+      const a = (await first.json()).result;
+      const b = (await (await call()).json()).result;
+      // Two calls, two different numbers: the counter is real and it remembers.
+      if (Number(a) === 1 && Number(b) === 2) {
+        pass('shared rate-limit counter works', 'limits are enforced across instances and survive restarts');
+      } else {
+        fail(
+          `the counter did not increment as expected (got ${a} then ${b})`,
+          'Expected 1 then 2. Confirm the URL and token belong to the same Redis database',
+        );
+      }
+    }
+  } catch (err) {
+    fail(
+      `Upstash unreachable: ${err instanceof Error ? err.message : err}`,
+      'The app falls back to per-instance counting, so this degrades the limit rather than breaking the game',
+    );
+  }
+}
+
 console.log();
 if (failed) {
   console.log(c.bad('Cloud sync is not ready.'), 'Fix the items above and run again.');
