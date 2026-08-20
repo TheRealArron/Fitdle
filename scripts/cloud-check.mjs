@@ -188,10 +188,24 @@ if (!serviceKey) {
   console.log(
     `  ${c.warn('→')} Supabase → Settings → API → service_role key. Server-only: never NEXT_PUBLIC_`,
   );
-} else if (/^ey/.test(serviceKey) && serviceKey === key) {
+} else if (serviceKey === key) {
+  /*
+   * Compared regardless of format. This used to be guarded by /^ey/, which only
+   * matched the old JWT-style keys - so once Supabase introduced the
+   * sb_publishable_/sb_secret_ format, pasting the publishable key into the
+   * secret slot passed this check silently. The failure mode it exists to catch
+   * is unchanged by the key format, so the test should not depend on it.
+   */
   fail(
     'SUPABASE_SERVICE_ROLE_KEY is the same value as the anon key',
-    'Copy the service_role key, not the anon/publishable one',
+    'Copy the secret (service_role) key, not the publishable/anon one',
+  );
+} else if (/^sb_publishable_/.test(serviceKey)) {
+  // Browser-safe by design, so it cannot write authoritative streaks and every
+  // server write will be refused by RLS - which looks like a broken app.
+  fail(
+    'SUPABASE_SERVICE_ROLE_KEY holds a publishable key',
+    'That one is public and RLS applies to it. Use the key labelled secret / service_role',
   );
 } else {
   pass('service-role key present', 'the API can write authoritative streaks');
