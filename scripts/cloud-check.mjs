@@ -89,6 +89,58 @@ try {
   process.exit(1);
 }
 
+/* ── 2b. the keys are the right way round ─────────────────────────────────── */
+
+/*
+ * Supabase's legacy keys are JWTs that state their own privilege in a `role`
+ * claim, so which key you are holding is knowable rather than guessable.
+ *
+ * The case this exists for is the worst one available: the service_role key
+ * pasted into NEXT_PUBLIC_SUPABASE_ANON_KEY. That ships a credential which
+ * bypasses RLS to every visitor's browser, and it is not obviously wrong from
+ * the outside - the app works perfectly, because a key with full access can do
+ * everything the app asks of it. The RLS check below would fail, but with a
+ * message about policies rather than about the key, which sends you to fix the
+ * wrong thing.
+ *
+ * Newer sb_publishable_/sb_secret_ keys are opaque and carry no claim to read.
+ * Their prefixes are already checked where they are used; this stays quiet
+ * rather than guessing.
+ */
+function jwtRole(token) {
+  const [, payload] = token.split('.');
+  if (!payload) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64').toString()).role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const anonRole = jwtRole(key);
+if (anonRole === 'service_role') {
+  fail(
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY holds the service_role key',
+    'That key bypasses RLS and NEXT_PUBLIC_ ships it to every browser. Replace it with the anon/publishable key and rotate the exposed one',
+  );
+} else if (anonRole === 'anon') {
+  pass('anon key is really the anon key', 'role claim says so');
+}
+
+if (serviceKey) {
+  const secretRole = jwtRole(serviceKey);
+  if (secretRole === 'anon') {
+    // RLS applies to it, so every server write is refused and the app looks
+    // broken rather than misconfigured.
+    fail(
+      'SUPABASE_SERVICE_ROLE_KEY holds the anon key',
+      'Server writes will be refused by RLS. Copy the service_role key instead',
+    );
+  } else if (secretRole === 'service_role') {
+    pass('service_role key is really the service_role key', 'role claim says so');
+  }
+}
+
 /* ── 3. table exists ──────────────────────────────────────────────────────── */
 
 const probe = await supabase.from('fitdle_progress').select('user_id').limit(1);
