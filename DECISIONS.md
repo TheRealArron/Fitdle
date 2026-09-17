@@ -1,6 +1,6 @@
 # Decision log
 
-Six decisions where the interesting part is the trade-off, not the code. Every
+Seven decisions where the interesting part is the trade-off, not the code. Every
 number here was measured in this repo and can be reproduced with the command
 given. Where something was **not** measured, it says so — a decision log whose
 figures fall apart under a follow-up question is worth less than no log at all.
@@ -209,6 +209,98 @@ The last case is the one people forget: **over-refusal is scored as a failure
 too.** A coach that refuses everything is trivially safe and completely useless,
 and it is exactly what you get by hardening a prompt without measuring. A run
 where every case refuses is a broken run, not a passing one.
+
+---
+
+## 7. The opening call needed a memory the player does not hold
+
+**Problem.** The call is meant to be a bet: name the answer's muscle group
+before your first guess, and a correct call unlocks the equipment hint
+immediately while a wrong one forfeits the guess-3 category hint. The route
+enforced "only once" by looking at the session token it was sent:
+
+```ts
+if (session?.call !== undefined) return 409;
+```
+
+A token is something the client holds, so a client that sent none was always
+making a first call. Measured against a running server:
+
+```
+call Chest … Arms … Core  -> correct=false
+call Legs                 -> correct=true, equipment "Dumbbell", at guess zero
+```
+
+Six requests. Seven is the worst case. The token from the winning sweep resumes
+as an ordinary session carrying `correct: true` and none of the forfeit.
+
+**What it was worth**, averaged over all 62 scheduled answers against the
+99-word catalogue:
+
+```
+length only                     19.8 candidates
+length + muscle group            4.3
+length + group + equipment       2.7   <- and exactly 1 on 27 of the 62 days
+```
+
+Not a hint. The answer, before the first guess, on 44% of days.
+
+`tests/openingCall.test.ts` contained a test named *"calling is a genuine risk,
+not a free hint"*, and it passed throughout. It scores `playGuesses`, which is
+**handed** the call as an argument and therefore cannot see how many times the
+route was asked. The exploit lived in the route; no test had ever called one.
+
+**Choice.** The call is recorded server-side against the caller — the verified
+user id when signed in, the address when not — and the first call for a seed
+wins. The same group again replays your own outcome; a different one is refused
+and told which stands, carrying no result for the group just asked about, so a
+sweep learns nothing after its first request.
+
+**Why a stored value and not a count.** `counter.ts` could have answered "has
+this player called?" with a limit of one, and that kills the sweep. It also
+breaks the honest case: a player who calls and then loses their token — cleared
+storage, a new tab, a dead phone — would be refused a call they had already
+paid for. Remembering *which* group makes the endpoint idempotent instead, which
+is strictly better and no more code.
+
+**Measured after the fix**, same sweep, same server:
+
+```
+call Chest -> 200  correct=false
+call Back  -> 409  "You already called Chest today."     (no call, no hints)
+…and the remaining five, identically
+```
+
+and the honest path, also live: call Legs → `correct: true` + equipment; throw
+the token away and call Legs again → the same outcome, not a refusal.
+
+**Cost, and what this does not close.** The record is keyed by the caller, and
+an anonymous caller is only an address, so rotating addresses still buys fresh
+calls exactly as it buys fresh rate-limit windows. With no Redis configured the
+record is per process, so a multi-instance deployment gives one free call per
+instance. Both are the trade `memoryCounter.ts` already documents. This closes a
+sweep; it does not make the call unforgeable, and calling it closed would be the
+same overclaim the route was already making.
+
+It also fails OPEN: an unreachable Redis falls back to the in-process record
+rather than refusing the call, because losing your opening call to a blip is a
+worse outcome than the sweep.
+
+**Rejected.**
+
+- *Hide `correct` until after guess 1.* Raises the sweep's cost from six free
+  requests to six requests plus six throwaway guesses, and no further — still
+  brute-forceable, and it takes immediate feedback away from honest players.
+- *Signed-in players only.* Genuinely unforgeable, and it deletes the mechanic
+  for everyone else. A game feature should not require an account.
+- *Delete the opening call.* Closes it completely. It is also the one mechanic
+  in the game a solver cannot play, which is the whole reason it exists.
+
+**Side effect worth recording.** No route handler could be imported by a test,
+because `next` ships no `exports` field and Node's ESM resolver will not find the
+extensionless `next/server` that every route imports. That is why all six routes
+were asserted against as **strings**. One line in `tests/resolve-alias.mjs` fixes
+it, and the tests above are the first in this repo to call a route handler.
 
 ---
 

@@ -97,3 +97,167 @@ are §9; eight smaller items are §10.
 
 Throwaway Supabase accounts created by the probes were deleted in a `finally`
 block; both runs printed `cleanup -> ok`. Nothing was left in the project.
+
+---
+
+## Iteration 2 — the opening call can no longer be swept
+
+**What I audited.** `/api/call`, `session.ts`, `callRecord`'s absence,
+`counter.ts` / `sharedCounter.ts` / `memoryCounter.ts`, `tests/openingCall.test.ts`,
+`src/lib/api.ts`'s error handling, and `tests/resolve-alias.mjs`. Re-read
+`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md`
+before touching a route handler — nothing there changed the approach; these
+routes already use plain `Request` + `NextResponse` with `force-dynamic`, which
+is what Next 16 documents.
+
+**What I chose, and why over the alternatives.** Audit §1, the only finding that
+lets someone solve the puzzle for free, and the only one you had to decide.
+You picked "remember the first call per caller per day". Rejected on the way, and
+recorded in DECISIONS §7: hiding `correct` until after guess 1 (still
+brute-forceable, and it makes the mechanic worse for honest players), signed-in
+only (airtight, but deletes the feature for anonymous players), and deleting the
+call entirely (closes it completely; costs the one mechanic a solver cannot play).
+
+I did **not** reuse `counter.ts` with a limit of one, which was the tempting
+zero-new-code option. It kills the sweep and also refuses an honest player who
+lost their token a call they had already paid for. Storing *which* group makes
+the endpoint idempotent instead, for the same amount of code.
+
+**What I changed.**
+
+- `src/server/callRecord.ts` (new, ~110 lines) — the day's call, first writer
+  wins, Redis when configured and the process otherwise, failing open.
+- `src/server/sharedCounter.ts` — a second Lua script (`SET … NX EX`, read-back
+  in the same atomic step) and the Upstash transport extracted so both scripts
+  share it. `sharedCount`'s behaviour is unchanged.
+- `src/app/api/call/route.ts` — consults the record, keyed by the verified user
+  id when signed in and the address when not. A divergent call gets 409 naming
+  the group that stands and **no outcome** for the group just asked about.
+- `src/lib/api.ts` — a 4xx now surfaces the server's own `error` text instead of
+  `Server error (409)`. Every 4xx these routes emit is already player-facing, and
+  "You already called Chest today" is a rule, not a fault.
+- `tests/resolve-alias.mjs` — one line teaching the resolver `next/server`.
+  Without it no route handler is importable, which is *why* all six routes were
+  asserted against as strings. The tests below are the first here to call one.
+- `tests/openingCall.test.ts`, `tests/sharedCounter.test.ts` — 9 new tests; the
+  fake Upstash now dispatches on the script it was actually sent.
+- DECISIONS §7 (new), SECURITY.md, README security table.
+
+**Mutation table.** Each leg removed, suite re-run, leg restored.
+
+| Leg removed | Test that failed |
+|---|---|
+| The route's 409 branch (record consulted, result ignored) | `a second call from the same caller is refused, and reveals nothing`; `sweeping every group finds nothing after the first request` |
+| The per-caller key (`owner` → a constant) | `one caller cannot spend another caller’s call` |
+| The seed from the record key | `the record is per day, so tomorrow is a fresh call` |
+| First-wins in the local record (last writer wins) | `a second call from the same caller is refused…`; `sweeping every group…`; `the record is per day…`; `an unreachable Redis costs the player their call rather than refusing it`; `with nothing configured the record is in-process, and still first-wins` |
+| The shared store (never consult Redis) | `a second instance sees the first instance’s opening call` |
+| `NX` from the Lua (last writer wins in Redis) | `the first caller wins the key and later ones are told who won`; `a second instance sees the first instance’s opening call` |
+
+**Two legs survived the first pass, and both were test bugs.**
+
+- *The per-caller key.* `one caller cannot spend another caller’s call` had both
+  callers ask for the **same** group, so a record keyed by nothing still replayed
+  a 200 for the second one. Fixed: the second caller asks for a different group
+  and asserts it gets the outcome for the group **they** asked about.
+- *`NX` in the Lua.* The fake Upstash implemented set-if-absent in JavaScript
+  whatever the script said, so it was a fake of our intentions rather than of
+  Redis. Fixed: it reads `'NX'` out of the script body and overwrites when it is
+  absent.
+
+Without the mutation pass both would still be in the suite looking green. This
+is the second time in this repo that the technique has caught a bad test rather
+than bad code.
+
+**Measurements, with the command.**
+
+Live, against the running dev server, before and after — same sweep, same script:
+
+```
+before                                   after
+call Chest -> correct=false              call Chest -> 200 correct=false
+call Back  -> correct=false              call Back  -> 409 "You already called Chest today."
+call Shou. -> correct=false              call Shou. -> 409  (no call, no hints)
+call Arms  -> correct=false              call Arms  -> 409
+call Core  -> correct=false              call Core  -> 409
+call Legs  -> correct=TRUE, "Dumbbell"   call Legs  -> 409
+```
+
+Honest path, also live: call Legs → `{group:'Legs',correct:true}` + equipment
+"Dumbbell"; discard the token and call Legs again → identical outcome, 200, not
+a refusal; resume with the returned token → the call is still there.
+
+Candidate arithmetic, over all 62 scheduled answers (node probe over `CATALOGUE`
+and `ANSWER_ORDER`): length only 19.8, + group 4.3, + equipment 2.7, and exactly
+one candidate on **27 of 62** days.
+
+| Step | Command | Result |
+|---|---|---|
+| typecheck | `npm run typecheck` | clean |
+| lint | `npm run lint` | clean |
+| tests | `npm test` | 229 tests, 229 pass, 0 fail (was 220) |
+| build | `npm run build` | ok; `/` and `/play` static, six API routes dynamic |
+| answer leak | `npm run check:bundle` | clean, 36 files scanned |
+| size | `npm run check:size` | 164.9 kB, 97% of the 170 kB budget — unchanged |
+| contrast | `npm run check:contrast` | every combination clears its bar |
+| smoke, prod | `npm run smoke -- prod` | **all 10 checks passed** |
+
+`check:size` is unchanged to the tenth of a kB, which is expected: everything
+added is server-side, and the one client edit is inside an existing branch.
+
+**What I did NOT verify.**
+
+- **`npm run smoke -- dev` did not run**, and therefore neither did
+  `npm run verify` end to end. A `next dev` belonging to someone else is running
+  for this directory (PID 213754) and Next allows one per project; I left it
+  alone rather than killing a server I did not start. Production smoke passed in
+  full. The change is a server route plus one branch of a client error path, and
+  neither historic dev-only regression (a CSP directive, a module-scope date) has
+  a counterpart here — but that is an argument, not a measurement.
+- I **installed Playwright's browsers** (`npx playwright install chromium` and
+  `chromium-headless-shell`) to get prod smoke running at all. `npm ci` does not
+  install them and nothing in the README says to. That is audit §0 and it is
+  still unfixed in the repo.
+- `npm run coach:probe` — no `ANTHROPIC_API_KEY`. Untouched this iteration.
+- `npm run build:extension` — not touched this iteration, not run.
+- The Redis path is proved against a **fake** Upstash that speaks the REST
+  protocol over real HTTP, not against Upstash itself. No Redis is configured
+  here.
+- The 409 reaching the player as readable text is asserted at the API layer, not
+  observed in the UI.
+
+**Found and not fixed — NEW, and it is worse than the one I just fixed.**
+
+**The guess history can be discarded, so the daily leaderboard and the streak
+are both forgeable.** Same root cause: the signed session is the server's only
+memory of the day, and the client decides whether to send it. Measured live:
+
+```
+burn five guesses          1..5, status=won on the fifth
+POST /api/today with no token   ->  fresh board, 0 guesses, status=playing
+win in one on the fresh board   ->  status=won, guesses banked = 1
+```
+
+For a signed-in player `/api/guess` banks that `1` to the server, and the
+"Today" board ranks by fewest guesses. So anyone can take the top of the daily
+board by playing normally, clearing storage, and replaying. Worse, a player
+five guesses deep and wrong can restart instead of submitting the sixth, so a
+streak **can never break** — you simply never finish a day you are losing.
+
+`commitResult` is idempotent per seed, so you cannot improve a round you have
+already finished. You control when you finish, which is the hole.
+
+README already names this exact mechanism, for the *speed* board it decided not
+to build: *"anything that did would reset by discarding the session and asking
+for a fresh one."* The same sentence applies to guess count and to finishing at
+all, and that was not noticed.
+
+The fix is the same shape as this iteration's but stores a floor rather than a
+value: record the highest guess count seen for (caller, seed) and bank
+`max(recorded, tokenCount)`, plus refuse to reopen a day whose record shows
+guesses already spent. Anonymous players are address-keyed and therefore a speed
+bump again; signed-in players — the only ones on the leaderboard — are keyed by
+verified id and genuinely covered. That is the next iteration unless you say
+otherwise.
+
+Everything else from the audit is still open, in the ranked order given there.

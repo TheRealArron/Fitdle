@@ -113,3 +113,109 @@ test('scoring is unchanged by the call', () => {
   assert.deepEqual(a.muscles, b.muscles);
   assert.deepEqual(a.evaluations[0], evaluateGuess(guesses[0], answer.name));
 });
+
+/* ── the sweep ────────────────────────────────────────────────────────────── */
+
+/*
+ * These call the route handler, not a pure function.
+ *
+ * The tests above this line score a call that `playGuesses` is HANDED. They all
+ * passed while `/api/call` gave out unlimited calls, because a function given
+ * the call as an argument cannot see how many times it was asked. The exploit
+ * lived entirely in the route, so the test has to live there too.
+ *
+ * Measured against a live server before the fix: six requests with no token
+ * found the day's group and collected the equipment hint, with no forfeit.
+ */
+
+process.env.FITDLE_SESSION_SECRET ||= 'tests-only-not-a-real-secret-0000000000';
+
+const { POST: callRoute } = await import('@/app/api/call/route');
+const { dailySeed } = await import('@/server/game');
+const { recordCall, resetCallRecords } = await import('@/server/callRecord');
+const { GROUP_ORDER } = await import('@/data/muscles');
+
+/** One call, from a named address, with no session token - the sweep's shape. */
+async function call(group: string, address: string) {
+  const res = await callRoute(
+    new Request('http://localhost/api/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': address },
+      body: JSON.stringify({ group }),
+    }),
+  );
+  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+}
+
+const todaysGroup = answerFor(dailySeed()).group;
+const otherGroup = GROUP_ORDER.find((g) => g !== todaysGroup)!;
+
+test('a second call from the same caller is refused, and reveals nothing', async () => {
+  resetCallRecords();
+  const first = await call(otherGroup, '198.51.100.10');
+  assert.equal(first.status, 200, 'the first call must be accepted');
+  assert.equal((first.body.call as { correct: boolean }).correct, false);
+
+  // The sweep: throw the token away and try the next group.
+  const second = await call(todaysGroup, '198.51.100.10');
+  assert.equal(second.status, 409, 'a second group must be refused');
+  assert.equal(second.body.call, undefined, 'a refusal must carry no outcome');
+  assert.equal(second.body.hints, undefined, 'a refusal must carry no hints');
+  assert.equal(second.body.called, otherGroup, 'and must name the call that stands');
+});
+
+test('sweeping every group finds nothing after the first request', async () => {
+  resetCallRecords();
+  const seen = [];
+  for (const group of GROUP_ORDER) {
+    const { status, body } = await call(group, '198.51.100.11');
+    if (status === 200) seen.push((body.call as { correct: boolean }).correct);
+  }
+  assert.equal(seen.length, 1, `the sweep got ${seen.length} outcomes; it must get exactly one`);
+});
+
+test('calling the same group again replays your own outcome', async () => {
+  /*
+   * The honest case this has to keep working: a player calls, then loses the
+   * token - cleared storage, a new tab, a dead phone. Refusing them would cost
+   * a call they already paid for, so the same group is idempotent rather than
+   * rejected.
+   */
+  resetCallRecords();
+  const first = await call(todaysGroup, '198.51.100.12');
+  const again = await call(todaysGroup, '198.51.100.12');
+  assert.equal(again.status, 200, 'the same group must be replayable');
+  assert.deepEqual(again.body.call, first.body.call, 'and must replay the same outcome');
+  assert.deepEqual(again.body.hints, first.body.hints);
+});
+
+test('one caller cannot spend another caller’s call', async () => {
+  /*
+   * The two must ask for DIFFERENT groups. With the same group a record keyed
+   * by nothing at all still replays a 200 for the second caller, so the test
+   * would pass with the key removed - which is exactly what it failed to catch
+   * the first time it was written.
+   */
+  resetCallRecords();
+  const a = await call(otherGroup, '198.51.100.13');
+  const b = await call(todaysGroup, '198.51.100.14');
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200, 'a different caller must still get their own first call');
+  assert.equal(
+    (b.body.call as { correct: boolean }).correct,
+    true,
+    'and must get the outcome for the group THEY asked about',
+  );
+});
+
+test('the record is per day, so tomorrow is a fresh call', async () => {
+  resetCallRecords();
+  const seed = dailySeed();
+  assert.equal(await recordCall('ip:203.0.113.1', seed, 'Legs'), 'Legs');
+  assert.equal(await recordCall('ip:203.0.113.1', seed, 'Chest'), 'Legs', 'same day, first wins');
+  assert.equal(
+    await recordCall('ip:203.0.113.1', seed + 1, 'Chest'),
+    'Chest',
+    'a new seed must not inherit yesterday’s call',
+  );
+});

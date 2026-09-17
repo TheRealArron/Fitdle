@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import test from 'node:test';
 import { count } from '@/server/counter';
-import { sharedCounterConfigured } from '@/server/sharedCounter';
+import { sharedCounterConfigured, sharedSetIfAbsent } from '@/server/sharedCounter';
+import { recordCall, resetCallRecords } from '@/server/callRecord';
 
 /**
  * The shared counter, tested against a real HTTP server.
@@ -14,9 +15,17 @@ import { sharedCounterConfigured } from '@/server/sharedCounter';
  * below the network is genuinely exercised.
  */
 
-/** Enough of Upstash to serve `/eval` of the increment script. */
+/**
+ * Enough of Upstash to serve `/eval` for both scripts this app sends.
+ *
+ * It dispatches on the script body rather than assuming one, because the two
+ * have different semantics - one increments a number, the other claims a string
+ * for whoever asks first - and a fake that answered both with a count would let
+ * a wired-up-wrong caller pass.
+ */
 function fakeUpstash(behaviour: 'ok' | 'error' | 'garbage' | 'hang' = 'ok') {
   const keys = new Map<string, number>();
+  const values = new Map<string, string>();
   const seen: { auth: string | undefined; body: unknown }[] = [];
 
   const server = http.createServer((req, res) => {
@@ -36,11 +45,25 @@ function fakeUpstash(behaviour: 'ok' | 'error' | 'garbage' | 'hang' = 'ok') {
         return;
       }
 
-      // [script, numkeys, key, windowSeconds] - the script's own semantics.
-      const [, , key] = JSON.parse(raw) as [string, number, string, string];
+      // [script, numkeys, key, ...args] - each script's own semantics.
+      const [script, , key, ...args] = JSON.parse(raw) as [string, number, string, ...string[]];
+      res.writeHead(200, { 'content-type': 'application/json' });
+
+      if (script.includes("'SET'")) {
+        /*
+         * Obey the command the script actually sent, rather than the one we
+         * hope it sent. A fake that always applied NX passed happily with NX
+         * deleted from the Lua, which makes it a fake of our intentions instead
+         * of a fake of Redis.
+         */
+        const nx = script.includes("'NX'");
+        if (!nx || !values.has(key)) values.set(key, args[0]);
+        res.end(JSON.stringify({ result: values.get(key) }));
+        return;
+      }
+
       const next = (keys.get(key) ?? 0) + 1;
       keys.set(key, next);
-      res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ result: next }));
     });
   });
@@ -186,4 +209,70 @@ test('with nothing configured it is the in-process counter, unchanged', async ()
   const key = `n${Math.random()}`;
   assert.equal((await count(key, 1, 1, 60)).allowed, true);
   assert.equal((await count(key, 1, 1, 60)).allowed, false);
+});
+
+/* ── the opening call, shared ─────────────────────────────────────────────── */
+
+test('the first caller wins the key and later ones are told who won', async () => {
+  const up = await fakeUpstash('ok');
+  pointAt(up.port);
+  try {
+    const key = `call${Math.random()}`;
+    assert.equal(await sharedSetIfAbsent(key, 'Legs', 60), 'Legs');
+    assert.equal(await sharedSetIfAbsent(key, 'Chest', 60), 'Legs', 'the second writer must lose');
+    assert.equal(await sharedSetIfAbsent(key, 'Back', 60), 'Legs');
+  } finally {
+    unset();
+    await up.close();
+  }
+});
+
+test('a second instance sees the first instance’s opening call', async () => {
+  /*
+   * The whole reason the record is shared. `resetCallRecords()` stands in for a
+   * cold instance: a process that has never seen this caller. Without Redis it
+   * would hand out a fresh call, which is one free sweep per instance.
+   */
+  const up = await fakeUpstash('ok');
+  pointAt(up.port);
+  try {
+    resetCallRecords();
+    assert.equal(await recordCall('ip:203.0.113.9', 20260101, 'Legs'), 'Legs');
+
+    resetCallRecords(); // a different instance, with no local memory
+    assert.equal(
+      await recordCall('ip:203.0.113.9', 20260101, 'Chest'),
+      'Legs',
+      'a cold instance must not hand out a second call',
+    );
+  } finally {
+    unset();
+    await up.close();
+  }
+});
+
+test('an unreachable Redis costs the player their call rather than refusing it', async () => {
+  // Fail open, same rule as the counter: losing the opening call because Redis
+  // blinked is a worse outcome than the sweep the record prevents.
+  const up = await fakeUpstash('error');
+  pointAt(up.port);
+  try {
+    resetCallRecords();
+    assert.equal(await recordCall('ip:203.0.113.10', 20260101, 'Legs'), 'Legs');
+    assert.equal(
+      await recordCall('ip:203.0.113.10', 20260101, 'Chest'),
+      'Legs',
+      'the in-process record must still hold within one instance',
+    );
+  } finally {
+    unset();
+    await up.close();
+  }
+});
+
+test('with nothing configured the record is in-process, and still first-wins', async () => {
+  unset();
+  resetCallRecords();
+  assert.equal(await recordCall('ip:203.0.113.11', 20260101, 'Legs'), 'Legs');
+  assert.equal(await recordCall('ip:203.0.113.11', 20260101, 'Chest'), 'Legs');
 });

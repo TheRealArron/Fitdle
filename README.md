@@ -370,6 +370,7 @@ board's centre exactly the viewport's centre at every width; a test asserts
 | Inline script injection | **Not** blocked - see the CSP note in [next.config.ts](next.config.ts) |
 | Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 43 client chunks to prove it |
 | Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
+| Sweeping the opening call to learn the group for free | **Blocked for one caller.** The first call of the day is recorded server-side; a second group is refused and carries no outcome. Address-keyed for anonymous players, so it is a speed bump there - see SECURITY.md |
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
 | Replaying an old session | **Blocked.** The seed is inside the signature |
 | Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP - a speed bump, not a distributed defence |

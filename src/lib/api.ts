@@ -109,7 +109,22 @@ async function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
       return { ok: false, error: 'Too many requests - wait a moment.' };
     }
     if (!res.ok) {
-      return { ok: false, error: `Server error (${res.status})` };
+      /*
+       * Prefer the server's own message. Every 4xx these routes emit carries a
+       * player-facing `error` - "You already called Legs today", "The call has
+       * to come before your first guess" - and rendering "Server error (409)"
+       * over the top of it turns a clear rule into a fault report. A 5xx from
+       * the platform is not JSON, so it falls through to the status line.
+       */
+      const message = await res
+        .json()
+        .then((body: unknown) =>
+          typeof (body as { error?: unknown })?.error === 'string'
+            ? ((body as { error: string }).error)
+            : null,
+        )
+        .catch(() => null);
+      return { ok: false, error: message ?? `Server error (${res.status})` };
     }
     return { ok: true, data: (await res.json()) as T };
   } catch {
