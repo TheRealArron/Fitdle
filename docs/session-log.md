@@ -261,3 +261,13 @@ verified id and genuinely covered. That is the next iteration unless you say
 otherwise.
 
 Everything else from the audit is still open, in the ranked order given there.
+
+**Found and not fixed — SECOND new finding, and it makes the first inert.**
+
+**The "Today" leaderboard can never contain a row.** `commitResult` never writes
+`save.day`, so the row the server banks always reads `day_guesses = 0`,
+`day_won = false`. Verified through the real route against the live project with
+a throwaway account: player wins, `progress written = yes`, and the daily board
+query returns **0 rows**. The streak board is fine. Written up as audit §11 and
+§12; they have to be fixed together, because fixing the dead board without
+fixing the discardable session turns it into a forgeable one.
