@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { commitResult, defaultSave, reconcile } from '@/lib/secureStorage';
+import {
+  commitResult,
+  defaultSave,
+  isCoherent,
+  normalise,
+  reconcile,
+  type SaveData,
+} from '@/lib/secureStorage';
 
 /*
  * The server-authoritative streak.
@@ -149,23 +156,23 @@ test('a rolled-back clock earns no credit server-side either', () => {
 
 test('the server writes only when the round is over', () => {
   /*
-   * Pins the guard around the call rather than the exact spelling of the
-   * condition. The previous version matched `if (outcome.status !== 'playing')`
-   * literally and broke the day a second clause was added to it - a failure
-   * about punctuation, on a test whose subject is when a database write
-   * happens. Matching the guard AND the call together keeps it about that.
+   * Asserted by ORDER, not by matching the shape of the code around the call.
+   *
+   * This test has now broken twice on punctuation - once when a second clause
+   * was added to the condition, once when the call was wrapped in a try/catch -
+   * while the property it exists for was never in question. A regex over source
+   * cannot help being a regex over source, but it can at least be about the
+   * thing it claims to be about: there is exactly one bank, and it is
+   * downstream of the round-over guard.
    */
   const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
-  assert.match(
-    route,
-    /if \([^)]*outcome\.status !== 'playing'[^)]*\) \{\s*progress = await bankResult/,
-    'bankResult must be reachable only once the round is over',
-  );
-  assert.equal(
-    (route.match(/await bankResult/g) ?? []).length,
-    1,
-    'and there must be exactly one call to it',
-  );
+
+  const calls = [...route.matchAll(/await bankResult/g)].map((m) => m.index!);
+  assert.equal(calls.length, 1, 'there must be exactly one call to bankResult');
+
+  const guard = route.indexOf("outcome.status !== 'playing'");
+  assert.notEqual(guard, -1, 'the round-over guard must still exist');
+  assert.ok(calls[0] > guard, 'and the bank must come after it, never before');
 });
 
 test('a cloud failure cannot cost a player their result', () => {
@@ -261,4 +268,62 @@ test('the guess route counts guesses per account, not off the token', () => {
   const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
   assert.match(route, /spent:\$\{seed\}:\$\{user\.id\}/, 'keyed per account per day');
   assert.match(route, /Math\.max\(guesses\.length,/, 'the token can only raise the count, never lower it');
+});
+
+/* ── a row is not automatically a save ────────────────────────────────────── */
+
+/*
+ * `fitdle_claim_ai` creates the progress row for a player who has never played,
+ * seeding `save` as `{}` - which is truthful and correct for the leaderboard
+ * columns, and is not a SaveData.
+ *
+ * Reproduced end to end against a live project before the fix: sign up, ask the
+ * guide one question, then play. The guess that WON the round returned HTTP
+ * 500. No test in this file could see it, because they all build their inputs
+ * with `defaultSave()`, which always has a `distribution`.
+ */
+
+test('the empty row the AI quota creates is not mistaken for a save', () => {
+  assert.equal(isCoherent({}), false, 'the {} seed must not read as a record');
+  assert.equal(isCoherent(normalise({} as SaveData)), false, 'and normalising it must not rescue it');
+});
+
+test('normalise does not, and must not, invent the fields reconcile needs', () => {
+  // Pinning the actual cause rather than the symptom. `normalise` backfills the
+  // fields added after v1 and nothing else; it is an upgrade, not a repair.
+  const n = normalise({} as SaveData) as Partial<SaveData>;
+  assert.equal(n.distribution, undefined, 'normalise is not a repair function');
+  assert.throws(
+    () => reconcile(n as SaveData, 20260917),
+    /distribution/,
+    'which is why the row has to be validated before it reaches reconcile',
+  );
+});
+
+test('the server validates a stored row before trusting it', () => {
+  const fn = progressSource.slice(
+    progressSource.indexOf('async function readRow'),
+    progressSource.indexOf('export async function bankResult'),
+  );
+  assert.match(fn, /isCoherent\(/, 'readRow must check the row before normalising it');
+  assert.match(fn, /return null;/, 'and treat an unusable row as no row');
+});
+
+test('the server uses the browser’s coherence rule, not a second opinion', () => {
+  // Same reason reconcile and commitResult are imported rather than rewritten.
+  assert.match(progressSource, /isCoherent/);
+  const storage = readFileSync(new URL('../src/lib/secureStorage.ts', import.meta.url), 'utf8');
+  assert.match(storage, /export function isCoherent/, 'exported so there is one rule, not two');
+});
+
+test('a throw while banking cannot cost the player their result', () => {
+  /*
+   * The file's own comments promised this and it was untrue: bankResult handles
+   * a failed write, not a throw, and a throw escaped the route as a 500 on the
+   * winning guess.
+   */
+  const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
+  const guarded = /try \{\s*progress = await bankResult\([\s\S]*?\} catch/.test(route);
+  assert.ok(guarded, 'the bank must sit inside a try/catch or a throw becomes a lost round');
+  assert.match(route, /console\.error\('\[guess\] banking failed/, 'and must be logged, not swallowed silently');
 });

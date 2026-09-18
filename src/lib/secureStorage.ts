@@ -252,8 +252,18 @@ const GUESS_NAME = /^[A-Z]{4,10}$/;
  * Structural + semantic validation. A forged record that verifies must still be
  * internally coherent, which removes the easy wins (streak of 9e99, more wins
  * than games played, a distribution that does not sum to the win count).
+ *
+ * Exported because the server has to apply the SAME rule to a row it reads back
+ * out of Postgres, for the same reason it imports `reconcile` and
+ * `commitResult` rather than reimplementing them: a second opinion about what a
+ * valid save looks like is a second opinion that will eventually disagree.
+ *
+ * It caught a real one. `fitdle_claim_ai` seeds `save = '{}'` for a player who
+ * asks the AI a question before ever playing, and `normalise` only backfills
+ * the fields added after v1 - so `reconcile` was handed an object with no
+ * `distribution` and threw inside `/api/guess`. The player won and got a 500.
  */
-function isCoherent(d: unknown): d is SaveData {
+export function isCoherent(d: unknown): d is SaveData {
   if (!d || typeof d !== 'object') return false;
   const s = d as Record<string, unknown>;
 

@@ -426,3 +426,115 @@ round is ranked and recorded as six, which is what it cost.
   item left), §3 (reset uses an upsert RLS refuses), §4 (the two guards that
   cannot fail), §5, §6 (extension permissions), §7, §9 (fifteen wrong numbers),
   §10.
+
+---
+
+## Iteration 4 — the 500 that cost a player a won round
+
+**What I audited.** `readRow`, `normalise`, `isCoherent`, `reconcile`,
+`defaultSave`, the `fitdle_claim_ai` insert, and the bank call site in
+`/api/guess`. Re-derived the crash from first principles rather than trusting
+iteration 1's write-up, and checked where `normalise` is called from: the local
+path runs `isCoherent` **before** it (`loadSave`, line 343); the server path did
+not.
+
+**What I chose, and why.** Audit §2 — the only remaining finding that loses a
+real player a real result, and the one item left that needed no decision from
+you. Higher value than §3 (reset), which is annoying but recoverable, and than
+§4/§6/§9, which are about guards and documents rather than about players.
+
+Rejected: seeding a full default save from `fitdle_claim_ai` instead of `{}`.
+The SQL would then have to know the save's shape, which is a second source of
+truth for a structure that changes, and `{}` is the honest encoding of "has not
+played" — the generated columns read null out of it, which is right.
+
+Also rejected: making `normalise` fill in the missing fields. It is an upgrade
+function, not a repair function; teaching it to invent a `distribution` would
+also quietly repair records that ought to be rejected, which is the opposite of
+this codebase's fail-closed posture on saves.
+
+**What I changed.**
+
+- `src/lib/secureStorage.ts` — `isCoherent` exported, for the same reason
+  `reconcile` and `commitResult` are imported by the server rather than
+  reimplemented: one rule, not two.
+- `src/server/progress.ts` — `readRow` validates the stored row before
+  normalising it and returns null for anything that is not a usable save, so
+  `bankResult` falls back to `defaultSave()`. For the `{}` case that is exactly
+  right, since that is what `{}` means.
+- `src/app/api/guess/route.ts` — the bank sits inside a try/catch. The result is
+  already computed and is returned regardless.
+- README — the "Fails soft" bullet now says it was false and what made it true.
+- 5 new tests; the brittle round-over test rewritten again, this time to assert
+  by position rather than by the shape of the code around the call.
+
+**Mutation table.**
+
+| Leg removed | Test that failed |
+|---|---|
+| `readRow` stops validating the row | `the server validates a stored row before trusting it` |
+| The bank is no longer wrapped | `a throw while banking cannot cost the player their result` |
+| `isCoherent` un-exported | `tests/progress.test.ts` fails to import — loud, but a module error rather than the named test (`the server uses the browser’s coherence rule, not a second opinion`) |
+| `normalise` "repairs" instead of upgrading | `normalise does not, and must not, invent the fields reconcile needs` |
+
+**Measurements, with the command.**
+
+The exact flow, through the real routes against the live project, before and
+after — throwaway account created and deleted inside the probe:
+
+```
+before                                    after
+fitdle_claim_ai -> ok                     fitdle_claim_ai -> ok
+row.save now = {}                         row.save now = {}
+guess 1 BRIDGE -> playing                 guess 1 CARRY  -> playing
+…                                         …
+guess 5 GOBLET -> HTTP 500                guess 6 HINGE  -> lost, progress written
+```
+
+and the win path, which is the one that hurt:
+
+```
+the player asked the guide a question first; row.save = {}
+then won in one: HTTP 200  status=won  streak=1
+row -> {"streak":1,"day_seed":20260918,"day_won":true,
+        "day":{"seed":20260918,"spent":1,"status":"won","guesses":["SQUAT"]}}
+```
+
+**A claim I checked that turned out to be true.** `schema.sql` argues the AI
+quota columns are kept out of the save blob so an AI question cannot touch the
+streak row's history. I verified the converse, which nobody had: a player on
+`tier = 'pro'` with `ai_count = 3` finishes a round, and the bank's upsert
+leaves `tier`, `ai_day` and `ai_count` exactly as they were.
+
+| Step | Command | Result |
+|---|---|---|
+| typecheck | `npm run typecheck` | clean |
+| lint | `npm run lint` | clean |
+| tests | `npm test` | 241 tests, 241 pass, 0 fail (was 236) |
+| build | `npm run build` | ok |
+| answer leak | `npm run check:bundle` | clean, 36 files |
+| size | `npm run check:size` | 164.9 kB, 97% of budget — unchanged a third time |
+| contrast | `npm run check:contrast` | every combination clears its bar |
+| smoke, prod | `npm run smoke -- prod` | all 10 passed, 5 columns today |
+
+**What I did NOT verify.**
+
+- **`npm run smoke -- dev`, and so `npm run verify` end to end** — third
+  iteration running. The `next dev` holding Next's project lock is not mine and
+  I have not killed it. Prod smoke passed in full each time.
+- The try/catch is asserted by reading the route, not by forcing a throw through
+  it. I could not make `bankResult` throw on demand without a fault-injection
+  seam, and adding one for a test is the kind of thing this repo's style rules
+  say not to do. What I have instead is the real reproduction above, on the real
+  cause.
+- `coach:probe` (no key), `build:extension` (untouched).
+- The `isCoherent` guard rejects a genuinely corrupt-but-real row too, and that
+  player's server-side record restarts from zero on their next completed round.
+  I judged that better than a 500, and it cannot happen from client input — the
+  client has no write permission — but I have not seen it happen.
+
+**Found and not fixed.** Audit §3 (reset uses an upsert RLS refuses), §4 (the
+`cloud:check` revocation probe that cannot fail, and `check:bundle`'s
+first-occurrence window), §5, §6 (extension permissions), §7, §9 (fifteen wrong
+numbers, three stale structural claims), §10, §12's remainder (a streak still
+need never break).

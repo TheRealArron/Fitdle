@@ -117,14 +117,31 @@ export async function POST(request: Request) {
    */
   let progress: Awaited<ReturnType<typeof bankResult>> = null;
   if (outcome.status !== 'playing' && user) {
-    progress = await bankResult(
-      user.id,
-      seed,
-      outcome.status === 'won',
-      guesses,
-      spent,
-      user.username,
-    );
+    try {
+      progress = await bankResult(
+        user.id,
+        seed,
+        outcome.status === 'won',
+        guesses,
+        spent,
+        user.username,
+      );
+    } catch (err) {
+      /*
+       * "Fails soft" was an assertion, not a guarantee, and it was false.
+       *
+       * `bankResult` handles a failed WRITE and returns null. It did not handle
+       * a throw, and one was reachable: a row seeded `{}` by the AI quota made
+       * `reconcile` throw on a missing `distribution`, the exception escaped
+       * this handler, and the player got a 500 on the guess that won them the
+       * round. That specific cause is fixed in `readRow`; this is the boundary
+       * that makes the promise true for the next one.
+       *
+       * The result itself is already computed and is returned regardless. The
+       * streak reconciles on their next completed round.
+       */
+      console.error('[guess] banking failed, returning the result anyway:', err);
+    }
   }
 
   return NextResponse.json(

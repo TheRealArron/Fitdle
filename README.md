@@ -546,6 +546,21 @@ Two properties worth stating:
   a failed write all fall back to the local save. A cloud problem must never
   cost someone the result they just earned.
 
+  **That was an assertion, not a guarantee, and it was false.** `bankResult`
+  handled a failed *write*; it did not handle a *throw*, and one was reachable.
+  `fitdle_claim_ai` creates the progress row for a player who has never played
+  and seeds `save` as `{}` - correct in itself, and not a save record. `normalise`
+  only backfills the fields added after v1, so `reconcile` was handed an object
+  with no `distribution` and threw straight out of the route. Reproduced end to
+  end against a live project: sign up, ask the guide one question, play, and the
+  guess that **wins** the round returns HTTP 500 - no reveal, no streak, nothing
+  banked. The flow is sign-up, ask how it works, play.
+
+  Fixed in two places: the stored row is now checked against the same coherence
+  rule the browser applies to local storage before it is trusted, and the bank
+  sits inside a try/catch so the next unforeseen throw costs a log line rather
+  than a round. Same flow, re-run after: `HTTP 200, status=won, streak=1`.
+
 `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS completely, so it is server-only and
 `npm run cloud:check` fails loudly if it is ever the anon key by mistake - or if
 the project is still running the old policies, which would look completely fine

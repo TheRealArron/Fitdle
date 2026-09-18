@@ -2,6 +2,7 @@ import 'server-only';
 import {
   commitResult,
   defaultSave,
+  isCoherent,
   normalise,
   reconcile,
   type SaveData,
@@ -46,7 +47,33 @@ async function readRow(userId: string): Promise<SaveData | null> {
     .maybeSingle();
 
   if (error || !data?.save) return null;
-  return normalise(data.save as SaveData);
+
+  /*
+   * A row is not automatically a save.
+   *
+   * `fitdle_claim_ai` creates the row for a player who has never played - it
+   * has to, because asking the guide a question should not be the thing that
+   * fails - and seeds `save` as `{}`. That is a truthful "has not played" and
+   * the generated leaderboard columns read null out of it, which is correct.
+   *
+   * It is not a `SaveData`. `normalise` only backfills the fields added after
+   * v1, so `{}` came back with no `distribution`, `reconcile` did
+   * `[...input.distribution]` on undefined, and the exception escaped
+   * `/api/guess`. Reproduced end to end against a live project: sign up, ask
+   * the guide one question, play, and the guess that WINS the round returns
+   * HTTP 500 - no reveal, no streak, nothing banked. The one path this file's
+   * own comments promise will never cost somebody their result.
+   *
+   * So the row is checked against the same coherence rule the browser applies
+   * to local storage, and anything that is not a usable record is treated as
+   * "no record" - which for the `{}` case is exactly right, since that is what
+   * it means.
+   */
+  if (!isCoherent(data.save)) {
+    console.error('[progress] stored record is not a usable save; treating as none');
+    return null;
+  }
+  return normalise(data.save);
 }
 
 /**
