@@ -6,7 +6,8 @@
 |---|---|
 | Answer not in the client bundle | `server-only` on the schedule + `check:bundle` greps compiled chunks |
 | Wins can't be forged | Server derives status from an HMAC-signed session it issued |
-| Streaks can't be forged | Client `insert`/`update` revoked; API writes under service-role |
+| Streaks can't be forged | Client `insert`/`update` revoked; API writes under service-role. **Verified live** - signed in as the row's own owner, UPDATE touches 0 rows and INSERT/UPSERT return 42501 |
+| Guess counts can't be forged | Counted per account per UTC day by the server, not read off the client's session token |
 | Identity can't be spoofed | `auth.getUser()` verifies the JWT; `sub` is never read locally |
 | No user ids on the leaderboard | `isYou` computed server-side, crosses as a boolean |
 | Secrets stay server-side | Tests assert no `NEXT_PUBLIC_` on service-role or Anthropic keys |
@@ -36,6 +37,23 @@ nothing reads them but that browser. Cloud streaks are server-written.
 
 ## Not verified
 
-The RLS revocation, leaderboard ranking, and both model guardrails need a live
-project and an API key. Run `npm run cloud:check` and `npm run coach:probe`
-after deploying — before announcing.
+Both model guardrails need an API key: run `npm run coach:probe` after
+deploying, before announcing.
+
+The RLS revocation **is** now verified against a live project - as the row's own
+owner, with the public anon key: UPDATE 0 rows, INSERT and UPSERT 42501, the
+`fitdle_claim_ai` RPC 42501, DELETE one row, and the streak column unmoved.
+Note that `cloud:check` is not what verified it: its probe is an unauthenticated
+caller updating a row that does not exist, which the *old* policy would have
+passed identically. Proving the revocation needs an authenticated owner updating
+their own existing row.
+
+Still outstanding, and both are player-facing rather than security:
+
+- A streak need never break. The signed session is the server's only memory of a
+  round and the client chooses whether to send it, so a player five guesses deep
+  and wrong can discard rather than submit the sixth. The guesses are counted, so
+  the leaderboard is honest; the round simply never ends.
+- Rate limits, the global AI budget, the anonymous quota and the opening-call
+  record are per instance without Redis, and keyed by address for anonymous
+  callers. Speed bumps.

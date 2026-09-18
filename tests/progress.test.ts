@@ -104,12 +104,94 @@ test('the client keeps read and delete', () => {
   assert.match(schema, /create policy "delete own progress"[\s\S]*?for delete/);
 });
 
-test('syncSave no longer pushes', () => {
-  // A client that wrote its merge back would be overwriting the authoritative
-  // record with a number it computed itself.
-  const fn = cloudSync.slice(cloudSync.indexOf('export async function syncSave'));
-  const body = fn.slice(0, fn.indexOf('\n}'));
-  assert.ok(!body.includes('pushCloudSave'), 'syncSave still pushes to the cloud');
+test('syncSave writes nothing at all', () => {
+  /*
+   * Was `assert.ok(!body.includes('pushCloudSave'))`, which became vacuous the
+   * day `pushCloudSave` was deleted - a test that passes because its subject no
+   * longer exists is not a test. The property is that the pull side of sync
+   * performs no write, whatever the write is spelled.
+   */
+  const body = cloudSync.slice(cloudSync.indexOf('export async function syncSave'));
+  for (const verb of ['upsert(', 'insert(', 'update(', 'delete(']) {
+    assert.ok(!body.includes(verb), `syncSave must not ${verb.slice(0, -1)} - the server owns the row`);
+  }
+});
+
+/* ── clearing your own record ─────────────────────────────────────────────── */
+
+test('the reset clears the record instead of writing one', () => {
+  /*
+   * `overwriteCloud` existed because a merge cannot express a deletion. Its
+   * implementation was an upsert, and revoking the client's insert/update
+   * permission is exactly what forbids an upsert - so the reset had been
+   * failing 42501 and silently doing nothing again, which is the bug it was
+   * written to fix. Measured live, signed in as the row's own owner: UPSERT
+   * 42501, DELETE one row.
+   */
+  const fn = cloudSync.slice(cloudSync.indexOf('export async function clearCloudSave'));
+  assert.match(fn, /rpc\('fitdle_reset_progress'\)/, 'the reset goes through the function');
+  assert.ok(!fn.includes('upsert('), 'and must never upsert - RLS refuses it');
+  assert.ok(!fn.includes('.update('), 'nor update');
+});
+
+test('resetting progress actually reaches the cloud', () => {
+  /*
+   * Leg that survived the first mutation pass: deleting the cloud call from
+   * `resetProgress` broke nothing, and that is the whole bug - local storage is
+   * cleared, the cloud row survives, and the next sync merges it back. The
+   * companion test in cloudSync.test.ts pins WHY a merge cannot express a
+   * reset; this pins that something still does.
+   */
+  const store = readFileSync(new URL('../src/store/useGameStore.ts', import.meta.url), 'utf8');
+  // The implementation, not the interface declaration above it - which is what
+  // a bare indexOf('resetProgress: (') finds, and which contains no code.
+  const at = store.indexOf('resetProgress: () => {');
+  assert.notEqual(at, -1, 'resetProgress must exist');
+  const fn = store.slice(at, at + 600);
+  assert.match(fn, /clearSave\(\)/, 'the local save must be cleared');
+  assert.match(fn, /clearCloudIfSignedIn\(\)/, 'and so must the cloud copy, or the next sync restores it');
+});
+
+test('a project without the reset function still resets', () => {
+  /*
+   * Also survived the first pass. The function is a migration, and a player on
+   * a deployment that has not run it must still be able to clear their
+   * statistics - deleting the row costs them a tier nobody has set yet, and a
+   * reset that silently does nothing is the bug being fixed.
+   */
+  const fn = cloudSync.slice(cloudSync.indexOf('export async function clearCloudSave'));
+  assert.match(fn, /PGRST202/, 'a missing function has to be recognised');
+  assert.match(fn, /\.delete\(\)/, 'and fall back to the delete RLS does permit');
+});
+
+test('the reset cannot be pointed at somebody else', () => {
+  const fn = schema.slice(schema.indexOf('create or replace function public.fitdle_reset_progress'));
+  const body = fn.slice(0, fn.indexOf('$$;'));
+  assert.match(body, /fitdle_reset_progress\(\)/, 'it takes no arguments');
+  assert.match(body, /where user_id = auth\.uid\(\)/, 'and only ever touches the caller’s own row');
+  assert.ok(!/p_user/.test(body), 'a user id parameter would be a way to clear a stranger’s record');
+});
+
+test('the reset is granted to signed-in players and nobody else', () => {
+  assert.match(
+    schema,
+    /revoke all on function public\.fitdle_reset_progress\(\) from public, anon;/,
+    'security definer plus PostgREST means it is callable by anyone unless revoked',
+  );
+  assert.match(schema, /grant execute on function public\.fitdle_reset_progress\(\) to authenticated;/);
+});
+
+test('the reset leaves billing state alone', () => {
+  // Deleting the row would work and would also cancel a paid tier. The function
+  // writes one column.
+  const fn = schema.slice(schema.indexOf('create or replace function public.fitdle_reset_progress'));
+  // The body only - `set search_path` is part of the declaration, not a write.
+  const body = fn.slice(fn.indexOf('as $$'), fn.indexOf('$$;'));
+  const sets = [...body.matchAll(/set\s+(\w+)\s*=/g)].map((m) => m[1]);
+  assert.deepEqual(sets, ['save'], `the reset writes ${sets.join(', ')}; it must write only the save`);
+  for (const col of ['tier', 'ai_day', 'ai_count']) {
+    assert.ok(!body.includes(col), `the reset must not touch ${col}`);
+  }
 });
 
 /* ── the arithmetic the server applies ────────────────────────────────────── */

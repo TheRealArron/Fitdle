@@ -538,3 +538,133 @@ leaves `tier`, `ai_day` and `ai_count` exactly as they were.
 first-occurrence window), §5, §6 (extension permissions), §7, §9 (fifteen wrong
 numbers, three stale structural claims), §10, §12's remainder (a streak still
 need never break).
+
+---
+
+## Iteration 5 — "reset my statistics" reaches the cloud again
+
+**What I audited.** `resetProgress`, `overwriteCloud`,
+`overwriteCloudIfSignedIn`, `pushCloudSave`, `syncSave`, `mergeSaves`, the RLS
+policies, and what a row carries besides the save. Re-derived the failure rather
+than trusting iteration 1, and probed the old path live before changing it.
+
+**What I chose, and why.** Audit §3 — the last finding that is broken for a real
+player today and needs no decision from you. Ranked above §4 (guards that cannot
+fail) and §9 (wrong numbers) because those are about the repo's own confidence
+rather than about somebody losing a feature.
+
+**A decision inside it that changed the shape of the fix.** The obvious repair
+is the one the code already sign-posts: RLS grants DELETE, so delete the row.
+That works — measured, one row removed — and it also takes `tier`, `ai_day` and
+`ai_count` with it. Those are deliberately *not* in the save blob, by the
+schema's own argument, and a statistics reset that silently cancels somebody's
+paid tier is a worse bug than the one being fixed. So the reset clears the save
+and leaves the rest of the row alone, through a security-definer function that
+takes no arguments and writes one column. Deleting is kept as the fallback for a
+project that has not run the newer schema, because a reset that does nothing is
+worse than one that over-deletes a tier nobody has set yet.
+
+This is a new SQL function, which is a migration. It is not a new *pattern*:
+`fitdle_claim_ai` is already a security-definer RPC with its grants pinned by a
+test, and this one is narrower — no parameters, so there is nothing to point at
+a stranger's record.
+
+**What I changed.**
+
+- `supabase/schema.sql` — `fitdle_reset_progress()`, revoked from `public`/`anon`
+  and granted to `authenticated`, reading `auth.uid()` itself.
+- `src/lib/cloudSync.ts` — `pushCloudSave` (an upsert RLS refuses) replaced by
+  `clearCloudSave`, with the delete fallback.
+- `src/store/useAuthStore.ts`, `src/store/useGameStore.ts` — call sites.
+- `scripts/cloud-check.mjs` — probes for the function by calling it
+  unauthenticated and expecting 42501.
+- `SECURITY.md` — the RLS revocation moves out of "Not verified", with the
+  caveat that `cloud:check` is not what verified it.
+- 6 new tests, 1 vacuous test replaced.
+
+**Mutation table.**
+
+| Leg removed | Test that failed |
+|---|---|
+| `clearCloudSave` goes back to an upsert | `the reset clears the record instead of writing one` |
+| The RPC takes a user id | `the reset cannot be pointed at somebody else` |
+| The `authenticated` grant is dropped | `the reset is granted to signed-in players and nobody else` |
+| The reset also clears `tier` | `the reset leaves billing state alone` |
+| `syncSave` gains a write | `syncSave writes nothing at all`; `the reset clears the record instead of writing one` |
+| `resetProgress` stops touching the cloud | `resetting progress actually reaches the cloud` |
+| The delete fallback is removed | `a project without the reset function still resets` |
+
+**Two legs survived the first pass again** (the reset not touching the cloud at
+all, and the fallback being removed) and now have tests. And one of those new
+tests was itself broken when written — it sliced from `indexOf('resetProgress:
+(')`, which finds the *interface declaration* rather than the implementation, so
+it failed on unmutated code. The mutation pass is what surfaced it; without it I
+would have shipped a test that fails for a reason unrelated to its subject.
+
+**I also replaced a test that had become vacuous.** `syncSave no longer pushes`
+asserted `!body.includes('pushCloudSave')` — which became automatically true the
+moment `pushCloudSave` was deleted. It now asserts that the pull side contains no
+write verb at all.
+
+**Measurements, with the command.**
+
+Live, through the real API and the real database, with a throwaway account — the
+old path and the new one side by side:
+
+```
+after winning         : {"streak":1,"day_won":true}
+OLD reset (upsert)    : 42501 new row violates row-level security policy
+  record afterwards   : {"streak":1,"day_won":true}   <- the reset did nothing
+NEW reset (rpc)       : PGRST202 Could not find the function   (schema not migrated)
+  fallback (delete)   : removed 1 row(s)
+  record afterwards   : gone
+  next sync would pull: nothing
+```
+
+`npm run cloud:check` against the live project now reports the missing function
+as a failure, with the fix named — no mutation needed to prove it can fail,
+because the real condition is present:
+
+```
+✗ the function fitdle_reset_progress is missing
+  → Re-run supabase/schema.sql. Until then "reset my statistics" falls back to
+    deleting the whole row, which also clears tier and the AI counters
+```
+
+| Step | Command | Result |
+|---|---|---|
+| typecheck | `npm run typecheck` | clean |
+| lint | `npm run lint` | clean |
+| tests | `npm test` | 247 tests, 247 pass, 0 fail (was 241) |
+| build | `npm run build` | ok |
+| answer leak | `npm run check:bundle` | clean, 36 files |
+| size | `npm run check:size` | 164.9 kB, 97% of budget — unchanged a fourth time |
+| contrast | `npm run check:contrast` | every combination clears its bar |
+| smoke, prod | `npm run smoke -- prod` | all 10 passed |
+
+**What I did NOT verify.**
+
+- **`fitdle_reset_progress` itself has never run.** It does not exist on the live
+  project and I did not create it — that is DDL against your database. What I
+  verified is the *fallback*, live, and that `cloud:check` detects the absence.
+  The function's own behaviour, its grants, and the `auth.uid()` guard are
+  asserted from the SQL text only.
+- **The live reset probe replicates the two calls `clearCloudSave` makes rather
+  than invoking the module.** `clearCloudSave` reaches Supabase through
+  `@/lib/supabase`, which needs browser storage. The protocol is verified; the
+  function body is covered by tests, not by that run.
+- **`npm run smoke -- dev`, and so `npm run verify` end to end** — fourth
+  iteration. Same `next dev` holding Next's project lock.
+- The UI path (Stats modal → "Reset") was not clicked. The smoke test still does
+  not submit a guess, let alone open a modal.
+- `coach:probe` (no key), `build:extension` (untouched).
+
+**Found and not fixed.** Audit §4 (the `cloud:check` revocation probe that cannot
+fail; `check:bundle`'s first-occurrence window), §5, §6 (extension permissions),
+§7, §9 (fifteen wrong numbers, three stale structural claims), §10, and §12's
+remainder (a streak need never break — the option you did not pick).
+
+**Two migrations are now pending on the live project**, both detected by
+`npm run cloud:check`: the `day_guesses` column (iteration 3) and
+`fitdle_reset_progress` (this one). Re-running `supabase/schema.sql` applies
+both; the checks turn from `✗`/`?` to `✓` or fail loudly.

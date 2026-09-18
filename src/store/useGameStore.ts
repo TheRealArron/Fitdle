@@ -396,7 +396,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     clearSave();
     const fresh = defaultSave();
     writeSave(fresh);
-    void import('@/store/useAuthStore').then((m) => m.overwriteCloudIfSignedIn(fresh));
+    void import('@/store/useAuthStore').then((m) => m.clearCloudIfSignedIn());
     set({
       save: fresh,
       streak: 0,

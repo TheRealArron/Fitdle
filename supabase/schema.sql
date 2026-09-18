@@ -281,6 +281,56 @@ begin
 end;
 $$;
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Clearing your own record.
+--
+-- "Reset my statistics" has to reach the cloud copy or it silently does
+-- nothing: every counter in the merge takes the max, so a cleared local save
+-- merged with the surviving cloud row restores it in full. That was the
+-- behaviour before `overwriteCloud` existed, and revoking the client's write
+-- permission brought it straight back - `pushCloudSave` is an upsert, and an
+-- upsert is exactly what the revocation forbids. Measured against a live
+-- project, signed in as the row's own owner: 42501.
+--
+-- Deleting the row is permitted and would work, but it takes `tier`, `ai_day`
+-- and `ai_count` with it. Those are billing-adjacent state that a statistics
+-- reset has no business touching - the whole reason they are not in the save
+-- blob - and it would mean clearing your stats silently cancelled a paid tier.
+--
+-- So the reset clears the SAVE and leaves the rest of the row alone. It is
+-- security definer for the same reason the quota claim is: the caller no longer
+-- has update permission on their own row. It cannot be used to inflate
+-- anything - it takes no arguments, writes one constant, and only ever to the
+-- caller's own row, so the worst it can do is what it says on the button.
+--
+-- `'{}'` rather than a default save because that is the same "has not played"
+-- encoding `fitdle_claim_ai` seeds, and the server already treats a row that is
+-- not a coherent save as no record at all.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.fitdle_reset_progress()
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+
+  update public.fitdle_progress
+     set save = '{}'::jsonb
+   where user_id = auth.uid();
+end;
+$$;
+
+-- Callable by a signed-in player for their own row, and by nobody else. The
+-- function reads auth.uid() itself rather than taking a user id, so there is no
+-- argument to point at somebody else's record.
+revoke all on function public.fitdle_reset_progress() from public, anon;
+grant execute on function public.fitdle_reset_progress() to authenticated;
+
 -- Only the server may call it. The service-role key bypasses RLS, but the
 -- function is reachable by anyone who can reach PostgREST unless this is said.
 revoke all on function public.fitdle_claim_ai(uuid, int, int, int, boolean) from public, anon, authenticated;

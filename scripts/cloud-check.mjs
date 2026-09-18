@@ -351,6 +351,51 @@ if (serviceKey) {
   }
 }
 
+/* ── 8a. clearing your own record ─────────────────────────────────────────── */
+
+/*
+ * Without this function "reset my statistics" cannot reach the cloud copy.
+ * The client has no insert or update permission - that is the point - so the
+ * old upsert fails 42501, the local save is cleared, the cloud row survives,
+ * and the next sync merges it straight back in. The reset appears to work and
+ * is silently undone, which is the exact bug `overwriteCloud` was written to
+ * fix and which came back when the write permission went away.
+ *
+ * The app falls back to deleting the row, so a stale project still resets - it
+ * just takes `tier` and the AI counters with it.
+ *
+ * Probed with the anon key, unauthenticated: the function reads `auth.uid()`
+ * itself and raises 42501 when there is nobody signed in. That refusal is the
+ * proof - to raise it, the function had to exist, be callable, and run.
+ */
+const resetProbe = await supabase.rpc('fitdle_reset_progress');
+const resetCode = resetProbe.error?.code ?? '';
+const resetMessage = resetProbe.error?.message ?? '';
+
+if (resetCode === '42501' || /not authenticated/i.test(resetMessage)) {
+  pass('reset-my-statistics can reach the cloud', 'fitdle_reset_progress refused an anonymous caller');
+} else if (
+  resetCode === 'PGRST202' ||
+  resetCode === '42883' ||
+  /could not find the function/i.test(resetMessage)
+) {
+  fail(
+    'the function fitdle_reset_progress is missing',
+    'Re-run supabase/schema.sql. Until then "reset my statistics" falls back to deleting the whole row, which also clears tier and the AI counters',
+  );
+} else if (!resetProbe.error) {
+  fail(
+    'fitdle_reset_progress ran for an UNAUTHENTICATED caller',
+    'It must raise when auth.uid() is null. Re-run supabase/schema.sql and check the grants',
+  );
+} else {
+  console.log(
+    `${c.warn('?')} fitdle_reset_progress refused, but not as expected ${c.dim(
+      `(${resetCode || 'no code'}: ${resetMessage.slice(0, 60)})`,
+    )}`,
+  );
+}
+
 /* ── 8b. the daily board ranks what the round cost ────────────────────────── */
 
 /*
