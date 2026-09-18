@@ -409,3 +409,45 @@ test('a throw while banking cannot cost the player their result', () => {
   assert.ok(guarded, 'the bank must sit inside a try/catch or a throw becomes a lost round');
   assert.match(route, /console\.error\('\[guess\] banking failed/, 'and must be logged, not swallowed silently');
 });
+
+/* ── the check that checks the revocation ─────────────────────────────────── */
+
+test('cloud:check proves the revocation instead of assuming it', () => {
+  /*
+   * The probe used to run an UPDATE as an ANONYMOUS caller against a row id
+   * that does not exist, and print a green tick when it touched no rows. That
+   * tick could not fail: with the OLD `update own progress` policy installed,
+   * `auth.uid()` is null for an anonymous caller, no row matches, and PostgREST
+   * returns the identical "no error, zero rows".
+   *
+   * The only configuration where the two outcomes differ is an authenticated
+   * caller updating a row that exists and is their own, so the check has to
+   * make an account to get there - and clean it up.
+   */
+  const script = readFileSync(new URL('../scripts/cloud-check.mjs', import.meta.url), 'utf8');
+  const region = script.slice(
+    script.indexOf('Why this signs in, rather than probing anonymously'),
+    script.indexOf('/* ── 8a.'),
+  );
+  assert.ok(region.length > 0, 'the write-policy probe must still exist');
+
+  /*
+   * Comments stripped before asserting, including for the PRESENCE checks.
+   *
+   * `tests/helpers/source.ts` says absence checks read the code and presence
+   * checks may read the whole file. That is not quite right and it bit here:
+   * `assert.match(probe, /finally/)` passed with the finally block deleted,
+   * because the comment above it contains the word "finally". A presence check
+   * for a code CONSTRUCT has the same problem as an absence check.
+   */
+  const probe = region.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  assert.match(probe, /signInWithPassword/, 'it must sign in as the row’s own owner');
+  assert.match(probe, /createUser/, 'which means creating a throwaway account');
+  assert.match(probe, /deleteUser/, 'and deleting it again');
+  assert.match(probe, /\}\s*finally\s*\{/, 'in a finally, so a failure mid-probe leaves nothing behind');
+  assert.ok(
+    !/00000000-0000-0000-0000-000000000000[\s\S]{0,200}update/.test(probe),
+    'it must not go back to updating a row id that does not exist',
+  );
+});

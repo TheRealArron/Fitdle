@@ -668,3 +668,149 @@ remainder (a streak need never break — the option you did not pick).
 `npm run cloud:check`: the `day_guesses` column (iteration 3) and
 `fitdle_reset_progress` (this one). Re-running `supabase/schema.sql` applies
 both; the checks turn from `✗`/`?` to `✓` or fail loudly.
+
+---
+
+## Iteration 6 — the two guards that could not fail, both now demonstrated
+
+**What I audited.** `scripts/cloud-check.mjs`'s write-policy probe and
+`scripts/check-bundle.mjs`'s run scan — audit §4, the only finding that is about
+the repo's own confidence rather than about a player. Re-derived both from the
+source rather than trusting iteration 1, then tried to make each one fail.
+
+**What I chose, and why.** Everything player-facing from the audit is now fixed.
+What is left is §4 (hollow guards), §5 (behavioural coverage), §6 (extension
+permissions), §7 and §9 (documents). §4 first, because a guard that cannot fail
+is worse than no guard: it is the reason the other findings survived this long,
+and both of these sit on properties the repo describes as load-bearing.
+
+**What I changed.**
+
+- `scripts/cloud-check.mjs` — the write-policy probe now creates a throwaway
+  account with the service-role key, seeds a row for it the way the API would,
+  signs in as that account with the **public anon key**, tries to rewrite its own
+  row with `streak: 9999`, reads the row back with the service-role key, and
+  deletes both row and account in a `finally`. A leftover account id is printed
+  loudly rather than swallowed.
+- `scripts/check-bundle.mjs` — the run scan walks every occurrence of the anchor
+  instead of only `text.indexOf(run[0])`.
+- `tests/helpers/source.ts` — its own guidance corrected; see below.
+- 2 new tests.
+
+**The demonstrations, which are the point of this iteration.**
+
+*`check:bundle` was missing a real leak.* Iteration 1 called this "reasoned, not
+demonstrated". It is demonstrated now. The whole of `ANSWER_ORDER` was appended
+as a JSON array to the built chunk that already carries the public catalogue —
+35 kB past the first occurrence of the anchor, which is where the catalogue's own
+copy sits:
+
+```
+planting into .next/static/chunks/0dmpsijn___dl.js
+  first occurrence of SQUAT is at byte 2481 (the catalogue)
+  schedule appended at byte 37248
+
+$ npm run check:bundle          # as it stood
+✓ no answer ordering, coaching text or video ids in any client chunk (36 files scanned)
+EXIT=0
+
+$ npm run check:bundle          # after
+✗ answer ORDER leaked in .next/static/chunks/0dmpsijn___dl.js
+  found consecutive run at byte 37266: SQUAT -> BURPEE -> CLIMBER -> DEADLIFT -> HIPTHRUST
+EXIT=1
+```
+
+Every future puzzle, sitting in a chunk the browser downloads, and the guard said
+clean. The planted chunk was restored from a copy and the clean tree passes
+again; `ls .next/static/chunks/*.orig` returns nothing. Runtime is unchanged at
+`0.40s total`.
+
+*`cloud:check`'s revocation probe.* Against the live project it now signs in as
+the row's own owner and reports:
+
+```
+✓ client writes are revoked   the row's own owner updated 0 rows and the record is unchanged
+```
+
+which is conclusive in a way the old line was not: the row exists, it belongs to
+the caller, and it is unchanged afterwards. The old line —
+`✓ client writes are revoked  no row was updatable` — came from an anonymous
+caller updating a row id that does not exist, which the **old** policy would
+have answered identically.
+
+I could not create the failing condition, because installing the old policy is
+DDL against a database that is not mine. What I did instead was feed the
+detector its failure signal — seed the probe row already marked `forged` — and
+confirm the branch fires and the script exits 1:
+
+```
+✗ a signed-in player CAN rewrite their own progress row - the old write policies are still in place
+  → Re-run supabase/schema.sql; it drops "insert own progress" and "update own progress".
+    Until then any streak on the leaderboard is whatever the browser typed
+EXIT=1
+```
+
+**Mutation table.**
+
+| Leg removed | Test that failed |
+|---|---|
+| `cloud:check` goes back to the anonymous probe | `cloud:check proves the revocation instead of assuming it` |
+| `cloud:check` stops cleaning up (no `finally`) | same test |
+| `check:bundle` goes back to the first occurrence | `the leak scan looks at every occurrence, not just the first` |
+
+**The cleanup leg survived the first pass, and the reason is worth keeping.**
+`assert.match(probe, /finally/)` passed with the `finally` block deleted, because
+the comment above it says the word "finally". That is precisely the failure
+`tests/helpers/source.ts` was written to prevent — and its own guidance is what
+let it through: *"absence checks read the CODE, and presence checks can read the
+whole file."* That holds only when what you are asserting is prose. A presence
+check for a code **construct** has the same problem in reverse. The helper's
+comment now says so, and the test strips comments before asserting.
+
+**Also checked, because these probes create real accounts.** After every probe
+run in this session:
+
+```
+total auth users: 1
+probe accounts left behind: 0 []
+rows in fitdle_progress: 1
+```
+
+| Step | Command | Result |
+|---|---|---|
+| typecheck | `npm run typecheck` | clean |
+| lint | `npm run lint` | clean |
+| tests | `npm test` | 249 tests, 249 pass, 0 fail (was 247) |
+| build | `npm run build` | ok |
+| answer leak | `npm run check:bundle` | clean, 36 files, 0.40s |
+| size | `npm run check:size` | 164.9 kB, 97% of budget — unchanged a fifth time |
+| contrast | `npm run check:contrast` | every combination clears its bar |
+| smoke, prod | `npm run smoke -- prod` | all 10 passed |
+| cloud | `npm run cloud:check` | revocation now proved; two migrations still pending |
+
+**What I did NOT verify.**
+
+- **The revocation probe against a project that actually has the old policies.**
+  That needs DDL on your database. What is proved: the passing branch is
+  conclusive, and the failing branch fires and exits 1.
+- **`npm run cloud:check` now creates and deletes an auth account on every run.**
+  That is a real side effect on your project — one MAU, one row, both removed in
+  a `finally`. I judged that worth it because the alternative is a green tick
+  that means nothing, but it is a cost you did not ask for and you may want it
+  behind a flag. I did not add one, because a flag that CI does not pass is how
+  the default stops being exercised.
+- **`npm run smoke -- dev`, and so `npm run verify` end to end** — fifth
+  iteration, same `next dev` holding Next's project lock.
+- `coach:probe` (no key), `build:extension` (untouched).
+- `check:bundle`'s coaching-text and video-id scans still use a plain
+  `includes`, which has no window problem, and I did not plant anything against
+  them.
+
+**Found and not fixed.** Audit §5 (the smoke test still never submits a guess),
+§6 (extension permissions: `https://*/*` and an unused `"storage"`), §7
+(`coach:probe` reports "n of 7" across 14 cases; the guide's "safe by
+construction" claim covers the app's data but not the model's own knowledge), §9
+(fifteen wrong numbers, three stale structural claims), §10, and §12's remainder.
+
+Two migrations remain pending on the live project, both reported by
+`npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.

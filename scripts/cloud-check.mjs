@@ -268,29 +268,128 @@ if (!serviceKey) {
  * is that it must fail with 42501 rather than reaching the foreign key, because
  * reaching the FK means an insert policy still exists and is letting rows past.
  */
-const policyProbe = await supabase
-  .from('fitdle_progress')
-  .update({ save: {} })
-  .eq('user_id', '00000000-0000-0000-0000-000000000000')
-  .select();
+/*
+ * ── Why this signs in, rather than probing anonymously ──────────────────────
+ *
+ * The previous version of this check ran an UPDATE as an ANONYMOUS caller
+ * against a row id that does not exist, and printed a green tick when it
+ * touched no rows. That tick could not fail. With the OLD `update own progress`
+ * policy still installed, `auth.uid()` is null for an anonymous caller, so no
+ * row matches, so PostgREST returns exactly the same "no error, zero rows" -
+ * and the check would have said "client writes are revoked" on a project where
+ * they were not.
+ *
+ * That is the one property this whole script exists for: a project running the
+ * old schema looks completely fine while forged streaks sail through.
+ *
+ * Proving it needs the only configuration where the two outcomes differ: an
+ * AUTHENTICATED caller updating a row that exists and is their own. With the
+ * policy gone the update is invisible to them (zero rows, and the value is
+ * unchanged); with the policy present it succeeds. There is no way to reach
+ * that configuration without an account, so this makes one.
+ *
+ * The account is created with the service-role key, used, and deleted in a
+ * `finally`. If the deletion ever fails the id is printed loudly, because a
+ * leftover probe account in your auth table is exactly the kind of thing a
+ * tool should not leave behind quietly.
+ */
+if (serviceKey) {
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const email = `fitdle-cloudcheck-${Date.now()}@example.invalid`;
+  const password = `Ck-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}!A`;
+  let probeId = null;
 
-if (policyProbe.error?.code === '42501') {
-  pass('client writes are revoked', 'update refused by RLS');
-} else if (!policyProbe.error && (policyProbe.data ?? []).length === 0) {
-  // An update matching no rows is not proof either way - with no update policy
-  // Postgres reports zero rows rather than an error.
-  pass('client writes are revoked', 'no row was updatable');
-} else if (!policyProbe.error) {
-  fail(
-    'a client UPDATE was accepted - the old write policies are still in place',
-    'Re-run supabase/schema.sql; it drops "insert own progress" and "update own progress"',
-  );
-} else {
-  console.log(
-    `${c.warn('?')} client update refused, but not by RLS ${c.dim(
-      `(${policyProbe.error.code ?? 'no code'})`,
-    )}`,
-  );
+  try {
+    const created = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (created.error || !created.data?.user) {
+      console.log(
+        `${c.warn('?')} could not test the write policies ${c.dim(
+          `(${created.error?.message.slice(0, 60) ?? 'no user returned'})`,
+        )}`,
+      );
+      console.log(
+        `  ${c.warn('→')} This check signs in as a throwaway account to prove the revocation. Without it, nothing here can tell the new policies from the old ones`,
+      );
+    } else {
+      probeId = created.data.user.id;
+
+      // The server's own write, so there is a real row belonging to the probe.
+      const seeded = await admin
+        .from('fitdle_progress')
+        .upsert({ user_id: probeId, save: { marker: 'cloud-check' } }, { onConflict: 'user_id' });
+
+      if (seeded.error) {
+        console.log(
+          `${c.warn('?')} could not seed a row to test against ${c.dim(seeded.error.message.slice(0, 60))}`,
+        );
+      } else {
+        const asOwner = createClient(url, key, { auth: { persistSession: false } });
+        const signIn = await asOwner.auth.signInWithPassword({ email, password });
+
+        if (signIn.error) {
+          console.log(
+            `${c.warn('?')} could not sign in as the probe account ${c.dim(signIn.error.message.slice(0, 60))}`,
+          );
+        } else {
+          const attack = await asOwner
+            .from('fitdle_progress')
+            .update({ save: { marker: 'forged', streak: 9999 } })
+            .eq('user_id', probeId)
+            .select();
+
+          // Read back with the service-role key: what the row actually says is
+          // the only answer that cannot be argued with.
+          const after = await admin
+            .from('fitdle_progress')
+            .select('save')
+            .eq('user_id', probeId)
+            .maybeSingle();
+          const forged = after.data?.save?.marker === 'forged';
+
+          if (forged || (!attack.error && (attack.data ?? []).length > 0)) {
+            fail(
+              'a signed-in player CAN rewrite their own progress row - the old write policies are still in place',
+              'Re-run supabase/schema.sql; it drops "insert own progress" and "update own progress". Until then any streak on the leaderboard is whatever the browser typed',
+            );
+          } else if (attack.error?.code === '42501') {
+            pass('client writes are revoked', 'the row’s own owner was refused 42501');
+          } else if (!attack.error) {
+            pass(
+              'client writes are revoked',
+              'the row’s own owner updated 0 rows and the record is unchanged',
+            );
+          } else {
+            console.log(
+              `${c.warn('?')} the owner's update was refused, but not by RLS ${c.dim(
+                `(${attack.error.code ?? 'no code'}: ${attack.error.message.slice(0, 50)})`,
+              )}`,
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log(
+      `${c.warn('?')} the write-policy check could not run ${c.dim(
+        err instanceof Error ? err.message.slice(0, 60) : String(err),
+      )}`,
+    );
+  } finally {
+    if (probeId) {
+      await admin.from('fitdle_progress').delete().eq('user_id', probeId);
+      const removed = await admin.auth.admin.deleteUser(probeId);
+      if (removed.error) {
+        console.log(
+          c.bad(`! could not delete the probe account ${probeId} - remove it in Supabase → Authentication`),
+        );
+      }
+    }
+  }
 }
 
 /* ── 7. the AI quota columns ──────────────────────────────────────────────── */

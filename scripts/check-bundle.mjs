@@ -59,6 +59,13 @@ const { ANSWER_ORDER, COACHING } = await import('../src/server/answers.ts');
  * name is expected (the catalogue is public); five in the right order is not.
  */
 const RUN = 5;
+
+/*
+ * How far either side of an anchor a run has to fit to count as "together".
+ * Generous: a minified array of 62 short names is well under this, and the
+ * whole point is to catch the ordering however it is spelled.
+ */
+const WINDOW = 400;
 const runs = [];
 for (let i = 0; i + RUN <= ANSWER_ORDER.length; i++) {
   runs.push(ANSWER_ORDER.slice(i, i + RUN));
@@ -75,17 +82,34 @@ for (const file of files) {
 
   for (const run of runs) {
     // Names may be separated by quotes/commas in the minified output.
-    if (run.every((n) => text.includes(n))) {
-      const window = 400;
-      const first = text.indexOf(run[0]);
-      const slice = text.slice(Math.max(0, first - window), first + window);
+    if (!run.every((n) => text.includes(n))) continue;
+
+    /*
+     * EVERY occurrence of the anchor, not just the first.
+     *
+     * This used to take `text.indexOf(run[0])` and look 400 bytes either side
+     * of it. The catalogue is public and ships to the browser by design, so the
+     * first occurrence of any name is almost always an innocent one - and a
+     * real leak somewhere else in the same chunk was measured against a window
+     * around the wrong bytes and reported clean.
+     *
+     * Demonstrated, not assumed: the whole of ANSWER_ORDER was appended to the
+     * chunk that already carries the catalogue, 35 kB past the first occurrence
+     * of the anchor, and this script printed "no answer ordering [...] in any
+     * client chunk" and exited 0.
+     */
+    let leakedHere = false;
+    for (let at = text.indexOf(run[0]); at !== -1; at = text.indexOf(run[0], at + 1)) {
+      const slice = text.slice(Math.max(0, at - WINDOW), at + WINDOW);
       if (run.every((n) => slice.includes(n))) {
         console.log(c.bad(`✗ answer ORDER leaked in ${rel}`));
-        console.log(c.dim(`  found consecutive run: ${run.join(' -> ')}`));
+        console.log(c.dim(`  found consecutive run at byte ${at}: ${run.join(' -> ')}`));
         leaked = true;
+        leakedHere = true;
         break;
       }
     }
+    if (leakedHere) break;
   }
 
   for (const sample of coachingSamples) {
