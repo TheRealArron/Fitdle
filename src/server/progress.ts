@@ -52,6 +52,11 @@ async function readRow(userId: string): Promise<SaveData | null> {
 /**
  * Banks a finished round against the server's copy of the player's record.
  *
+ * `guesses` is the board as this session played it; `spent` is how many guesses
+ * the player has actually used on this puzzle, which is the larger of that and
+ * the server's own count. They differ when somebody discards their session and
+ * restarts the day, and `spent` is the one that is ranked and recorded.
+ *
  * Idempotent by construction: `commitResult` refuses to pay out twice for the
  * same seed, so a retried request, a double-submitted guess, or a client that
  * replays the winning call cannot inflate anything. That property is inherited
@@ -64,7 +69,8 @@ export async function bankResult(
   userId: string,
   seed: number,
   won: boolean,
-  guessCount: number,
+  guesses: string[],
+  spent: number,
   username?: string | null,
 ): Promise<BankedProgress | null> {
   const client = adminClient();
@@ -76,7 +82,34 @@ export async function bankResult(
   // streak for missed days and detects a rolled-back clock), then bank.
   const { save: rolled, clockRollback } = reconcile(existing, seed);
   const before = rolled.lastSeed;
-  const next = commitResult(rolled, seed, won, guessCount, !clockRollback);
+  const next = commitResult(rolled, seed, won, spent, !clockRollback);
+
+  /*
+   * Write the day record. This is what the leaderboard's generated columns are
+   * derived from, and nothing was writing it.
+   *
+   * `reconcile` creates the record and `commitResult` writes the counters -
+   * neither touches `day`, so every row the server banked carried
+   * `{guesses: [], status: 'playing'}` however the round actually went. The
+   * "Today" board filters `day_won = true`, so it matched nobody and could not
+   * ever have matched anybody. Measured against a live project: a player won,
+   * the row read `day_won = false`, and the board query returned zero rows.
+   *
+   * The client used to write this as it played. The RLS revocation took that
+   * write away and the server never picked it up.
+   *
+   * `guesses` is the real board, kept truthful so a reload restores it and so
+   * `isCoherent` accepts it. `spent` is what the round is RANKED by, and the
+   * two differ the moment somebody discards their session and starts the day
+   * over - see the floor in `/api/guess`.
+   */
+  next.day = {
+    ...(next.day ?? { seed, guesses: [], status: 'playing' }),
+    seed,
+    guesses,
+    status: won ? 'won' : 'lost',
+    spent,
+  };
 
   // Nothing changed - the round was already banked. Skip the write.
   if (before === seed) return { save: next, written: false };

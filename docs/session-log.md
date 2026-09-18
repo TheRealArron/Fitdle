@@ -271,3 +271,158 @@ a throwaway account: player wins, `progress written = yes`, and the daily board
 query returns **0 rows**. The streak board is fine. Written up as audit §11 and
 §12; they have to be fixed together, because fixing the dead board without
 fixing the discardable session turns it into a forgeable one.
+
+---
+
+## Iteration 3 — the "Today" board goes from 0 rows to real ones, and the number it ranks stops being resettable
+
+**What I audited.** `bankResult`, `reconcile`, `commitResult`, `DayRecord`,
+`isCoherent`, the generated columns in `supabase/schema.sql`, `dailyBoard`, and
+`/api/guess`. Traced the board's ranking columns back through the blob they are
+derived from to the code that was supposed to write it, and found nothing did.
+
+**What I chose, and why over the alternatives.** Audit §11 and §12 together.
+They are one item: §11 alone turns a dead leaderboard into a forgeable one, so
+shipping the one-line fix on its own would have been worse than leaving it
+broken. You picked the guess floor over the stricter "six recorded guesses ends
+the day", which would also close the never-lose hole but can lock a player out
+of a day they cleared their browser in the middle of.
+
+Rejected inside that: making `day.guesses` itself carry the total (it would mean
+fabricating guesses the player never made, and `isCoherent` rightly requires
+real uniform-width names), and ranking on something else entirely (drops the
+competitive dimension the board exists for).
+
+**What I changed.**
+
+- `src/server/progress.ts` — `bankResult` writes `save.day` with the real
+  guesses, the real status and `spent`. Signature takes the guess array and the
+  floor instead of a count.
+- `src/lib/secureStorage.ts` — `DayRecord.spent`, optional, with a coherence
+  rule that it may exceed `guesses.length` but never undercut it and never
+  exceed `MAX_GUESSES`.
+- `src/app/api/guess/route.ts` — counts guesses per account per UTC day through
+  the existing `counter.ts` (no new primitive) and banks
+  `max(counted, board length)`. `verifiedUser` hoisted to the top, because the
+  count is needed on every guess rather than only the last.
+- `supabase/schema.sql` — `day_guesses` now prefers `save.day.spent`, dropped
+  and re-added rather than `add if not exists`, which would have left the old
+  expression ranking on any deployed project. The stale "A note on trust"
+  paragraph, which contradicted the revocation ninety lines above it, is
+  corrected and says it was wrong.
+- `scripts/cloud-check.mjs` — probes that the deployed column actually ranks
+  `spent`, by comparing the column against the blob on banked rows.
+- README — the daily-board section, including an explicit correction of
+  "already unforgeable", which was false.
+- 7 new tests; one brittle existing test rewritten.
+
+**Mutation table.** Each leg removed, `npm test` re-run, leg restored.
+
+| Leg removed | Test that failed |
+|---|---|
+| `bankResult` stops writing `next.day` | `bankResult writes the day record, not just the counters` |
+| The day is written but always `'playing'` | `bankResult writes the day record, not just the counters` |
+| `commitResult` gets the board length, not the floor | `the distribution records what the round cost, not the board length` |
+| The route drops the floor (`Math.max` removed) | `the guess route counts guesses per account, not off the token` |
+| The counter key drops the account | `the guess route counts guesses per account, not off the token` |
+| `isCoherent` stops bounding `spent` | `` `spent` may exceed the board it describes, but never undercut it `` |
+| The schema column stops preferring `spent` | `the board ranks `spent`, which a restart cannot lower` |
+
+**One leg survived the first pass again** — swapping `spent` for
+`guesses.length` in the `commitResult` call broke nothing, and that is the
+difference between a restarted round landing in the six-guess bucket and the
+one-guess bucket. `bankResult` cannot be called from a test (it needs a
+service-role client and a live project), so the new test pins the argument by
+parsing the call. That is weaker than I would like and the log should say so —
+what makes me confident is the live run below, which shows
+`distribution [0,0,0,0,0,1]`.
+
+**I also mutation-tested the new `cloud:check` probe**, because the audit's §4
+is about a probe that could not fail. Planted a real stale-schema row (the
+deployed project has not had the new DDL run), then ran the undecorated command:
+
+```
+planted row: day_guesses=1  save.day.spent=6
+✗ day_guesses ranks the guess ARRAY, not what the round cost (1 of 1 rows disagree)
+cloud:check exit code = 1
+```
+
+With no banked rounds it reports `? daily board ranking not checked (no banked
+rounds to compare against yet)` rather than a green tick, because PostgREST
+cannot read a column's definition and pretending otherwise is the §4 mistake.
+
+**Measurements, with the command.**
+
+The dead board, through the real route against the live project, with a
+throwaway account — before and after the change:
+
+```
+before                                after
+day_seed    = 20260917                day_seed    = 20260917
+day_guesses = 0                       day_guesses = 1
+day_won     = false                   day_won     = true
+save.day    = {guesses:[],            save.day    = {seed:20260917, spent:1,
+               status:"playing"}                    status:"won", guesses:["GOBLET"]}
+
+rows the "Today" board query returns: 0        rows: 1
+```
+
+The floor, same setup — a signed-in player burns five guesses, discards the
+token, and wins in one:
+
+```
+fresh board guesses = 0
+status = won   board shows 1 guess(es)
+
+save.day          = {"seed":20260917,"spent":6,"status":"won","guesses":["GOBLET"]}
+save.distribution = [0,0,0,0,0,1]        <- the six-guess bucket
+day_guesses (column as deployed)              = 1
+day_guesses (expression in the new schema)    = 6
+```
+
+The board still shows one guess, which is correct — that is the board. The
+round is ranked and recorded as six, which is what it cost.
+
+| Step | Command | Result |
+|---|---|---|
+| typecheck | `npm run typecheck` | clean |
+| lint | `npm run lint` | clean |
+| tests | `npm test` | 236 tests, 236 pass, 0 fail (was 229) |
+| build | `npm run build` | ok |
+| answer leak | `npm run check:bundle` | clean, 36 files |
+| size | `npm run check:size` | 164.9 kB, 97% of the 170 kB budget — unchanged again |
+| contrast | `npm run check:contrast` | every combination clears its bar |
+| smoke, prod | `npm run smoke -- prod` | all 10 passed |
+| cloud | `npm run cloud:check` | green except Redis and the new "not checked" line |
+
+**What I did NOT verify.**
+
+- **The schema migration has not been applied to the live project.** I wrote the
+  DDL and proved the new expression by evaluating it over a real banked row, but
+  I did not run `drop column … add column` against your database — that alters
+  your schema and is yours to run. Everything measured above is therefore on the
+  **old** column, which is why the two `day_guesses` lines differ. Run
+  `supabase/schema.sql` and then `npm run cloud:check`; the new probe will turn
+  from `?` to `✓` or fail loudly.
+- **`npm run smoke -- dev`, and therefore `npm run verify` end to end.** Same
+  reason as iteration 2: a `next dev` is holding Next's one-per-project lock and
+  I left it alone. Prod smoke passed in full.
+- The smoke test still never submits a guess in a browser, so none of this
+  iteration's behaviour is covered there. That is backlog #5 and it is now the
+  most valuable remaining item.
+- `coach:probe` (no API key) and `build:extension` — untouched, unrun.
+- The per-account counter under Redis is covered by the fake Upstash only; no
+  Redis is configured here.
+- The extra `verifiedUser` call per guess adds a Supabase token verification to
+  every guess for signed-in players. I did not measure the latency it adds.
+
+**Found and not fixed.**
+
+- **A streak still need never break.** A player five guesses deep and wrong can
+  discard rather than submit the sixth. The floor records the guesses but
+  nothing forces the round closed, and forcing it is the option you did not
+  pick. Audit §12.
+- Everything else from the audit: §2 (the `{}`-row 500, now the highest-value
+  item left), §3 (reset uses an upsert RLS refuses), §4 (the two guards that
+  cannot fail), §5, §6 (extension permissions), §7, §9 (fifteen wrong numbers),
+  §10.

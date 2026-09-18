@@ -40,8 +40,6 @@ alter table public.fitdle_progress
   -- Today's board: which puzzle, how many guesses, and whether it was solved.
   add column if not exists day_seed int
     generated always as (nullif(save -> 'day' ->> 'seed', '')::int) stored,
-  add column if not exists day_guesses int
-    generated always as (jsonb_array_length(save -> 'day' -> 'guesses')) stored,
   add column if not exists day_won boolean
     generated always as ((save -> 'day' ->> 'status') = 'won') stored;
 
@@ -69,6 +67,43 @@ alter table public.fitdle_progress
   add column if not exists tier text not null default 'free',
   add column if not exists ai_day int not null default 0,
   add column if not exists ai_count int not null default 0;
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `day_guesses` ranks what the round COST, not what the board shows.
+ *
+ * It used to be `jsonb_array_length(save -> 'day' -> 'guesses')`, and that is
+ * the number a player can reset. The signed session is the server's only memory
+ * of a round and the client chooses whether to send it, so discarding it hands
+ * out a fresh board for the same day: burn five guesses, discard, win in one,
+ * and the round banks as a one-guess win - top of a board ranked by fewest
+ * guesses. Measured against a running server before this changed.
+ *
+ * `/api/guess` now counts guesses per account per day and writes the total as
+ * `save.day.spent`, which a restart cannot lower. The array stays truthful,
+ * because it is the board a reload restores.
+ *
+ * DROP then ADD rather than `add column if not exists`: the column already
+ * exists on any project running the previous schema, and `if not exists` would
+ * silently leave the old expression in place - which looks completely fine
+ * while ranking the forgeable number. It is a generated column, so there is
+ * nothing to lose by dropping it; Postgres recomputes it from the same blob.
+ *
+ * The coalesce keeps rows banked before this existed ranking sensibly rather
+ * than as null.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+alter table public.fitdle_progress drop column if exists day_guesses;
+
+alter table public.fitdle_progress
+  add column day_guesses int
+    generated always as (
+      coalesce(
+        nullif(save -> 'day' ->> 'spent', '')::int,
+        jsonb_array_length(save -> 'day' -> 'guesses')
+      )
+    ) stored;
 
 /*
  * Indexes.
@@ -150,11 +185,18 @@ create trigger fitdle_progress_touch
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A note on trust.
 --
--- The client computes and uploads its own streak, so a determined user can
--- upload any number they like. This schema does not pretend otherwise. Making
--- streaks authoritative would mean moving the answer and the scoring server
--- side - a Postgres function that owns the daily word and validates each guess
--- - which is a different product decision, not a policy tweak.
+-- This used to say the client computes and uploads its own streak, so a
+-- determined user can upload any number they like. That stopped being true in
+-- this same file, ninety lines above: the insert and update policies are gone
+-- and `/api/guess` writes the row under the service-role key. Verified against
+-- a live project - signed in as the row's own owner, an UPDATE touches zero
+-- rows and an INSERT or UPSERT is refused 42501, while the streak column stays
+-- where the server put it.
+--
+-- What remains true: the numbers here are only as good as what the API writes,
+-- and the API is only as good as its session. The guesses a round cost are
+-- counted per account by the server rather than read off the client's token,
+-- because a token is discardable - see `day_guesses` above.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─────────────────────────────────────────────────────────────────────────────

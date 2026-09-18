@@ -351,6 +351,58 @@ if (serviceKey) {
   }
 }
 
+/* ── 8b. the daily board ranks what the round cost ────────────────────────── */
+
+/*
+ * `day_guesses` used to be `jsonb_array_length(save -> 'day' -> 'guesses')`,
+ * which is the number a player can reset by discarding their session and
+ * starting the day over - measured: burn five guesses, discard, win in one, and
+ * the round banks as a one-guess win. The server now counts per account and
+ * writes the total as `save.day.spent`, and the column has to prefer it.
+ *
+ * A stale project is invisible from the UI: the board renders, the ranks look
+ * plausible, and they are the forgeable number.
+ *
+ * PostgREST cannot read a column's definition, so this checks the column's
+ * BEHAVIOUR against the blob it is derived from - any row where they disagree
+ * proves the old expression is still installed. With no banked rounds yet there
+ * is nothing to compare, and this says so rather than passing.
+ */
+if (serviceKey) {
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+  const rows = await admin
+    .from('fitdle_progress')
+    .select('day_guesses, save')
+    .not('save->day->spent', 'is', null)
+    .limit(50);
+
+  if (rows.error) {
+    console.log(
+      `${c.warn('?')} could not read banked rounds ${c.dim(`(${rows.error.message.slice(0, 60)})`)}`,
+    );
+  } else if ((rows.data ?? []).length === 0) {
+    console.log(
+      `${c.warn('?')} daily board ranking not checked ${c.dim('(no banked rounds to compare against yet)')}`,
+    );
+    console.log(
+      `  ${c.warn('→')} Re-run supabase/schema.sql if you have not since the day_guesses change, then finish a round and re-run this`,
+    );
+  } else {
+    const wrong = rows.data.filter((r) => r.day_guesses !== r.save?.day?.spent);
+    if (wrong.length > 0) {
+      fail(
+        `day_guesses ranks the guess ARRAY, not what the round cost (${wrong.length} of ${rows.data.length} rows disagree)`,
+        'Re-run supabase/schema.sql; it drops and re-adds day_guesses. Until then the daily board ranks a number players can reset',
+      );
+    } else {
+      pass(
+        'the daily board ranks what the round cost',
+        `day_guesses matches save.day.spent on ${rows.data.length} row(s)`,
+      );
+    }
+  }
+}
+
 /* ── 9. the shared rate-limit counter ─────────────────────────────────────── */
 
 /*

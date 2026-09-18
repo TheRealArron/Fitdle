@@ -464,7 +464,7 @@ round, which `/api/guess` banks from a session it signed itself.
 | Board | Ranks by | Ties |
 |---|---|---|
 | **Streaks** | Current streak, descending | Whoever got there first |
-| **Today** | Fewest guesses | Whoever finished earlier |
+| **Today** | Fewest guesses the round actually cost | Whoever finished earlier |
 
 **No user id ever reaches the client.** A stable public identifier is a
 correlation key, and a leaderboard is exactly where someone would go to collect
@@ -474,7 +474,12 @@ same way: a count of players strictly ahead of you, never a list.
 
 **The ranking columns are generated, not written.** Postgres derives `streak`,
 `day_seed`, `day_guesses` and `day_won` from the save blob, so a leaderboard
-column physically cannot drift from the record it ranks - which it would within
+column physically cannot drift from the record it ranks - though it can rank a
+field nobody fills in, which is exactly what happened: nothing wrote `save.day`
+after the client lost write permission, so every banked row read
+`day_won = false` and the "Today" board returned zero rows for everybody, for as
+long as it had existed. Verified against a live project before and after: the
+board query went from 0 rows to 1 for a player who had just won - which it would within
 a week if the server had to remember to update both. `username` is the one
 exception: it lives in `auth.users`, which nobody may read for another account,
 so the API denormalises it at bank time.
@@ -488,9 +493,27 @@ is big enough to hurt.
 A speed board was the obvious second dimension, and it is not honestly
 measurable here. Nothing records when a player *started*, and anything that did
 would reset by discarding the session and asking for a fresh one - so the board
-would rank whoever worked that out rather than whoever solved it fastest. Guess
-count is already measured, already unforgeable, and is what the game is
-about. The UI never uses the word "fastest", and a test enforces that.
+would rank whoever worked that out rather than whoever solved it fastest. The UI
+never uses the word "fastest", and a test enforces that.
+
+**That paragraph was half wrong, and it is worth saying which half.** Guess
+count was described as "already unforgeable". It was not: the session is the
+server's only memory of a round and the client chooses whether to send it, so
+discarding it hands out a fresh board for the same day. Measured against a
+running server - burn five guesses, discard the token, win in one, and the round
+banked as a **one-guess win**. The very mechanism the paragraph names for the
+speed board applied to guess count too.
+
+It is unforgeable now, for the players the board contains. `/api/guess` counts
+guesses per account per UTC day and banks the larger of that count and the
+board it was sent, so a restart can only ever raise your score. Anonymous
+players are not counted and are not on the leaderboard.
+
+What it still does **not** stop: a player five guesses deep and wrong can
+discard rather than submit the sixth, so they never record a loss and a streak
+need never break. Closing that means refusing to reopen a day whose record is
+spent, which changes what happens to somebody who clears their browser
+mid-round - a product call, not a policy tweak.
 
 ### The streak is the server's, not the browser's
 

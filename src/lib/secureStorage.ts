@@ -49,6 +49,22 @@ export interface DayRecord {
   guesses: string[];
   status: GameStatus;
   /**
+   * How many guesses this puzzle has actually cost the player, which is not
+   * always `guesses.length`.
+   *
+   * The signed session is the server's only memory of a round, and the client
+   * decides whether to send it - so discarding it hands you a fresh board for
+   * the same day. Measured: burn five guesses, discard the token, win in one,
+   * and the round banks as a one-guess win. `guesses` stays the board you are
+   * looking at; this is the number that is ranked.
+   *
+   * Written by the server when it banks a finished round. Absent on a save the
+   * server has not banked and on every save written before this existed, which
+   * is why it is optional and why anything reading it falls back to
+   * `guesses.length`.
+   */
+  spent?: number;
+  /**
    * The server's signed session for this day, stored so a reload resumes the
    * same game rather than starting a fresh one. Opaque and unforgeable - the
    * server re-verifies its HMAC on every request, so persisting it here grants
@@ -283,6 +299,15 @@ function isCoherent(d: unknown): d is SaveData {
       if (!day.guesses.every((g) => (g as string).length === width)) return false;
     }
     if (day.status !== 'playing' && day.status !== 'won' && day.status !== 'lost') return false;
+    /*
+     * `spent` counts guesses across sessions, so it may exceed `guesses.length`
+     * - that is the whole point of it - but it can never be below, and it can
+     * never exceed the six a puzzle allows.
+     */
+    if (day.spent !== undefined) {
+      if (!isInt(day.spent)) return false;
+      if (day.spent < day.guesses.length || day.spent > MAX_GUESSES) return false;
+    }
     // Opaque to us; the server validates it. Only the shape is checked here.
     if (day.serverState !== undefined && typeof day.serverState !== 'string') return false;
   }

@@ -125,3 +125,33 @@ test('missing storage does not throw', async () => {
     assert.equal(save.streak, 0);
   });
 });
+
+test('`spent` may exceed the board it describes, but never undercut it', async () => {
+  /*
+   * `day.spent` is how many guesses the puzzle actually cost, counted by the
+   * server per account. It exceeds `day.guesses.length` exactly when somebody
+   * discarded their session and started the day over, which is the case it
+   * exists for - so the coherence rule is a floor and a ceiling, not equality.
+   */
+  const day = { seed: 20260917, guesses: ['SQUAT'], status: 'won' as const };
+  const base = { ...defaultSave(), played: 1, wins: 1, streak: 1, maxStreak: 1,
+    distribution: [1, 0, 0, 0, 0, 0], lastSeed: 20260917, lastResult: 'won' as const,
+    highSeed: 20260917 };
+
+  const load = async (spent: number | undefined) =>
+    withStorage(async () => {
+      const { loadSave } = await import('@/lib/secureStorage');
+      const save = { ...base, day: spent === undefined ? day : { ...day, spent } };
+      (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage.setItem(
+        'fitdle:save:v2',
+        envelope(save as SaveData),
+      );
+      return loadSave();
+    });
+
+  assert.equal((await load(6)).tampered, false, 'a restart legitimately spends more');
+  assert.equal((await load(1)).tampered, false, 'an honest round');
+  assert.equal((await load(0)).tampered, true, 'spent below its own board is impossible');
+  assert.equal((await load(7)).tampered, true, 'a round cannot cost more than MAX_GUESSES');
+  assert.equal((await load(undefined)).tampered, false, 'and a save written before it existed still loads');
+});

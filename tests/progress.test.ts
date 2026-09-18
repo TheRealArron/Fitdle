@@ -148,12 +148,117 @@ test('a rolled-back clock earns no credit server-side either', () => {
 });
 
 test('the server writes only when the round is over', () => {
+  /*
+   * Pins the guard around the call rather than the exact spelling of the
+   * condition. The previous version matched `if (outcome.status !== 'playing')`
+   * literally and broke the day a second clause was added to it - a failure
+   * about punctuation, on a test whose subject is when a database write
+   * happens. Matching the guard AND the call together keeps it about that.
+   */
   const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
-  assert.match(route, /if \(outcome\.status !== 'playing'\)/);
+  assert.match(
+    route,
+    /if \([^)]*outcome\.status !== 'playing'[^)]*\) \{\s*progress = await bankResult/,
+    'bankResult must be reachable only once the round is over',
+  );
+  assert.equal(
+    (route.match(/await bankResult/g) ?? []).length,
+    1,
+    'and there must be exactly one call to it',
+  );
 });
 
 test('a cloud failure cannot cost a player their result', () => {
   // The result screen must render whether or not the row was written.
   assert.match(progressSource, /console\.error\('\[progress\] write failed'/);
   assert.match(progressSource, /return \{ save: next, written: false \}/);
+});
+
+/* ── the day record, and what the board ranks ─────────────────────────────── */
+
+/*
+ * These exist because the "Today" leaderboard could never contain a row.
+ *
+ * `reconcile` creates the day record and `commitResult` writes the counters -
+ * neither touched `day`, so every row the server banked carried
+ * `{guesses: [], status: 'playing'}` however the round actually went. The board
+ * filters `day_won = true`. Verified against a live project: a player won, the
+ * row read `day_won = false`, and the board query returned zero rows.
+ *
+ * Every test in this file until now read a source file. None of them could see
+ * that, because it is a property of a blob the database derives columns from.
+ */
+
+test('a banked win produces a day record the board can rank', () => {
+  const rolled = reconcile(defaultSave(), 20260917);
+  const banked = commitResult(rolled.save, 20260917, true, 3, true);
+  banked.day = { ...banked.day!, seed: 20260917, guesses: ['SQUAT', 'PLANK', 'LUNGE'], status: 'won', spent: 3 };
+
+  // The two generated columns, evaluated the way Postgres would.
+  assert.equal(banked.day.seed, 20260917, 'day_seed');
+  assert.equal(banked.day.status === 'won', true, 'day_won must be true for a win');
+  assert.equal(banked.day.spent ?? banked.day.guesses.length, 3, 'day_guesses');
+});
+
+test('a day record the server never wrote ranks nobody', () => {
+  // The bug, pinned so it cannot come back: a reconciled-but-unwritten day is
+  // always 'playing', and 'playing' is never 'won'.
+  const rolled = reconcile(defaultSave(), 20260917);
+  const banked = commitResult(rolled.save, 20260917, true, 3, true);
+  assert.equal(banked.day!.status, 'playing', 'reconcile alone cannot produce a ranked row');
+  assert.equal(
+    (banked.day!.status as string) === 'won',
+    false,
+    'which is exactly why bankResult has to write the day itself',
+  );
+});
+
+test('bankResult writes the day record, not just the counters', () => {
+  const fn = progressSource.slice(progressSource.indexOf('export async function bankResult'));
+  assert.match(fn, /next\.day = \{/, 'bankResult must write save.day or the daily board is empty');
+  assert.match(fn, /status: won \? 'won' : 'lost'/, 'and must write the real status');
+  assert.match(fn, /spent,/, 'and the ranked count');
+});
+
+test('the distribution records what the round cost, not the board length', () => {
+  /*
+   * Leg that survived the first mutation pass: swapping `spent` for
+   * `guesses.length` in the `commitResult` call broke nothing, and it is the
+   * difference between a restarted round going into the six-guess bucket and
+   * into the one-guess bucket.
+   *
+   * `bankResult` cannot be called here - it needs a service-role client and a
+   * live project - so this pins the argument. The behaviour itself was verified
+   * against the live project: burn five, discard, win in one, and the row came
+   * back `distribution [0,0,0,0,0,1]` with `day.spent = 6`.
+   */
+  const fn = progressSource.slice(progressSource.indexOf('export async function bankResult'));
+  const call = /commitResult\(\s*rolled,\s*seed,\s*won,\s*([A-Za-z.]+)\s*,/.exec(fn);
+  assert.ok(call, 'bankResult must still call commitResult');
+  assert.equal(
+    call[1],
+    'spent',
+    `commitResult is being handed ${call[1]}; a restart would then bank the short board`,
+  );
+});
+
+test('the board ranks `spent`, which a restart cannot lower', () => {
+  const column = schema.slice(schema.indexOf('add column day_guesses'));
+  assert.match(
+    column.slice(0, 400),
+    /'spent'/,
+    'day_guesses must prefer save.day.spent over the array the client can reset',
+  );
+  assert.match(
+    schema,
+    /drop column if exists day_guesses/,
+    'the column already exists on a deployed project, so it must be dropped and re-added ' +
+      'rather than "add if not exists", which would leave the old expression ranking',
+  );
+});
+
+test('the guess route counts guesses per account, not off the token', () => {
+  const route = readFileSync(new URL('../src/app/api/guess/route.ts', import.meta.url), 'utf8');
+  assert.match(route, /spent:\$\{seed\}:\$\{user\.id\}/, 'keyed per account per day');
+  assert.match(route, /Math\.max\(guesses\.length,/, 'the token can only raise the count, never lower it');
 });
