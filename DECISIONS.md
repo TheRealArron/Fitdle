@@ -1,9 +1,18 @@
 # Decision log
 
 Seven decisions where the interesting part is the trade-off, not the code. Every
-number here was measured in this repo and can be reproduced with the command
-given. Where something was **not** measured, it says so — a decision log whose
-figures fall apart under a follow-up question is worth less than no log at all.
+number here was measured in this repo. Where something was **not** measured, it
+says so — a decision log whose figures fall apart under a follow-up question is
+worth less than no log at all.
+
+Two kinds of number appear below and they are labelled, because conflating them
+is how a log like this rots. **Live** figures can be reproduced with the command
+given, and were re-run on 2026-09-21. **Recorded** figures were measured against
+code that no longer exists — a before/after from a change already landed — and
+cannot be re-run by anyone, including me. This preamble used to promise that
+every number could be reproduced with the command given. That was never true of
+the before/after pairs, and several of the live figures had drifted since they
+were written.
 
 ---
 
@@ -58,8 +67,9 @@ leaderboard — yet waited for it before first paint.
 **Measured** (`npm run check:size`, gzipped first-load JS):
 
 ```
-before  236.5 kB
-after   178.0 kB      -58.5 kB, -25%
+before  236.5 kB      recorded — the code that produced it is gone
+after   178.0 kB      recorded — as above          -58.5 kB, -25%
+now     165.4 kB      live — npm run check:size, 2026-09-21
 ```
 
 **The first attempt only looked like it worked.** The bundle shrank because the
@@ -125,7 +135,9 @@ seed whose answer moves underneath them: the board stops matching its own
 feedback, and every share grid already posted becomes wrong. A total rewrite of
 the calendar dressed up as a content update.
 
-**Choice.** `SCHEDULE_SIZE` frozen at 60. Appended words land beyond it and are
+**Choice.** `SCHEDULE_SIZE` frozen — at **62**, not the 60 an earlier edition of
+this entry said; the README's own sweep table picked 62 and the constant has
+read 62 throughout. Appended words land beyond it and are
 never drawn, so vocabulary can grow at any time with zero calendar effect —
 which is what makes content iteration workable at all. Golden date→answer pairs
 are pinned by tests.
@@ -308,14 +320,18 @@ it, and the tests above are the first in this repo to call a route handler.
 
 | Verified in this repo | Not verified |
 |---|---|
-| 159 unit tests | The RLS revocation (needs a live project) |
-| Browser checks against production builds | The leaderboard's actual ranking (needs the service-role key) |
-| Three attacks on the guess API, three on the coach API | The coach's model behaviour (no API key) |
-| Bundle budget, enforced in `npm run verify` | Any performance number under real network conditions |
-| Answer schedule absent from 48 client chunks | Anything about users, retention, or engagement |
+| 253 unit tests | The coach's and guide's model behaviour (no API key — `coach:probe` has never run) |
+| A full round played in a real browser, in dev **and** prod | Any performance number under real network conditions |
+| Three attacks on the guess API, three on the coach API | Anything about users, retention, or engagement |
+| The RLS revocation, against a live project, as the row's own owner | `fitdle_reset_progress` and the new `day_guesses` column (migrations not yet run) |
+| The leaderboard's ranking, end to end against a live project | Whether the built extension loads in Chrome |
+| Bundle budget and dependency audit, enforced in `npm run verify` | |
+| Answer schedule absent from 36 client chunks | |
 
-`npm run verify` runs typecheck, lint, tests, build, the answer-leak scan, the
-size budget, and a smoke test in both dev and production. It exits 0.
+`npm run verify` runs typecheck, lint, the dependency audit, the tests, the
+extension build, the web build, the answer-leak scan, the size ratchet, the
+contrast pass, and a smoke test that plays a whole round in both dev and
+production. Measured 2026-09-21: it exits 0.
 
 ## The logo is one file, cropped by a script
 

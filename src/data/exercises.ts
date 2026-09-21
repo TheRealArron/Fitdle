@@ -14,10 +14,10 @@ import type { Equipment, MuscleGroup, MuscleRegion } from './muscles';
  *
  * There is deliberately NO `isAnswer` flag. It used to be public so a shortlist
  * panel could list today's candidates, and that made the game trivially
- * solvable: 12 answers per length is ~3.6 bits of entropy, while one scored
- * guess returns up to 7.9, so a single optimal opener identified the answer for
- * 60 out of 60 answers. Measured, not assumed. Publishing the answer subset
- * hands that shortcut to anyone who wants it.
+ * solvable: 12 to 13 answers per length is ~3.6 to 3.7 bits of entropy, while
+ * one scored guess returns up to 7.9, so a single optimal opener identified the
+ * answer for every one of them. Measured, not assumed. Publishing the answer
+ * subset hands that shortcut to anyone who wants it.
  *
  * What is NOT here, and must never be added:
  *

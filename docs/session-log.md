@@ -1221,3 +1221,126 @@ but false as stated:
   bundle size (178.0 → **165.4**) are now all re-measured on the current tree.
 
 Also still open: audit §10, and §12's remainder.
+
+---
+
+## Iteration 10 — every documented number re-measured, and the one that moves pinned to the source
+
+**What I audited.** Every figure in README.md, DECISIONS.md, SECURITY.md and the
+load-bearing code comments, re-measured against the current tree rather than
+trusting iteration 1's table. Audit §9.
+
+**What I chose, and why.** It is what was left of the audit that a reader can
+act on being wrong about. The extension, the guards and the criticals are done;
+what remains besides this is §10's small stuff and §12's product decision.
+
+**Three wrong numbers turned up that iteration 1 had not caught**, now written
+up as audit §13:
+
+- The README's most quotable claim — *"`DEADLIFT` → tap 'hamstrings' → 1
+  candidate: DEADLIFT"* — is false. **Six** eight-letter catalogue words work the
+  hamstrings: CRABWALK, DEADLIFT, HIPRAISE, INCHWORM, LEGPRESS, TOETOUCH. The
+  worst case exists, but it is SEATEDROW → lats.
+- The average beside it, *"3.6 candidates out of 19+"*: my measurement of the
+  same idea gives **7.1**, and same-length pools run 18–23. I cannot reconcile
+  3.6 because the method behind it was never recorded — so the replacement says
+  how it was measured, which is the part that was missing. The same paragraph is
+  duplicated verbatim in `MuscleDetail.tsx` and paraphrased in
+  `tests/leaderboard.test.ts`; all three are fixed.
+- *"67 literal call sites"* of `text-white`/`text-slate-300`: **129**.
+
+**What I changed.** 14 corrections in README.md, 5 in DECISIONS.md, and 5 in
+code comments and tests. Every one says the old figure was wrong rather than
+quietly replacing it. Highlights beyond the counts:
+
+- DECISIONS' preamble promised that *"every number here … can be reproduced with
+  the command given"*. That was never true of the before/after pairs — the code
+  that produced them is gone. It now distinguishes **live** figures (re-run
+  2026-09-21) from **recorded** ones (historical, unreproducible), and the
+  bundle table carries all three numbers with the label on each.
+- DECISIONS §4 said `SCHEDULE_SIZE` was *"frozen at 60"*. The constant has read
+  62 throughout and the README's own sweep table picked 62. `game.ts`'s comment
+  said new words land at "index 60+"; they land at 62 and beyond.
+- The README's security table pointed at `fitdle_server_time()` as what blocks a
+  forward clock skip. `grep -rn fitdle_server_time` matched that one line and
+  nothing else in the repo. What actually blocks it is that `/api/today`
+  computes the seed server-side.
+- The architecture table listed an `isAnswer` flag under the client column.
+  `exercises.ts:15` says *"There is deliberately NO `isAnswer` flag"* and a test
+  asserts its absence.
+
+**The durable part.** Four different test counts across two documents (93, 200,
+106, 159) is evidence that re-typing a number does not work, so the count is now
+**pinned by a test**: it counts `test(` declarations across `tests/*.test.ts` and
+asserts every `N tests` claim in the three documents equals it.
+
+It failed the moment it was written — adding it made the count 253 while the
+docs said 252 — which is the behaviour, not a mistake.
+
+**The cost, stated plainly:** adding a test now means editing three lines of
+documentation, and the failure names the new number so it is a one-character
+fix. That is real friction, and it is the same trade as the size ratchet. I
+judged four wrong counts to be worse. Everything else in that class is either
+derived from the data at render time (the landing page already does this) or is
+a historical figure that cannot be re-run and is now labelled as such — neither
+needs pinning.
+
+**Mutation table.**
+
+| Leg | Test that failed |
+|---|---|
+| A test count drifts in README.md | `the documented test count is the real one` |
+| A test count drifts in DECISIONS.md | same |
+| The landing page hardcodes an exercise count | `the landing page derives its numbers instead of typing them` |
+
+**The third leg survived the first pass**, and the reason is worth keeping. The
+existing guard matched `\d{2,4}\s+exercises` — a number written next to the
+word. Replacing `const EXERCISE_COUNT = CATALOGUE.length` with `= 100` renders
+exactly the same wrong claim one level of indirection up, and sailed through.
+The guard now also asserts that **no top-level constant in that file is a bare
+number**, which is the real property: every figure the page states comes from
+the data it imports.
+
+**Measurements, with the command.**
+
+| Claim | Was | Is | How |
+|---|---|---|---|
+| unit tests | 93 / 200 / 106 / 159 | **253** | `npm test` |
+| client chunks scanned | 43 / 48 | **36** (16 web + 20 extension) | `npm run check:bundle` |
+| first-load JS | 178.0 kB | **165.4 kB** | `npm run check:size` |
+| answer pool | 60 (12 per length) | **62** (13/13/12/12/12) | node over `ANSWER_ORDER` |
+| answers needing equipment | 25 | **26**, all with a substitute | node over `COACHING` |
+| answers with a curated video | "40/40" | **60 of 62** | node over `COACHING` |
+| candidates after tapping a lit muscle | 3.6 out of "19+" | **7.1**, pools 18–23 | node over `CATALOGUE` |
+| 8-letter words working hamstrings | "1: DEADLIFT" | **6** | node over `CATALOGUE` |
+| `text-white`/`text-slate-300` sites | 67 | **129** | `grep -roE` over `src/` |
+| `SCHEDULE_SIZE` | "frozen at 60" | **62** | the constant |
+
+`npm run verify`, undecorated: **exit 0**, all ten steps — typecheck, lint,
+`check:audit` (0 vulnerabilities), 253 tests, extension build, web build,
+`check:bundle` clean over 36 files, `check:size` 165.4 kB at 97% of budget,
+`check:contrast` clean, smoke 14/14 in dev and 14/14 in prod.
+
+**What I did NOT verify.**
+
+- **The two recorded bundle figures (236.5 kB, 178.0 kB).** They cannot be
+  re-run; the code that produced them is gone. They are now labelled as recorded
+  rather than presented as reproducible.
+- **DECISIONS §5's flip timings** (1.00 s → 0.80 s, 1.40 s → 1.10 s). Same
+  category — a before/after against code that no longer exists. I did not
+  re-derive the current durations from the stagger constants, so they are
+  unchecked either way.
+- **Whether 3.6 was ever right.** Its method was not recorded. I replaced it with
+  a number whose method is stated; I cannot say the old one was measuring
+  something wrong, only that it cannot be checked.
+- `npm run coach:probe` — still no API key.
+- Whether the built extension loads in Chrome.
+
+**Found and not fixed.** Audit §10 (`practiceAnswer` is a dead field on the
+session; `peekQuota` is called only from tests; a failed model call still
+consumes the player's quota; `smoke` drops console errors whose text contains
+"404"; the peek path reads process memory even when Redis is configured) and
+§12's remainder (a streak need never break — the option you did not pick).
+
+Two migrations still pending on the live project, both reported by
+`npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.

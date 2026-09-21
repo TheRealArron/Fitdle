@@ -33,11 +33,16 @@ interface MuscleDetailProps {
  * │ of "exercises that train this muscle" is the third side of an intersection │
  * │ the player did not have to earn.                                          │
  * │                                                                          │
- * │ Measured across the answer pool, tapping ONE lit muscle mid-round left an │
- * │ average of 3.6 candidates out of 19+ same-length words, and in the worst  │
- * │ case exactly one:                                                        │
+ * │ Re-measured 2026-09-21 over all 62 scheduled answers - for each one,     │
+ * │ averaged across the muscles it works - tapping ONE lit muscle mid-round  │
+ * │ leaves 7.1 of the same-length catalogue words, and in the worst case     │
+ * │ exactly one:                                                             │
  * │                                                                          │
- * │   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT                  │
+ * │   SEATEDROW -> tap "lats" -> 1 candidate                                 │
+ * │                                                                          │
+ * │ This used to claim 3.6 and name DEADLIFT -> hamstrings as the worst      │
+ * │ case. Eight-letter words working the hamstrings number six, and the      │
+ * │ method behind 3.6 was never recorded. Same-length pools run 18 to 23.    │
  * │                                                                          │
  * │ That is a narrower solver than the shortlist panel that was already       │
  * │ deleted for the same reason. So mid-round this names the muscle and       │

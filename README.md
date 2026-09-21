@@ -23,11 +23,12 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → 93 unit tests → build → bundle leak check →
+`verify` runs typecheck → lint → dependency audit → 253 unit tests →
+extension build → web build → answer-leak scan → size ratchet → contrast pass →
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 200 unit tests
+npm test                 # 253 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -91,13 +92,13 @@ you win buys nothing.
 
 **Today's shortlist** unlocks after guess 2 - a collapsible panel listing every
 answer of today's length. A second tab narrows it to only those matching every
-clue on your board. That one is a solver and says so: with 12 answers per length
+clue on your board. That one is a solver and says so: with 12-13 answers per length
 it will often leave a single word, which is why the plain list is the default
 and narrowing is a deliberate click.
 
 **Five themes**, including **Daylight**, a genuine light mode. The interesting
 part is how: the codebase writes text as `text-white` and `text-slate-300`
-throughout - 67 literal call sites. Tailwind 4 compiles those to
+throughout - 129 literal call sites. Tailwind 4 compiles those to
 `color: var(--color-slate-300)`, so remapping the variables under one selector
 re-points all of them at once. Remapping `--color-white` also flips every
 `bg-white/[0.06]` overlay into a subtle dark tint, which is exactly what a light
@@ -127,13 +128,22 @@ the exercise lists unlock when the round ends.
 That gate is not caution, it is arithmetic. The figure already tells you which
 muscles the answer shares and the board tells you its length, so a list of
 "exercises that train this" is the third side of an intersection you did not
-earn. Measured across the answer pool, tapping one lit muscle mid-round left an
-average of **3.6 candidates out of 19+** same-length words - and in the worst
-case exactly one:
+earn. Re-measured on 2026-09-21 over all 62 scheduled answers - for each one,
+averaged across the muscles it works - tapping a lit muscle leaves **7.1** of
+the same-length catalogue words, and in the worst case exactly one:
 
 ```
-DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
+SEATEDROW -> tap "lats" -> 1 candidate
 ```
+
+Same-length pools run 18 to 23, so even 7.1 is most of the space gone.
+
+An earlier edition of this paragraph said 3.6 out of "19+" and used
+DEADLIFT → hamstrings as the worst case. Both were wrong. Eight-letter words
+working the hamstrings number **six** - CRABWALK, DEADLIFT, HIPRAISE, INCHWORM,
+LEGPRESS, TOETOUCH - and the method behind 3.6 was never written down, so it
+could not be checked against anything. The sentence above says how it was
+measured, which is the part that was missing.
 
 A narrower solver than the shortlist panel already deleted for the same reason.
 
@@ -202,8 +212,8 @@ that is not a word - and no amount of curating the list fixes it while the grid
 is five wide.
 
 Answers now run **5–9 letters at their natural spelling**, and the grid width
-changes daily, which is itself a strong clue. The pool is 60 answers (12 per
-length) inside a 99-exercise catalogue.
+changes daily, which is itself a strong clue. The pool is 62 answers inside a
+99-exercise catalogue - 13 each at 5 and 6 letters, 12 each at 7, 8 and 9.
 
 The daily index is `seed % SCHEDULE_SIZE`, and **`SCHEDULE_SIZE` is a frozen
 constant, not `ANSWER_ORDER.length`.** That distinction is load-bearing.
@@ -377,12 +387,12 @@ board's centre exactly the viewport's centre at every width; a test asserts
 |---|---|
 | Row-level security | Enabled, four owner-only policies, **verified live** by `cloud:check` returning `42501` on an anonymous write |
 | Clock rewind (replay old puzzles) | Blocked by the monotonic `highSeed` high-water mark |
-| Clock *forward* skip (play tomorrow early) | Blocked once `fitdle_server_time()` exists - the daily seed comes from the server, not the browser |
+| Clock *forward* skip (play tomorrow early) | **Blocked.** `/api/today` computes the seed from the server's clock, so which puzzle you get is not the browser's decision at all |
 | Token exfiltration after an XSS | Blocked by `connect-src` pinned to self + your one Supabase project |
 | Clickjacking an authenticated session | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
 | Plugin / base-tag escalation | Blocked by `object-src 'none'`, `base-uri 'self'` |
 | Inline script injection | **Not** blocked - see the CSP note in [next.config.ts](next.config.ts) |
-| Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 43 client chunks to prove it |
+| Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 36 client chunks to prove it - 16 from the web build and 20 from a freshly built extension |
 | Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
 | Sweeping the opening call to learn the group for free | **Blocked for one caller.** The first call of the day is recorded server-side; a second group is refused and carries no outcome. Address-keyed for anonymous players, so it is a speed bump there - see SECURITY.md |
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
@@ -404,8 +414,14 @@ The obvious fix is to read the `Date` response header off any Supabase call.
 **It does not work, and it fails silently.** `Date` is not a CORS-safelisted
 response header, so cross-origin JavaScript reads `null` even though `curl` sees
 the header perfectly. It was built that way first, and the clock-skew test
-caught it. The time now comes back in the response *body*, from a small `stable`
-SQL function in [schema.sql](supabase/schema.sql).
+caught it. The time now comes back in the response *body* - every `/api/today`
+and `/api/guess` carries `serverTime`, and `adoptServerTime` takes the offset
+from it.
+
+This paragraph used to end "from a small `stable` SQL function in schema.sql".
+There is no such function, and there has not been one since `trustedTime.ts`
+dropped the RPC - it was a second mechanism for the same job, one more thing to
+install, and a 404 in the console for anyone on an older schema.
 
 ### The server owns the answer
 
@@ -415,12 +431,12 @@ readable in devtools, every future puzzle included. That is now split:
 | Client (`data/exercises.ts`) | Server (`server/answers.ts`) |
 |---|---|
 | All 99 exercise names, muscles, equipment | The date→answer **ordering** |
-| `isAnswer` flag | How-to text, video ids, daily challenge |
+| Nothing saying which of them can be an answer | How-to text, video ids, daily challenge |
 
 **The word list staying public is deliberate.** Wordle works because everyone
 carries common English in their head; nobody carries a list of exercise names,
 so the in-app index has to hand them over or the game is unplayable. Knowing a
-word *can* be an answer narrows 99 to 60. Knowing *which day* would give the
+word *can* be an answer narrows 99 to 62. Knowing *which day* would give the
 game away - and that is the part that moved.
 
 `server-only` on the answer module turns an accidental client import into a
@@ -456,9 +472,13 @@ So the import is deferred, gated on a one-key localStorage probe that answers
 "is anyone signed in here?" without loading anything:
 
 ```
-before  236.5 kB first-load JS
-after   178.0 kB   (-58.5 kB, -25%)
+before  236.5 kB first-load JS      recorded at the time of the change
+after   178.0 kB   (-58.5 kB, -25%) recorded at the time of the change
+now     165.4 kB                    npm run check:size, 2026-09-21
 ```
+
+The first two are historical and cannot be re-run - the code that produced them
+is gone. The third is the live number, and it is what the 170 kB ratchet guards.
 
 The first attempt only *looked* like it worked - the bundle shrank because the
 SDK moved to its own chunk, but `init()` still requested it on mount, so every
@@ -615,7 +635,7 @@ outcome of a bug in it is a wrong personal best. The badge it earns
 ### Do the exercise, wherever you are
 
 Solving the puzzle gives you a prescription - `4 x 8 Burpee`, `3 x 45 seconds
-Plank`. For the 25 answers that need a barbell, dumbbell, kettlebell or machine,
+Plank`. For the 26 answers that need a barbell, dumbbell, kettlebell or machine,
 that instruction is useless to anyone not standing in a gym, so each one carries
 a **no-equipment substitute**: a backpack, a towel, a chair, a wall.
 
@@ -828,9 +848,10 @@ result states, it reinforces the same one-saturated-colour rule.
 
 `FORM_VIDEO` in [exercises.ts](src/data/exercises.ts) pins one video per answer.
 Every ID was resolved from a real search and then checked against YouTube's
-oEmbed endpoint, which returns the live title and channel - 40/40 came back
-valid, so none are guessed and none were dead at the time of writing. The
-verified title sits beside each ID as a comment.
+oEmbed endpoint, which returns the live title and channel, so none are guessed
+and none were dead at the time of writing. The verified title sits beside each
+ID as a comment. 60 of the 62 answers carry one; the other two fall back to a
+search, and a test names them so a curated video cannot be dropped by accident.
 
 Videos still rot, so `formVideoUrl` prefers the pinned link while
 `searchVideoUrl` is always available as a fallback that cannot 404, and the UI
@@ -863,7 +884,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 106 tests over the things that must not silently break:
+`npm test` - 253 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

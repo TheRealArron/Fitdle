@@ -38,9 +38,9 @@ export function dailySeed(now: Date = new Date()): number {
  * against a seed whose answer just changed underneath them, their board stops
  * matching their feedback, and every share grid already posted becomes wrong.
  *
- * Freezing N makes appending SAFE: new words land at index 60+ and are simply
- * never scheduled, so you can add vocabulary any time without touching the
- * calendar. Bringing them into rotation is then a deliberate act - raise this
+ * Freezing N makes appending SAFE: new words land at index 62 and beyond and are
+ * simply never scheduled, so you can add vocabulary any time without touching
+ * the calendar. Bringing them into rotation is then a deliberate act - raise this
  * number - rather than a side effect of editing a list.
  *
  * Raising it still reshuffles every future date. Do it before launch, or accept

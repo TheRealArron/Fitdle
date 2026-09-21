@@ -34,6 +34,24 @@ test('the landing page derives its numbers instead of typing them', () => {
     !/\b\d{2,4}\s+exercises\b/i.test(src),
     'the exercise count is hardcoded; read CATALOGUE.length instead',
   );
+
+  /*
+   * And the same literal hiding one level up.
+   *
+   * The check above only sees a number written next to the word. Replacing
+   * `const EXERCISE_COUNT = CATALOGUE.length` with `= 100` renders exactly the
+   * same wrong claim and slipped straight past it - measured, by doing that.
+   * So no top-level constant in this file may be a bare number: every figure
+   * the page states has to come from the data it imports.
+   */
+  const literals = [...src.matchAll(/^const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*-?\d/gm)].map(
+    (m) => m[1],
+  );
+  assert.deepEqual(
+    literals,
+    [],
+    `${literals.join(', ')} is a hardcoded number on a page whose numbers must be derived`,
+  );
 });
 
 test('the exercise count the page would render is the real one', () => {
@@ -139,5 +157,42 @@ test('nothing in the app calls a chrome.* API, so no permission is needed', () =
       !/\bchrome\.(storage|tabs|runtime|permissions)\b/.test(code),
       `${path.relative(srcDir, file)} calls a chrome.* API but the manifest requests no permissions`,
     );
+  }
+});
+
+/* ── numbers the documents claim ──────────────────────────────────────────── */
+
+test('the documented test count is the real one', () => {
+  /*
+   * The README and DECISIONS between them carried FOUR different test counts -
+   * 93, 200, 106 and 159 - for one suite that had 220 at the time, and the
+   * bundle size, the chunk count and the answer-pool size had drifted too. A
+   * document nobody can trust on a number nobody can trust on anything.
+   *
+   * The count is the one claim that moves every time a test is added, so it is
+   * the one worth wiring to the source. Everything else in that class is either
+   * derived from the data (the landing page already does that, above) or is a
+   * historical before/after that cannot be re-run and is labelled as such.
+   */
+  const files = fs
+    .readdirSync(new URL('../tests/', import.meta.url).pathname)
+    .filter((f) => f.endsWith('.test.ts'));
+
+  let actual = 0;
+  for (const f of files) {
+    const src = fs.readFileSync(new URL(`../tests/${f}`, import.meta.url), 'utf8');
+    actual += (src.match(/^test\(/gm) ?? []).length;
+  }
+  assert.ok(actual > 0, 'found no tests to count');
+
+  for (const doc of ['README.md', 'DECISIONS.md', 'SECURITY.md']) {
+    const text = fs.readFileSync(new URL(`../${doc}`, import.meta.url), 'utf8');
+    for (const m of text.matchAll(/(\d+)\s+(?:unit\s+)?tests?\b/g)) {
+      assert.equal(
+        Number(m[1]),
+        actual,
+        `${doc} says "${m[0]}" but there are ${actual}`,
+      );
+    }
   }
 });

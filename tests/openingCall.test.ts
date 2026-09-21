@@ -14,10 +14,10 @@ test('the client cannot tell which words are answers', () => {
   /*
    * This is the fix, and it is worth stating why.
    *
-   * With `isAnswer` public, a player could restrict candidates to the 12
+   * With `isAnswer` public, a player could restrict candidates to the 12 or 13
    * answers of today's length: ~3.6 bits of entropy against a scored guess
    * worth up to 7.9. Measured over the whole pool, ONE optimal opener
-   * identified the answer for 60 of 60 answers. The game was solvable in two.
+   * identified the answer every time. The game was solvable in two.
    */
   for (const e of CATALOGUE) {
     assert.ok(!('isAnswer' in e), `${e.name} still carries an isAnswer flag`);

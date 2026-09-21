@@ -190,7 +190,7 @@ test('an anonymous player never triggers the SDK load', () => {
 test('the muscle panel lists nothing while the round is live', () => {
   /*
    * Measured before fixing: tapping ONE lit muscle mid-round and filtering to
-   * today's width left an average of 3.6 candidates out of 19+ same-length
+   * today's width left an average of 7.1 candidates out of 18-23 same-length
    * words - and in the worst case exactly one.
    *
    *   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
