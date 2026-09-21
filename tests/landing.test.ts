@@ -87,3 +87,57 @@ test('the embedded drill cannot touch puzzle state', () => {
   assert.ok(!/useGameStore/.test(drill), 'the drill must not read or write puzzle state');
   assert.ok(!/\/api\//.test(drill), 'the drill must not call the game API');
 });
+
+/* ── what the extension asks for ──────────────────────────────────────────── */
+
+test('the committed manifest asks for no permissions at all', () => {
+  /*
+   * It used to ask for every https host on the internet, which Chrome renders
+   * to the user as "Read and change all your data on all websites" and which is
+   * the most common reason a Web Store review stalls.
+   *
+   * What the popup needs is cross-origin fetch to two known origins - the
+   * deployment and the Supabase project - and both are build-time constants, so
+   * `build-extension.mjs` derives them. The committed file must therefore ask
+   * for nothing, or a stale broad grant ships behind the generated one.
+   */
+  const manifest = JSON.parse(
+    fs.readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(manifest.host_permissions, undefined, 'host permissions are generated, not committed');
+  assert.equal(manifest.permissions, undefined, 'and nothing in src/ calls a chrome.* API');
+});
+
+test('the build derives host permissions from where it actually talks', () => {
+  const script = fs.readFileSync(new URL('../scripts/build-extension.mjs', import.meta.url), 'utf8');
+  const fn = script.slice(script.indexOf('function writeManifest'));
+  assert.match(fn, /NEXT_PUBLIC_API_URL/, 'the deployment it plays against');
+  assert.match(fn, /NEXT_PUBLIC_SUPABASE_URL/, 'and the project it signs in to');
+  assert.match(fn, /new URL\(value\)\.origin/, 'as origins, not as whatever was pasted in');
+});
+
+test('nothing in the app calls a chrome.* API, so no permission is needed', () => {
+  /*
+   * The pair to the manifest assertion above. If a `chrome.*` call ever lands,
+   * this fails and whoever added it has to add the permission deliberately
+   * rather than discovering at review time that the manifest never asked.
+   */
+  const srcDir = path.dirname(new URL('../src/', import.meta.url).pathname);
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(srcDir);
+
+  for (const file of files) {
+    const code = readCode(new URL(`file://${file}`));
+    assert.ok(
+      !/\bchrome\.(storage|tabs|runtime|permissions)\b/.test(code),
+      `${path.relative(srcDir, file)} calls a chrome.* API but the manifest requests no permissions`,
+    );
+  }
+});

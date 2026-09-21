@@ -109,6 +109,15 @@ const nextConfig: NextConfig = {
         output: 'export' as const,
         // No optimisation server exists behind a static export.
         images: { unoptimized: true },
+        /*
+         * The extension build parks `src/app/api` aside, because `output:
+         * 'export'` refuses to build with a route handler in the tree. Next
+         * typechecks everything the tsconfig includes, so a test importing a
+         * route handler cannot resolve during that build and fails it - on a
+         * file that is not part of the extension. This config is the same one
+         * minus `tests`; `npm run typecheck` still checks them in full.
+         */
+        typescript: { tsconfigPath: 'tsconfig.extension.json' },
       }
     : {
         async headers() {

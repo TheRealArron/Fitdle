@@ -943,3 +943,147 @@ stale structural claims across README and DECISIONS), §10, and §12's remainder
 
 Two migrations remain pending on the live project, both reported by
 `npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.
+
+---
+
+## Iteration 8 — the extension asked for every website, and its build had been broken for five iterations
+
+**What I audited.** `extension/manifest.json`, `scripts/build-extension.mjs`,
+the built `extension-dist/` output, `next.config.ts`, `tsconfig.json`, and
+`.github/workflows/verify.yml`. Audit §6.
+
+**The first thing I found was my own regression.** `npm run build:extension`
+**failed**:
+
+```
+tests/openingCall.test.ts(133,42): error TS2307:
+  Cannot find module '@/app/api/call/route'
+```
+
+The extension build parks `src/app/api` aside, because `output: 'export'`
+refuses to build with a route handler in the tree. `next build` typechecks
+whatever the tsconfig includes, so the route-level test I added in iteration 2 —
+the one that made the opening-call fix possible at all — could not resolve, and
+the build died on a file that is not part of the extension.
+
+Five iterations, and nothing told me. The audit had already written down why:
+*"the manifest is the one artefact `npm run verify` never touches"*. I wrote that
+sentence and then shipped past it.
+
+**What I changed.**
+
+- `tsconfig.extension.json` (new) — the project config minus `tests`, used only
+  by the extension build via Next 16's `typescript.tsconfigPath`. `npm run
+  typecheck` still checks the tests in full, with the API present, which is
+  where that check belongs.
+- `package.json` — `build:extension` is now the fourth step of `verify`, before
+  `build`. Order matters: it leaves `.next` holding the static export, and both
+  `check:bundle` and `check:size` read the web build's output, so the web build
+  has to come after it.
+- `extension/manifest.json` — `"host_permissions": ["https://*/*"]` and
+  `"permissions": ["storage"]` both removed.
+- `scripts/build-extension.mjs` — derives `host_permissions` from
+  `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SUPABASE_URL`, as origins; loads
+  `.env.local` (it never did, so it was reading variables that were set and
+  looked unset); warns loudly when there is no API url, because the extension
+  then builds and installs perfectly and cannot play.
+- `.github/workflows/verify.yml` — the Playwright install was incomplete.
+- 3 new tests.
+
+**Why the permissions were wrong, with the evidence.**
+
+`grep -rc "chrome\." extension-dist --include='*.js'` finds exactly one hit, and
+it is the word in the landing page's prose — *"without browser chrome"*. No
+`chrome.*` API is called anywhere in `src/`, so `"storage"` bought nothing; the
+app persists through `localStorage`, which needs no permission.
+
+`https://*/*` grants host access to every site on the internet and Chrome
+renders it to the user as "Read and change all your data on all websites". What
+the popup needs is cross-origin `fetch` to two origins, both build-time
+constants. Image hosts are deliberately not listed: `<img>` loads are governed by
+the extension page's CSP, not by host permissions, so the YouTube thumbnails need
+nothing, and video links open in a tab.
+
+Measured, before and after, from the shipped `extension-dist/manifest.json`:
+
+```
+before   "permissions": ["storage"]
+         "host_permissions": ["https://*/*"]
+
+after    permissions:      key omitted entirely
+         host_permissions: ["https://blqxcjfjqphiklktjhth.supabase.co/*"]
+
+after, with NEXT_PUBLIC_API_URL=https://fitdle.example.com set:
+         host_permissions: ["https://fitdle.example.com/*",
+                            "https://blqxcjfjqphiklktjhth.supabase.co/*"]
+```
+
+**The CI workflow had the browser install wrong too**, and in a way that hides
+the same gap the README had. It runs `npx playwright install --with-deps
+chromium`. `chromium-headless-shell` is a **separate** download and is what
+`chromium.launch()` reaches for by default. Measured locally with that exact
+state:
+
+```
+launch FAILED with chromium only:
+  Executable doesn't exist at .../chromium_headless_shell-1234/chrome-headless-shell
+launch OK with the headless shell present
+```
+
+Both are now named in the CI step.
+
+**Mutation table.**
+
+| Leg removed | Test that failed |
+|---|---|
+| The broad host permission back in the committed manifest | `the committed manifest asks for no permissions at all` |
+| The unused `"storage"` permission back | same test |
+| The build stops deriving from `NEXT_PUBLIC_SUPABASE_URL` | `the build derives host permissions from where it actually talks` |
+| A module starts calling `chrome.storage` | `nothing in the app calls a chrome.* API, so no permission is needed` |
+
+All four caught on the first pass.
+
+**Measurements, with the command.**
+
+`npm run verify`, undecorated, with `build:extension` now inside it:
+
+```
+VERIFY_EXIT=0
+VERIFY WALL CLOCK: 1:04.87
+
+typecheck        clean
+lint             clean
+test             # tests 252   # pass 252   # fail 0
+build:extension  4 page(s), 8 inline script(s) externalised
+                 host permissions: https://blqxcjfjqphiklktjhth.supabase.co/*
+build            ok
+check:bundle     no answer ordering, coaching text or video ids  (36 files scanned)
+check:size       164.9 kB total  (97% of the 170 kB budget)
+check:contrast   every combination clears its bar
+smoke            14 checks in dev, 14 in prod, all passed
+```
+
+Those 36 files are `16` from `.next/static` plus `20` from `extension-dist` —
+so the answer-leak scan covers a **freshly built** extension now, rather than
+whatever copy happened to be left from a previous run.
+
+**What I did NOT verify.**
+
+- **I have not loaded `extension-dist/` in Chrome.** The manifest is correct by
+  construction and by test; whether Chrome accepts it, and whether the popup
+  works against a real deployment, is unmeasured. There is no deployment to
+  point it at from here.
+- **The wall clock is a warm-cache number.** 1:04.87 was measured with Next's
+  build cache populated, and I did not measure the before/after delta from
+  adding `build:extension`, so I cannot say what that step costs on its own.
+- The CI fix is reasoned from a local reproduction of the same command, not from
+  a CI run. I cannot trigger one.
+- `npm run coach:probe` — still no `ANTHROPIC_API_KEY`.
+
+**Found and not fixed.** Audit §7 (`coach:probe` reports "n of 7" across 14
+cases; the guide's "safe by construction" claim covers the app's catalogue but
+not the model's own knowledge of exercise names), §9 (fifteen wrong numbers and
+three stale structural claims), §10, and §12's remainder.
+
+Two migrations still pending on the live project, both reported by
+`npm run cloud:check`.
