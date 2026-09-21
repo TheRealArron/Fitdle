@@ -36,6 +36,8 @@ interface Bucket {
   /** Window identifier - a day number, or a fixed-window start timestamp. */
   window: number;
   count: number;
+  /** Wall-clock ms after which this bucket is certainly stale. */
+  expiresAt: number;
 }
 
 const buckets = new Map<string, Bucket>();
@@ -47,7 +49,34 @@ const buckets = new Map<string, Bucket>();
 const SWEEP_ABOVE = 5_000;
 let lastSweep = 0;
 
-function maybeSweep(currentWindow: number): void {
+/**
+ * Drops buckets that have certainly expired, by WALL CLOCK.
+ *
+ * ── Why not by window id, which is what this used to do ─────────────────────
+ * A window id only means something next to another id of the same period, and
+ * this map holds three periods at once:
+ *
+ *     utcDay   ~20,717        the AI budget and the anonymous AI quota
+ *     seed     ~20,260,921    the per-account guess floor (YYYYMMDD)
+ *     minute   ~29,833,266    every rate limit
+ *
+ * The sweep compared `bucket.window < currentWindow` across all of them. A
+ * sweep triggered by a rate-limit call therefore deleted every day-scoped and
+ * seed-scoped bucket in the map, because their ids are numerically smaller -
+ * live ones included.
+ *
+ * Measured before the fix: spend 3 of the day's AI budget, then make 5,100
+ * rate-limited requests from distinct addresses, and `budget:coach` reads **0
+ * used**. The global spend cap in `aiBudget.ts` exists to stop a busy day
+ * becoming a surprise invoice, and the exact condition that produces a busy day
+ * - thousands of distinct addresses - is what reset it.
+ *
+ * `resetsIn` is already passed by every caller and already means "seconds until
+ * this bucket rolls", so an absolute expiry needs no new argument and is
+ * comparable across every period. Lazy expiry on read is still what makes the
+ * counting correct; this is only about reclaiming memory.
+ */
+function maybeSweep(): void {
   if (buckets.size < SWEEP_ABOVE) return;
   // At most once a minute; a sweep is O(n) and the map only grows slowly.
   const now = Date.now();
@@ -55,7 +84,7 @@ function maybeSweep(currentWindow: number): void {
   lastSweep = now;
 
   for (const [key, bucket] of buckets) {
-    if (bucket.window < currentWindow) buckets.delete(key);
+    if (bucket.expiresAt <= now) buckets.delete(key);
   }
 }
 
@@ -82,7 +111,7 @@ export function count(
   resetsIn: number,
   consume = true,
 ): CountResult {
-  maybeSweep(window);
+  maybeSweep();
 
   const existing = buckets.get(key);
   const current = existing && existing.window === window ? existing.count : 0;
@@ -91,7 +120,14 @@ export function count(
     return { allowed: false, count: current, limit, retryAfter: resetsIn };
   }
 
-  if (consume) buckets.set(key, { window, count: current + 1 });
+  /*
+   * Recomputed on every write from the caller's own `resetsIn`, which always
+   * counts down to the same boundary - so the expiry converges on it rather
+   * than being pushed out, which is the mistake the Redis script documents.
+   */
+  if (consume) {
+    buckets.set(key, { window, count: current + 1, expiresAt: Date.now() + resetsIn * 1000 });
+  }
 
   const now = consume ? current + 1 : current;
   return { allowed: true, count: now, limit, retryAfter: resetsIn };

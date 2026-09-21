@@ -78,3 +78,52 @@ test('the counting is honest about being per-instance', async () => {
   assert.match(counter, /in the process|per-instance|instance count/i);
   assert.match(counter, /SPEED BUMP|speed bump/i);
 });
+
+/* ── one map, three period scales ─────────────────────────────────────────── */
+
+test('rate-limit traffic cannot wipe the day’s AI budget', async () => {
+  /*
+   * `memoryCounter` holds every counter in one map, and the window id it keys
+   * them by means different things to different callers:
+   *
+   *     utcDay   ~20,717        the AI budget and the anonymous AI quota
+   *     seed     ~20,260,921    the per-account guess floor (YYYYMMDD)
+   *     minute   ~29,833,266    every rate limit
+   *
+   * The sweep compared `bucket.window < currentWindow` across all three, so a
+   * sweep triggered by a rate-limit call deleted every day-scoped and
+   * seed-scoped bucket - live ones included, because their ids are numerically
+   * smaller.
+   *
+   * Measured before the fix: spend 3 of the day's budget, make 5,100
+   * rate-limited requests from distinct addresses, and the budget reads 0 used.
+   * The global spend cap exists to stop a busy day becoming a surprise invoice,
+   * and thousands of distinct addresses IS a busy day.
+   *
+   * This test doubles as the reclamation check, because the sweep throttles to
+   * once a minute and one test run gets one sweep.
+   */
+  const { count, utcDay, secondsUntilUtcMidnight } = await import('@/server/memoryCounter');
+
+  const day = utcDay();
+  const minute = Math.floor(Date.now() / 60_000);
+  const live = `sweep-live-${Math.random()}`;
+  const dead = `sweep-dead-${Math.random()}`;
+
+  for (let i = 0; i < 3; i++) count(live, 500, day, secondsUntilUtcMidnight());
+  count(dead, 500, day, 0); // expires immediately
+
+  // Enough distinct rate-limit keys to take the map past the sweep threshold.
+  for (let i = 0; i < 5_100; i++) count(`flood:${i}`, 20, minute, 60);
+
+  assert.equal(
+    count(live, 500, day, secondsUntilUtcMidnight(), false).count,
+    3,
+    'a live day-scoped counter must survive a flood of minute-scoped ones',
+  );
+  assert.equal(
+    count(dead, 500, day, 0, false).count,
+    0,
+    'and an expired bucket must still be reclaimed, or this is a memory leak',
+  );
+});

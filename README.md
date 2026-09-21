@@ -23,12 +23,12 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → dependency audit → 257 unit tests →
+`verify` runs typecheck → lint → dependency audit → 258 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 257 unit tests
+npm test                 # 258 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -892,7 +892,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 257 tests over the things that must not silently break:
+`npm test` - 258 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

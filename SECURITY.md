@@ -51,6 +51,16 @@ quota count per instance, so they multiply across instances and reset on cold
 start. Speed bumps, not guarantees. The signed-in AI quota is in Postgres
 because it guards money. See `src/server/memoryCounter.ts`.
 
+They were worse than that until 2026-09-21. One map holds all of them, and the
+window id it keys them by means different things per caller — a day number
+(~20,717), a `YYYYMMDD` seed (~20,260,921), a minute (~29,833,266). The sweep
+compared those ids to each other, so a sweep triggered by a rate-limit call
+deleted every day-scoped and seed-scoped bucket, live ones included. Measured:
+spend 3 of the day's AI budget, make 5,100 rate-limited requests from distinct
+addresses, and the budget reads **0 used** — the global spend cap reset by
+exactly the traffic it exists to survive. It sweeps by wall-clock expiry now,
+which is comparable across every period, and a test pins it.
+
 **Anonymous AI quota is resettable.** Keyed by IP in memory. Enforcing it
 properly means fingerprinting, which is a worse trade for 2 questions.
 
