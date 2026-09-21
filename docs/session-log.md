@@ -1344,3 +1344,93 @@ consumes the player's quota; `smoke` drops console errors whose text contains
 
 Two migrations still pending on the live project, both reported by
 `npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.
+
+---
+
+## Iteration 11 — audit §10, the small things
+
+**What I audited.** The five items in §10, re-read rather than taken from the
+list: `GameSession.practiceAnswer`, `peekQuota`, the order of the quota claim
+against the model call, `smoke`'s console-error filter, and `counter.ts`'s peek
+path.
+
+**What I chose, and why.** Only one of the five has any effect on a player, and
+it turned out to be worth more than "small": **a deployment with no Anthropic
+key charged every question against the player's daily allowance and answered
+none of them.** `askCoach` and `askGuide` check for the key and return "not set
+up on this deployment" without making a request — but the routes claimed the
+quota before reaching them. On the free tier that is five questions a day spent
+on nothing. Nobody reports that; it reads as the feature being bad.
+
+I fixed the three cheap ones alongside it because they are the same surface and
+a few lines each, and left the fifth alone — `counter.ts` serving a peek from
+process memory even when Redis is configured is documented, deliberate, and
+costs only a cosmetic number.
+
+**What I changed.**
+
+- `src/server/aiBudget.ts` — `aiConfigured()`, one place that knows whether a
+  model call is possible. It lives beside the budget rather than in either
+  surface because both ask the same question of the same variable, and because
+  the answer has to reach the *routes*, which is the whole point.
+- Both AI routes — claim when configured, **peek** when not, and never refuse on
+  a quota that was never spent. `peekQuota` had been exported and called only
+  from its own test; it has a caller now.
+- `src/server/session.ts` — `practiceAnswer` removed. Declared, never written,
+  never read, and the one field `openSession` did not validate: a dead field was
+  the only unvalidated thing in a signed token.
+- `scripts/smoke.mjs` — the console-error filter was `!/404/.test(t)`, which
+  drops *any* error whose text contains "404", including a real one that
+  mentions a status code in passing. It now forgives the browser's own
+  resource-load failure and nothing else.
+- README — the free-tier section says what changed and why it was worth saying.
+- 4 new tests.
+
+**Mutation table.**
+
+| Leg removed | Test that failed |
+|---|---|
+| The coach route claims unconditionally again | `both routes gate the claim on there being a key at all` |
+| The guide route refuses on a quota it never spent | same |
+| `aiConfigured()` accepts an empty key | `with no API key, asking a question costs nothing` |
+| `practiceAnswer` back on the session | `the session carries nothing it does not use` |
+
+All four caught on the first pass.
+
+**Measurements, with the command.**
+
+`npm run verify`, undecorated: **exit 0** — typecheck clean, lint clean,
+`check:audit` 0 vulnerabilities, **257 tests** (was 253), extension build, web
+build, `check:bundle` clean over 36 files, `check:size` 165.4 kB at 97% of the
+170 kB budget, `check:contrast` clean, smoke 14/14 in dev and 14/14 in prod.
+
+The documented count needed updating twice this iteration, which is the pinning
+test doing its job — it names the new number each time.
+
+**Narrowing the smoke filter changed nothing**, which is the answer I wanted:
+`npm run smoke -- prod` still reports `no console errors`, so there were no
+genuine 404s being forgiven. The exemption was covering nothing and could have
+hidden something.
+
+**What I did NOT verify.**
+
+- **The keyless path end to end.** The tests exercise `aiConfigured()` and the
+  quota functions directly and assert the route's shape; I did not drive
+  `/api/coach` with no key and watch the counter stay put, because the route
+  needs a finished round and a verified user to be interesting. The unit-level
+  evidence plus the mutation table is what stands behind it.
+- **Whether a mid-call failure should refund the allowance.** It still consumes.
+  Refunding would need `fitdle_claim_ai` to decrement — another migration — and
+  it is genuinely ambiguous: an exception after the request was sent may already
+  have been billed by Anthropic. The no-key case is unambiguous and is the one I
+  fixed. Left as-is deliberately.
+- `npm run coach:probe` — still no API key. That is now the only item in the
+  original audit that has never been exercised at all.
+
+**Found and not fixed.** Audit §12's remainder — a streak need never break,
+because a player five guesses deep can discard rather than submit the sixth.
+That is the option you did not pick, and closing it changes what happens to
+somebody who clears their browser mid-round.
+
+Two migrations still pending on the live project, both reported by
+`npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.

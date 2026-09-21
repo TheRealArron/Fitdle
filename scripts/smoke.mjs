@@ -86,6 +86,16 @@ async function waitForServer(port, timeoutMs = 120_000) {
   return false;
 }
 
+/*
+ * Console errors that are not the app's fault.
+ *
+ * This used to be `!/404/.test(t)`, which drops ANY console error whose text
+ * happens to contain "404" - including a real one that mentions a status code
+ * in passing. What it meant to forgive is a missing static asset, so that is
+ * what it says now: the browser's own resource-load failure, and nothing else.
+ */
+const IGNORED_ERROR = /Failed to load resource:.*\b40[34]\b/i;
+
 async function check(mode) {
   console.log(c.head(`\n── ${mode.name} ──────────────────────────────────────────`));
 
@@ -194,7 +204,7 @@ async function check(mode) {
     page.on('console', (m) => {
       const t = m.text();
       if (/Content Security Policy|Refused to/i.test(t)) violations.push(t.slice(0, 120));
-      else if (m.type() === 'error' && !/404/.test(t)) errors.push(t.slice(0, 120));
+      else if (m.type() === 'error' && !IGNORED_ERROR.test(t)) errors.push(t.slice(0, 120));
     });
     page.on('pageerror', (e) => errors.push(e.message.slice(0, 120)));
 

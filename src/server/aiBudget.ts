@@ -45,6 +45,24 @@ function budget(): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_BUDGET;
 }
 
+/**
+ * Whether a model call is possible at all on this deployment.
+ *
+ * Lives here rather than in either surface because both ask the same question
+ * of the same variable, and because the answer has to be available to the
+ * ROUTES - which is the point. `askCoach` and `askGuide` check the key too and
+ * own the message they return; what they cannot do is stop the route spending
+ * somebody's daily allowance before they are reached.
+ *
+ * Without this, a deployment with no key charged every question against the
+ * player's 2, 5 or 100 a day and answered none of them. Small, and exactly the
+ * kind of unfairness nobody reports because it looks like the feature is just
+ * bad.
+ */
+export function aiConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
 export interface BudgetCheck {
   allowed: boolean;
   used: number;

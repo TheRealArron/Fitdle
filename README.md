@@ -23,12 +23,12 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → dependency audit → 253 unit tests →
+`verify` runs typecheck → lint → dependency audit → 257 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
 smoke test in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 253 unit tests
+npm test                 # 257 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -689,6 +689,14 @@ spend is divided per account.
 | Free (signed in) | 5 | $0.57/mo | On the row, service-role written |
 | Pro | 100 | $11.44/mo | Same |
 
+**A deployment with no key charges nothing.** `askCoach` and `askGuide` check
+for `ANTHROPIC_API_KEY` and return "not set up on this deployment" without
+making a request - but the routes used to claim the player's quota *first*, so
+on a keyless deployment every question burned one of their 2, 5 or 100 for the
+day and answered none of them. The routes now ask whether a call is possible at
+all before spending anything, and peek instead so the counter still renders.
+Nobody reports a bug like that; it reads as the feature simply being bad.
+
 **If the migration is skipped, the quota fails closed.** A read error on those
 columns - almost always because `schema.sql` has not been re-run - drops the
 player to the anonymous allowance rather than granting free-tier limits with a
@@ -884,7 +892,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 253 tests over the things that must not silently break:
+`npm test` - 257 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each
