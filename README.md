@@ -181,8 +181,11 @@ copies of the same caveat. They are one primitive now
 ever needs to be authoritative rather than a speed bump.
 
 Continuous integration runs `npm run verify` on every push - typecheck, lint,
-200 tests, build, the answer-leak scan, the size ratchet, and a smoke test in
-both dev and production. Those guards only guard if they run.
+the dependency audit, the unit tests, the extension build, the web build, the
+answer-leak scan, the size ratchet, the contrast pass, and a smoke test that
+plays a whole round in both dev and production. Those guards only guard if they
+run - and `build:extension` was outside the chain long enough to break and stay
+broken, so it is inside it now.
 
 ## Where this deviates from `claude.md`, and why
 

@@ -13,11 +13,12 @@
     "cloud:check": "node scripts/cloud-check.mjs",
     "check:bundle": "node --conditions=react-server --import ./tests/loader.mjs scripts/check-bundle.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build:extension && npm run build && npm run check:bundle && npm run check:size && npm run check:contrast && npm run smoke",
+    "verify": "npm run typecheck && npm run lint && npm run check:audit && npm test && npm run build:extension && npm run build && npm run check:bundle && npm run check:size && npm run check:contrast && npm run smoke",
     "check:size": "node scripts/check-size.mjs",
     "coach:probe": "node --conditions=react-server --import ./tests/loader.mjs scripts/coach-probe.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "logo": "node scripts/build-logo.mjs"
+    "logo": "node scripts/build-logo.mjs",
+    "check:audit": "npm audit --audit-level=high"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

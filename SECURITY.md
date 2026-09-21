@@ -17,7 +17,34 @@
 
 ## Known and accepted
 
-`npm audit` reports **0 vulnerabilities** on Next 16.3.0.
+**Dependency advisories are checked by `verify`, not asserted here.**
+
+This file used to say *"`npm audit` reports 0 vulnerabilities on Next 16.3.0"*.
+That was true when it was written and had since stopped being true, which is the
+problem with writing a number down: advisories land after you ship, so a
+security document that states one decays into a false claim without anyone
+touching it. Measured on 2026-09-21, on Next 16.3.0:
+
+```
+3 vulnerabilities (2 high, 1 critical)
+
+next    16.0.0 - 16.3.2   CRITICAL  Unauthenticated RCE on windows-hosted servers (CVSS 9.0)
+                                    Unauthenticated RCE in the Image Optimization API (AVIF)
+js-yaml 4.0.0 - 4.3.1     high      maxTotalMergeKeys does not limit CPU use
+sharp   <0.35.4           high      libheif vulnerabilities
+```
+
+`package.json` already allowed the fix (`next: ^16.3.0`), so a fresh
+`npm install` was fine and a fresh `npm ci` — the one CI runs — reinstalled the
+vulnerable version from the lockfile. Patched to Next 16.3.5; `npm audit` now
+reports 0, first-load JS moved 164.9 kB → 165.4 kB, and `npm run verify` passes
+end to end on it.
+
+`npm run check:audit` (`npm audit --audit-level=high`) is now the fourth step of
+`verify`, so the claim enforces itself rather than being restated. Verified
+against the real before-and-after: exit 1 on the pre-patch lockfile, exit 0 on
+the current one. Moderate and low advisories do not fail the build; high and
+critical do.
 
 **In-process counters.** Rate limits, the global AI budget and the anonymous
 quota count per instance, so they multiply across instances and reset on cold

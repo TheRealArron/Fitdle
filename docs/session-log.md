@@ -1087,3 +1087,137 @@ three stale structural claims), §10, and §12's remainder.
 
 Two migrations still pending on the live project, both reported by
 `npm run cloud:check`.
+
+---
+
+## Iteration 9 — a critical RCE advisory the security document said did not exist
+
+**What I audited.** I started on §9 (the wrong numbers in the docs) and
+re-measured every claim rather than trusting iteration 1's table. One of those
+claims was SECURITY.md's *"`npm audit` reports **0 vulnerabilities** on Next
+16.3.0"*. It does not:
+
+```
+3 vulnerabilities (2 high, 1 critical)
+
+next    16.0.0 - 16.3.2   CRITICAL  Unauthenticated RCE on windows-hosted servers (CVSS 9.0)
+                                    Unauthenticated RCE in the Image Optimization API (AVIF)
+js-yaml 4.0.0 - 4.3.1     high      maxTotalMergeKeys does not limit CPU use
+sharp   <0.35.4           high      libheif vulnerabilities
+```
+
+**What I chose, and why.** This displaced the rest of §9 immediately. A critical
+advisory with a patch available outranks every remaining item, and it is the
+purest example of the thing this repo keeps getting caught by: a true statement
+that stopped being true while nobody touched the file. Advisories land *after*
+you ship.
+
+Worth being precise about the exposure: `package.json` already declared
+`next: ^16.3.0`, so a fresh `npm install` would have picked up the fix. The
+**lockfile** pinned 16.3.0, and `npm ci` — the command CI runs — installs from
+the lockfile. So the vulnerable version was what actually got built.
+
+**What I changed.**
+
+- `npm audit fix` → Next 16.3.0 → **16.3.5**, plus `js-yaml` and `sharp`.
+  10 packages changed; `package.json` needed no edit, only the lockfile.
+- `package.json` — `check:audit` (`npm audit --audit-level=high`), now the
+  fourth step of `verify`, after lint and before the tests.
+- `SECURITY.md` — the "0 vulnerabilities" line replaced. It now names the
+  command and what enforces it, records what was found, and says the old claim
+  was false. A security document should not state a number that decays.
+- `README.md` — the CI paragraph listed steps that no longer match `verify`.
+- `scripts/coach-probe.mjs` — audit §7's reporting bug, below.
+
+**Why moderate and low do not fail the build.** `--audit-level=high` is a
+judgement, and the trade is real: an unrelated upstream advisory can now break
+`verify` on a codebase nobody touched. That is the correct failure for high and
+critical - the alternative is the state this repo was just in - but making a
+moderate advisory in a transitive dev dependency stop the build would train
+people to skip the step, which is worse than not having it.
+
+**Also fixed: `coach:probe` reported "n of 7" across 14 cases.** `failures`
+accumulates over both suites and was printed against `CASES.length`, so a run
+where nine cases failed said "9 of 7 cases failed". The remediation text only
+mentioned the coach, too, though half the cases are the guide's - and the two
+have different fixes, since the guide's defence is structural (its prompt has
+never seen the catalogue) rather than a matter of wording. Both corrected; the
+header now says fourteen cases rather than seven.
+
+**Mutation table.**
+
+| Leg | What failed |
+|---|---|
+| The pre-patch lockfile restored | `npm run check:audit` → **exit 1**, naming the critical and two high advisories |
+| The patched lockfile | `npm run check:audit` → exit 0 |
+| `CASES.length` instead of the sum in coach-probe | total reported as 7 rather than 14 (checked by parsing the script, since the probe itself needs an API key) |
+
+The audit leg is not a simulation: it is the repo's own state from before this
+iteration, restored and re-measured.
+
+**Measurements, with the command.**
+
+```
+npm audit                  before: 3 vulnerabilities (2 high, 1 critical)
+                           after:  found 0 vulnerabilities
+next                       16.3.0 -> 16.3.5
+npm run check:audit        exit 1 on the old lockfile, exit 0 on the new one
+```
+
+`npm run verify`, undecorated, on the patched tree:
+
+```
+VERIFY_EXIT=0
+
+typecheck        clean
+lint             clean
+check:audit      found 0 vulnerabilities
+test             # tests 252   # pass 252   # fail 0
+build:extension  host permissions: https://<project>.supabase.co/*
+build            ok
+check:bundle     clean  (36 files scanned)
+check:size       165.4 kB total  (97% of the 170 kB budget)
+check:contrast   every combination clears its bar
+smoke            14 checks in dev, 14 in prod, all passed
+```
+
+**The upgrade's cost, measured:** first-load JS went **164.9 kB → 165.4 kB**,
++0.5 kB, still 97% of the budget. That is the only number in the repo that moved.
+
+**What I did NOT verify.**
+
+- **Whether this deployment was ever exposed.** One advisory is Windows-only and
+  this is a Linux-targeted app; the other is the Image Optimization API with
+  AVIF, which the web build does use (`next/image` on the landing page) but which
+  I have not tried to exercise. There is no production deployment, so nobody was
+  at risk in practice. I patched on the advisory, not on an exploit.
+- **`npm run coach:probe`** — still no `ANTHROPIC_API_KEY`, so the corrected
+  reporting has never actually printed. The arithmetic is checked by parsing the
+  script.
+- Whether `--audit-level=high` is the right line. It is a judgement, argued
+  above, not a measurement.
+- The Next patch notes. I read the installed 16.3.5's docs for the config option
+  I used in iteration 8, but I did not diff 16.3.0 → 16.3.5 behaviourally beyond
+  running `verify`.
+
+**Found and not fixed.** §9's remaining numbers — and re-measuring them turned
+up more than iteration 1 listed, including one claim that is not merely stale
+but false as stated:
+
+- README: *"`DEADLIFT` -> tap 'hamstrings' -> 1 candidate: DEADLIFT"*. Measured:
+  **6** eight-letter catalogue words work the hamstrings (CRABWALK, DEADLIFT,
+  HIPRAISE, INCHWORM, LEGPRESS, TOETOUCH). The worst case does exist, but it is
+  SEATEDROW, not DEADLIFT.
+- README: *"an average of 3.6 candidates out of 19+ same-length words"*. My
+  measurement of the same idea — for each scheduled answer, average over the
+  muscles it works of how many same-length catalogue entries work that muscle —
+  gives **7.1**, tightest 1. I cannot reproduce 3.6; the method behind it is not
+  recorded, so I cannot say which of us is measuring the right thing. Same-length
+  pools are 19/21/18/23/18, so "19+" is wrong at 7 and 9 letters regardless.
+- README: *"67 literal call sites"* of `text-white`/`text-slate-300`. Measured:
+  **129**.
+- Plus the fifteen already listed in the audit's §9 table, of which the test
+  counts (93/200/106/159 → **252**), the chunk counts (43/48 → **36**) and the
+  bundle size (178.0 → **165.4**) are now all re-measured on the current tree.
+
+Also still open: audit §10, and §12's remainder.
