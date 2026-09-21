@@ -25,7 +25,7 @@ and `verify` exits 1.
 
 `verify` runs typecheck → lint → dependency audit → 258 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
-smoke test in **both dev and production**. Individually:
+17 browser checks in **both dev and production**. Individually:
 
 ```bash
 npm test                 # 258 unit tests

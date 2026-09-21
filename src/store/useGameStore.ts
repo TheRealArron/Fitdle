@@ -406,8 +406,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   /**
-   * Practice picks locally from the answer-eligible pool. That is safe because
-   * practice can never touch a streak - leaking a practice answer costs nothing,
+   * Practice picks locally from the WHOLE catalogue, not the answer pool - the
+   * client does not know which 62 of the 99 can be answers, and keeping it that
+   * way is the point. That is safe because practice can never touch a streak:
+   * leaking a practice answer costs nothing,
    * and it keeps the mode playable without a round trip per guess.
    */
   startPractice: () => {

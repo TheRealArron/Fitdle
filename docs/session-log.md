@@ -1545,3 +1545,102 @@ decision), and the two items above that I read and deliberately left.
 
 Two migrations still pending on the live project, both reported by
 `npm run cloud:check`.
+
+---
+
+## Iteration 13 — practice mode and the drill had no browser coverage at all
+
+**What I audited.** The two client-only modes, because everything server-side is
+now covered and a bug in either is invisible to every test in the repo. Started
+from a claim I doubted: the README and `useGameStore` both said practice *"picks
+locally from the answer-eligible pool"* — which would mean the client knows
+which 62 of the 99 can be answers, the exact leak that deleting `isAnswer`
+closed.
+
+**It does not.** `PRACTICE_POOL = CATALOGUE`, and the definition site says so
+clearly. Only `startPractice`'s own comment had the wrong wording, and it is
+corrected. No leak.
+
+Then I drove both modes in a browser, which nothing had done:
+
+```
+practice: 6 cols, guessed PULLUP
+  row scored: rgb(75,85,99) rgb(234,179,8) rgb(75,85,99) rgb(75,85,99)
+  /api calls during the whole practice round: NONE
+
+the drill:
+  options: ["Lats","Glutes","Abs"]
+console errors: none
+```
+
+Both healthy. The finding is not that they are broken — it is that **nothing
+would have told anyone if they were**. Two README claims rest on them:
+
+- *"Practice mode stays fully local"* — no round trip per guess.
+- *"They are never written to storage, so there is no path from a practice round
+  to a streak."*
+
+Both are properties of the running client. `npm test` covers the drill's
+question generator and asserts the embedded drill's *imports*; neither claim had
+a check that could fail.
+
+**What I chose, and why.** Adding that coverage. It is the other half of audit
+§5 — iteration 7 made the smoke test play the daily round, and the two modes
+beside it stayed untouched. The harness was already written, so this is three
+checks for very little.
+
+**What I changed.** `scripts/smoke.mjs` only, plus the one wrong comment.
+
+- `the embedded drill starts and offers answers` — clicked on the landing page,
+  where it is the single interactive island on a server component.
+- `practice scores locally, with no server call` — starts practice after the
+  daily round, plays one real guess from the in-app list, and counts `/api`
+  requests across the whole round.
+- `a practice round cannot reach the streak` — snapshots `localStorage` before
+  and after.
+
+Also: the result-modal read had to move **above** the Escape that clears it for
+practice, and its failure message said `modal names <answer>` whether it passed
+or failed. Both fixed — the second only surfaced because the reordering made the
+check fail for real, and the message still claimed success.
+
+**Mutation table.**
+
+| Leg | Check that failed |
+|---|---|
+| `startPractice` writes the save | `a practice round cannot reach the streak` — "it wrote the save" |
+| The practice branch falls through to the server path | `practice scores locally, with no server call` — "1 API call(s)" |
+
+**The second leg's first attempt did not apply** — my `sed` matched nothing and
+the run passed, which would have read as "the check is hollow" if I had not
+checked that the mutation landed. It did once aimed at the right line. Worth
+recording: a mutation that silently fails to apply looks exactly like a test
+that cannot fail.
+
+**Measurements, with the command.**
+
+`npm run verify`, undecorated: **exit 0** — typecheck, lint, `check:audit` 0
+vulnerabilities, 258 tests, extension build, web build, `check:bundle` clean
+over 36 files, `check:size` 165.4 kB at 97% of budget, `check:contrast` clean,
+and smoke now **17 checks in each of dev and prod** (was 14).
+
+**What I did NOT verify.**
+
+- **The drill check is shallow.** It asserts the drill starts and offers at
+  least three options beside a figure. It does not answer a question, score one,
+  or check the personal best — so a drill that renders and then scores
+  everything wrong would still pass.
+- **The practice check plays one guess, not a round.** Enough to prove local
+  scoring and that storage is untouched; it does not play to a win, so the
+  practice result screen is uncovered.
+- **Practice's pick is uniform over the catalogue** — I read that and did not
+  measure the distribution.
+- The legacy-save migration path and `useGameStore` dropping the server's
+  `day.spent`, both from iteration 12's audit: still read, judged, not fixed.
+- `npm run coach:probe` — still no API key.
+
+**Found and not fixed.** Audit §12's remainder (your decision), and the two
+items above.
+
+Two migrations still pending on the live project, both reported by
+`npm run cloud:check`.

@@ -96,6 +96,27 @@ async function waitForServer(port, timeoutMs = 120_000) {
  */
 const IGNORED_ERROR = /Failed to load resource:.*\b40[34]\b/i;
 
+/** Pulls a guessable name of the given length out of the in-app exercise list. */
+async function wordOfLength(page, n) {
+  await page.click('button:has-text("Exercise list")');
+  await page.waitForSelector('[role="dialog"]');
+  const words = await page.evaluate((len) => {
+    const dialog = document.querySelector('[role="dialog"]');
+    const exact = new RegExp(`^[A-Z]{${len}}$`);
+    return [
+      ...new Set(
+        [...dialog.querySelectorAll('*')]
+          .filter((e) => e.children.length === 0)
+          .map((e) => e.textContent?.trim())
+          .filter((t) => t && exact.test(t)),
+      ),
+    ];
+  }, n);
+  await page.click('[role="dialog"] button[aria-label="Close"]');
+  await page.waitForSelector('[role="dialog"]', { state: 'detached' });
+  return words[0] ?? null;
+}
+
 async function check(mode) {
   console.log(c.head(`\n── ${mode.name} ──────────────────────────────────────────`));
 
@@ -225,6 +246,21 @@ async function check(mode) {
       shots: [...document.querySelectorAll('img')].length,
     }));
 
+    /*
+     * The anatomy drill is embedded in the landing page as the one interactive
+     * island on an otherwise static server component. It is client-only, so
+     * nothing server-side can tell whether it still runs, and `npm test` only
+     * covers the question generator.
+     */
+    await page.click('button:has-text("Start drill")').catch(() => {});
+    await sleep(1200);
+    const drill = await page.evaluate(() => ({
+      options: [...document.querySelectorAll('button')]
+        .map((b) => b.textContent?.trim())
+        .filter((t) => t && t.length > 1 && t.length < 20).length,
+      figure: document.querySelectorAll('svg').length,
+    }));
+
     await page.goto(`http://localhost:${mode.port}/play`, { waitUntil: 'networkidle' });
     await page.evaluate(() => localStorage.clear());
     await page.reload({ waitUntil: 'networkidle' });
@@ -247,6 +283,11 @@ async function check(mode) {
       ['landing page renders its headline', landing.heading.length > 10, `"${landing.heading}"`],
       ['landing page links to the game', landing.play >= 1, `${landing.play} link(s) to /play`],
       ['landing page screenshots load', landing.shots >= 3, `${landing.shots} image(s)`],
+      [
+        'the embedded drill starts and offers answers',
+        drill.options >= 3 && drill.figure >= 1,
+        `${drill.options} option(s), ${drill.figure} figure(s)`,
+      ],
       ['no CSP violations', violations.length === 0, violations[0] ?? ''],
       ['no console errors', errors.length === 0, errors[0] ?? ''],
     ];
@@ -370,6 +411,53 @@ async function check(mode) {
     // Now the modal is allowed to take its time.
     await page.waitForSelector('[role="dialog"]', { timeout: 10_000 }).catch(() => {});
 
+    /*
+     * ── Practice mode ───────────────────────────────────────────────────────
+     *
+     * Two claims the README makes about it, neither of which anything checked:
+     * that it "stays fully local" - no round trip per guess - and that practice
+     * rounds "are never written to storage, so there is no path from a practice
+     * round to a streak". Both are properties of the running client, so a
+     * regression in either is invisible to every server-side test.
+     */
+    // Read the result screen before anything closes it - practice comes next,
+    // and it needs the modal out of the way.
+    const modalText = await page.evaluate(
+      () => document.querySelector('[role="dialog"]')?.textContent ?? '',
+    );
+
+    await page.keyboard.press('Escape');
+    await sleep(600);
+    const apiBefore = payloads.length;
+    const saveBefore = await page.evaluate(() => localStorage.getItem('fitdle:save:v2'));
+
+    let practice = { cols: 0, scored: false, apiCalls: 0, wroteSave: true };
+    try {
+      await page.click('button:has-text("Practice mode")', { timeout: 5_000 });
+      await sleep(1200);
+      practice.cols = await page.evaluate(
+        () =>
+          document.querySelectorAll('[role="row"]')[0]?.querySelectorAll('.tile-perspective')
+            .length ?? 0,
+      );
+
+      const word = candidates.find((w) => w.length === practice.cols) ?? (await wordOfLength(page, practice.cols));
+      if (word && (await typeWord(0, word))) {
+        await page.keyboard.press('Enter');
+        await sleep(2_000);
+        practice.scored = await page.evaluate(() =>
+          [...document.querySelectorAll('[role="row"]')[0].querySelectorAll('.tile-face-back')].some(
+            (f) => getComputedStyle(f).backgroundColor !== 'rgba(0, 0, 0, 0)',
+          ),
+        );
+      }
+      practice.apiCalls = payloads.length - apiBefore;
+      practice.wroteSave =
+        (await page.evaluate(() => localStorage.getItem('fitdle:save:v2'))) !== saveBefore;
+    } catch {
+      /* reported by the checks below */
+    }
+
     const bodies = (await Promise.all(payloads)).filter(Boolean);
     const revealed = bodies.filter((b) => /"reveal":\{/.test(b.body));
     let answer = null;
@@ -388,10 +476,6 @@ async function check(mode) {
 
     const duringPlay = bodies.filter((b) => /"status":"playing"/.test(b.body));
     const leaks = answer ? duringPlay.filter((b) => b.body.includes(answer)) : [];
-
-    const modalText = await page.evaluate(
-      () => document.querySelector('[role="dialog"]')?.textContent ?? '',
-    );
 
     // The spec's three result colours, asserted as computed values.
     const GREEN = 'rgb(34, 197, 94)';
@@ -452,9 +536,23 @@ async function check(mode) {
         `${duringPlay.length} payload(s) checked for "${answer ?? '?'}"`,
       ],
       [
+        'practice scores locally, with no server call',
+        practice.cols >= 5 && practice.scored && practice.apiCalls === 0,
+        `${practice.cols} columns, ${practice.apiCalls} API call(s)`,
+      ],
+      [
+        'a practice round cannot reach the streak',
+        practice.wroteSave === false,
+        practice.wroteSave ? 'it wrote the save' : 'storage untouched',
+      ],
+      [
         'the result screen reveals the answer',
         answer !== null && modalText.includes(answer),
-        answer ? `modal names ${answer}` : 'no reveal',
+        answer === null
+          ? 'no reveal came back'
+          : modalText.includes(answer)
+            ? `modal names ${answer}`
+            : `modal does not name ${answer} (${modalText.length} chars)`,
       ],
     );
 
