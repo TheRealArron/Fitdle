@@ -143,11 +143,54 @@ async function check(mode) {
     }
 
     const { chromium } = await import('playwright');
-    const browser = await chromium.launch();
+
+    /*
+     * Playwright is a devDependency; its BROWSERS are not, and `npm ci` does
+     * not fetch them. On a clean checkout this threw an uncaught TimeoutError
+     * out of the script - so the one step that exists because unit tests missed
+     * two real regressions could not run at all, and said so in a stack trace
+     * at the end of a pipeline whose seven earlier steps had just gone green.
+     */
+    let browser;
+    try {
+      browser = await chromium.launch();
+    } catch (err) {
+      const missing = /Executable doesn't exist|playwright install/i.test(String(err));
+      console.log(c.bad(missing ? '✗ no browser to drive' : `✗ could not launch a browser`));
+      console.log(
+        c.dim(
+          missing
+            ? '  Playwright is installed but its browsers are not. Fetch them once:  npx playwright install'
+            : `  ${String(err).split('\n')[0]}`,
+        ),
+      );
+      failures++;
+      return;
+    }
     const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
 
     const violations = [];
     const errors = [];
+
+    /*
+     * Every API payload the page receives, kept as text.
+     *
+     * The answer-leak question is not "is the schedule in the bundle" - that is
+     * `check:bundle` - but "does the running server hand the answer to a player
+     * who has not finished". Nothing checked that. Once the round ends the
+     * reveal names the answer, and every payload captured BEFORE that point can
+     * be searched for it retrospectively.
+     */
+    const payloads = [];
+    page.on('response', (res) => {
+      if (!res.url().includes('/api/')) return;
+      payloads.push(
+        res
+          .text()
+          .then((body) => ({ url: res.url(), body }))
+          .catch(() => null),
+      );
+    });
     page.on('console', (m) => {
       const t = m.text();
       if (/Content Security Policy|Refused to/i.test(t)) violations.push(t.slice(0, 120));
@@ -204,6 +247,206 @@ async function check(mode) {
       () => document.querySelector('.tile-face:not(.tile-face-back)')?.textContent,
     );
     results.push(['keyboard input registers', typed === 'P', `saw "${typed}"`]);
+    await page.keyboard.press('Backspace');
+
+    /*
+     * ── Play a whole round, through the UI, against the real server ─────────
+     *
+     * Everything above this line checks that the page came up. That is what the
+     * two historic regressions needed and it is not enough: the guess round
+     * trip, the scoring, the reveal and the answer gate are all properties of
+     * the running server, and none of them had a browser check. Three separate
+     * bugs found in this repo lived in exactly that space - a leaderboard that
+     * could never have a row, a 500 on the winning guess, and a reset that
+     * silently did nothing.
+     *
+     * Guesses come from the in-app exercise list, which is where a player gets
+     * them, so this needs no copy of the word list and cannot drift from one.
+     */
+    await page.click('button:has-text("Exercise list")');
+    await page.waitForSelector('[role="dialog"]');
+    const candidates = await page.evaluate((n) => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const exact = new RegExp(`^[A-Z]{${n}}$`);
+      return [
+        ...new Set(
+          [...dialog.querySelectorAll('*')]
+            .filter((e) => e.children.length === 0)
+            .map((e) => e.textContent?.trim())
+            .filter((t) => t && exact.test(t)),
+        ),
+      ];
+    }, dom.cols);
+    await page.click('[role="dialog"] button[aria-label="Close"]');
+    await page.waitForSelector('[role="dialog"]', { state: 'detached' });
+
+    /*
+     * Type a word and confirm it landed, rather than sleeping and hoping.
+     *
+     * The client ignores keystrokes while a row is revealing, and the reveal is
+     * `0.5 s + 0.075 s per tile` (DECISIONS §5), so the right interval depends
+     * on the day's column count. Two attempts at a fixed wait were wrong here:
+     * the obvious signal - the back faces taking a result colour - is useless,
+     * because the back face is painted from the start and merely rotated away
+     * by `backface-visibility`. It reads as "revealed" before the flip begins,
+     * so the next guess was typed into a board that was ignoring input and the
+     * run died 20 s later on a request that was never made.
+     *
+     * Typing and checking needs no timing constant at all.
+     */
+    const typeWord = async (rowIndex, word) => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await page.keyboard.type(word, { delay: 15 });
+        const landed = await page.evaluate(
+          ({ rowIndex: r, word: w }) => {
+            const row = document.querySelectorAll('[role="row"]')[r];
+            if (!row) return false;
+            return (
+              [...row.querySelectorAll('.tile-face:not(.tile-face-back)')]
+                .map((e) => e.textContent)
+                .join('') === w
+            );
+          },
+          { rowIndex, word },
+        );
+        if (landed) return true;
+        for (let i = 0; i < word.length; i += 1) await page.keyboard.press('Backspace');
+        await sleep(150);
+      }
+      return false;
+    };
+
+    let played = 0;
+    const rowColours = [];
+    const playedWords = [];
+    let roundStatus = 'playing';
+    let typingFailed = null;
+
+    for (const word of candidates.slice(0, 6)) {
+      if (!(await typeWord(played, word))) {
+        typingFailed = word;
+        break;
+      }
+
+      const scored = page.waitForResponse((r) => r.url().includes('/api/guess'), {
+        timeout: 20_000,
+      });
+      await page.keyboard.press('Enter');
+
+      /*
+       * The round is over when the SERVER says so, not when the modal appears:
+       * the result modal is opened by a timer 0.9-1.5 s after the last row
+       * flips, so a loop watching for a dialog plays one guess too many.
+       */
+      const payload = await (await scored).json().catch(() => ({}));
+      if (payload.ok === false) continue; // a rejected word costs no guess
+      played += 1;
+      roundStatus = payload.status ?? roundStatus;
+
+      rowColours.push(
+        await page.evaluate(
+          (r) =>
+            [
+              ...document.querySelectorAll('[role="row"]')[r].querySelectorAll('.tile-face-back'),
+            ].map((f) => getComputedStyle(f).backgroundColor),
+          played - 1,
+        ),
+      );
+      playedWords.push(word);
+
+      if (roundStatus !== 'playing') break;
+    }
+
+    // Now the modal is allowed to take its time.
+    await page.waitForSelector('[role="dialog"]', { timeout: 10_000 }).catch(() => {});
+
+    const bodies = (await Promise.all(payloads)).filter(Boolean);
+    const revealed = bodies.filter((b) => /"reveal":\{/.test(b.body));
+    let answer = null;
+    try {
+      answer = revealed.length ? JSON.parse(revealed[revealed.length - 1].body).reveal.name : null;
+    } catch {
+      /* keep answer null; the assertion below reports it */
+    }
+
+    /*
+     * The reveal has to look like an answer, not merely exist. An empty string
+     * satisfies `modalText.includes(answer)` for any modal at all, so the shape
+     * is checked before anything is concluded from it.
+     */
+    if (answer !== null && !/^[A-Z]{4,10}$/.test(answer)) answer = null;
+
+    const duringPlay = bodies.filter((b) => /"status":"playing"/.test(b.body));
+    const leaks = answer ? duringPlay.filter((b) => b.body.includes(answer)) : [];
+
+    const modalText = await page.evaluate(
+      () => document.querySelector('[role="dialog"]')?.textContent ?? '',
+    );
+
+    // The spec's three result colours, asserted as computed values.
+    const GREEN = 'rgb(34, 197, 94)';
+    const YELLOW = 'rgb(234, 179, 8)';
+    const GREY = 'rgb(75, 85, 99)';
+    const RESULT_COLOURS = [GREEN, YELLOW, GREY];
+
+    const firstRowColours = rowColours[0] ?? [];
+    const scoredByServer =
+      firstRowColours.length === dom.cols &&
+      firstRowColours.every((col) => RESULT_COLOURS.includes(col));
+
+    /*
+     * A weaker invariant than "the scoring is correct", and deliberately so.
+     *
+     * Every tile taking *a* result colour is not evidence of scoring: with
+     * `evaluateGuess` returning `absent` for everything, the board is uniformly
+     * grey and still passes that check - measured, by doing exactly that. The
+     * duplicate-letter rules and position-before-presence belong to
+     * `tests/evaluate.ts`; re-deriving them here would put a second copy of the
+     * algorithm in the smoke script, which is the thing this codebase keeps
+     * refusing to do.
+     *
+     * So: a guess that shares a letter with the answer must light SOMETHING.
+     * That holds for any correct scoring, needs no copy of the rules, and is
+     * not luck - whether a shared letter exists is checked, not assumed.
+     */
+    const shouldLight =
+      answer === null
+        ? []
+        : playedWords
+            .map((word, i) => ({ word, colours: rowColours[i] ?? [] }))
+            .filter(({ word }) => [...word].some((ch) => answer.includes(ch)));
+    const litRows = shouldLight.filter(({ colours }) =>
+      colours.some((col) => col === GREEN || col === YELLOW),
+    );
+    const scoringIsReal = shouldLight.length > 0 && litRows.length === shouldLight.length;
+
+    results.push(
+      ['a guess reaches the server and comes back scored', scoredByServer, firstRowColours.join(' ')],
+      [
+        'a guess sharing a letter with the answer lights a tile',
+        scoringIsReal,
+        shouldLight.length === 0
+          ? 'no guess shared a letter - nothing to check'
+          : `${litRows.length}/${shouldLight.length} such row(s) lit`,
+      ],
+      [
+        'the round plays to a finish',
+        answer !== null && roundStatus !== 'playing' && !typingFailed,
+        typingFailed
+          ? `the board stopped accepting input at "${typingFailed}"`
+          : `${played} guess(es), ${roundStatus}`,
+      ],
+      [
+        'the answer is absent from every payload sent mid-round',
+        answer !== null && leaks.length === 0,
+        `${duringPlay.length} payload(s) checked for "${answer ?? '?'}"`,
+      ],
+      [
+        'the result screen reveals the answer',
+        answer !== null && modalText.includes(answer),
+        answer ? `modal names ${answer}` : 'no reveal',
+      ],
+    );
 
     for (const [name, ok, detail] of results) {
       if (!ok) failures++;

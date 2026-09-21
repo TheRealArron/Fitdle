@@ -814,3 +814,132 @@ construction" claim covers the app's data but not the model's own knowledge), §
 
 Two migrations remain pending on the live project, both reported by
 `npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.
+
+---
+
+## Iteration 7 — the smoke test plays a whole round, and `verify` finally runs end to end
+
+**What I audited.** `scripts/smoke.mjs` in full, the game's DOM through a real
+browser (to find selectors that are not invented), `useGameStore`'s input gate,
+and `Tile.tsx`'s flip. Audit §5.
+
+**What I chose, and why.** Everything else left is documents (§7, §9) or the
+extension manifest (§6). §5 is the one that would have caught the bugs this
+session found: three of the five - a leaderboard that could never hold a row, a
+500 on the winning guess, and a reset that silently did nothing - are properties
+of the running system, and the browser check stopped at "the page came up".
+
+**What I changed.** `scripts/smoke.mjs` only, plus a README line.
+
+The round is played through the UI, in both modes: open the in-app exercise
+list, take the day's candidates from it (so the script keeps no word list of its
+own and cannot drift from one), type each with the physical keyboard, press
+Enter, and continue until the server says the round is over. Four new checks:
+
+- **a guess reaches the server and comes back scored** — every tile in row one
+  carries one of the spec's three result colours, read from `getComputedStyle`.
+- **a guess sharing a letter with the answer lights a tile** — see the mutation
+  notes; the check above is not evidence of scoring on its own.
+- **the round plays to a finish** — the server reports `won` or `lost`.
+- **the answer is absent from every payload sent mid-round** — every `/api/`
+  response body is captured as text; once the reveal names the answer, all the
+  payloads captured while `status` was `playing` are searched for it
+  retrospectively. This is the property `check:bundle` cannot test: not "is the
+  schedule in the bundle" but "does the running server hand it over early".
+
+Plus: a missing Playwright browser now reports one line and a failed check
+instead of throwing an uncaught `TimeoutError` out of the script.
+
+**Two things I got wrong while building it, both worth recording.**
+
+*The round-over signal.* The first version watched the DOM for the result
+dialog. That modal is opened by a timer 0.9–1.5 s after the last row flips, so
+the loop typed one guess too many into a board the client had already closed, no
+request was made, and the run died 20 s later on a round that had ended
+correctly. The status comes off the `/api/guess` response now.
+
+*The "wait for the flip" signal.* The second version waited for the back faces
+to take a result colour. That is not a signal at all: the back face is painted
+from the start and merely rotated away by `backface-visibility`, so it reads as
+revealed before the flip begins — and the client ignores keystrokes while a row
+is revealing. Replaced with typing the word and confirming it landed, retrying
+if not, which needs no timing constant and self-corrects.
+
+**Mutation table.** Each leg applied to the app, `npm run smoke -- prod` re-run,
+leg restored.
+
+| Leg | Check that failed |
+|---|---|
+| `playGuesses` returns the reveal mid-round (`reveal: over` → `reveal: true`) | `the answer is absent from every payload sent mid-round` |
+| `evaluateGuess` returns `absent` for every letter | `a guess sharing a letter with the answer lights a tile` |
+| The server never ends the round (`>= MAX_GUESSES` → `>= 99`) | all four new checks |
+| Playwright's browsers removed from the cache | `no browser to drive`, with the install command named |
+
+**The scoring leg survived the first pass, and the fix is the interesting part.**
+With `evaluateGuess` returning `absent` for everything the board is uniformly
+grey — and every tile still carries *a* result colour, so the check passed. The
+tempting fix is to re-derive the expected colouring in the smoke script, which
+would put a second copy of the scoring rules next to the first; this codebase
+keeps refusing to do that and it is right to. The weaker invariant costs nothing
+and needs no copy: **a guess that shares a letter with the answer must light
+something.** Whether such a guess exists is checked rather than assumed, so it
+is not luck, and it caught the leg.
+
+**Measurements, with the command.**
+
+`npm run verify`, undecorated, from start to finish — **for the first time this
+session**, after you agreed to stop the `next dev` that had been holding Next's
+one-per-project lock for 22 hours:
+
+```
+VERIFY_EXIT=0
+
+typecheck       clean
+lint            clean
+test            # tests 249   # pass 249   # fail 0
+build           ok
+check:bundle    no answer ordering, coaching text or video ids  (36 files scanned)
+check:size      164.9 kB total  (97% of the 170 kB budget)
+check:contrast  every combination clears its bar
+smoke           14 checks in dev, 14 in prod, all passed
+```
+
+Today's puzzle was 8 letters, and both modes played it out:
+
+```
+✓ a guess reaches the server and comes back scored
+    rgb(75,85,99) rgb(75,85,99) rgb(234,179,8) rgb(75,85,99)
+    rgb(234,179,8) rgb(234,179,8) rgb(234,179,8) rgb(75,85,99)
+✓ a guess sharing a letter with the answer lights a tile   6/6 such row(s) lit
+✓ the round plays to a finish                              6 guess(es), lost
+✓ the answer is absent from every payload sent mid-round    9 payload(s) checked for "DEADLIFT"
+✓ the result screen reveals the answer                      modal names DEADLIFT
+```
+
+`check:size` is unchanged for the sixth iteration running, which is expected:
+nothing in this one ships to the browser.
+
+**What I did NOT verify.**
+
+- `npm run coach:probe` — still no `ANTHROPIC_API_KEY`. Untouched all session.
+- `npm run build:extension` — untouched, unrun.
+- The smoke round is played **signed out**, so it exercises the guess round trip,
+  the hint schedule and the reveal, but not banking, the leaderboard, the AI
+  quota, or the opening call. Those were verified live this session by direct
+  API probes with throwaway accounts, not by the browser.
+- The retry-until-it-lands typing is bounded at 40 attempts. I did not test what
+  happens if the board is permanently stuck - it would report
+  `the board stopped accepting input at "<word>"` rather than hang, which is the
+  intent, but I have not forced that state.
+- The four new checks add roughly one round of real gameplay per mode to
+  `verify`. I did not measure how much wall-clock that costs.
+
+**Found and not fixed.** Audit §6 (the extension asks for `https://*/*` and an
+unused `"storage"`), §7 (`coach:probe` reports "n of 7" across 14 cases; the
+guide's "safe by construction" claim covers the app's catalogue but not the
+model's own knowledge of exercise names), §9 (fifteen wrong numbers and three
+stale structural claims across README and DECISIONS), §10, and §12's remainder
+(a streak need never break — the option you did not pick).
+
+Two migrations remain pending on the live project, both reported by
+`npm run cloud:check`: the `day_guesses` column and `fitdle_reset_progress`.

@@ -7,10 +7,21 @@ Next.js 16 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 
 ```bash
 npm install
+npx playwright install   # once - the browsers `smoke` drives are not in npm ci
 npm run dev              # http://localhost:3000
 
 npm run verify           # ← the one that matters. Everything, in order.
 ```
+
+That second line is not optional and it is easy to miss. Playwright is a
+devDependency; its *browsers* are a separate download, so on a clean checkout
+`smoke` cannot run - and it is the last step of `verify`, so the seven before it
+go green first. `smoke` now says so in one line instead of a stack trace, but
+the install still has to happen.
+
+`verify` also needs no `next dev` running for this project: Next allows one per
+directory, so a dev server in another terminal blocks the dev-mode smoke check
+and `verify` exits 1.
 
 `verify` runs typecheck → lint → 93 unit tests → build → bundle leak check →
 smoke test in **both dev and production**. Individually:
