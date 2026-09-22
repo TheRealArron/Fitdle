@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { CATALOGUE } from '@/data/exercises';
+import { THEMES } from '@/store/useSettingsStore';
 import { readCode } from './helpers/source.ts';
 
 /**
@@ -195,4 +196,50 @@ test('the documented test count is the real one', () => {
       );
     }
   }
+});
+
+/* ── the theme, before the first paint ────────────────────────────────────── */
+
+test('the theme is stamped before paint, from one list of themes', () => {
+  /*
+   * The settings store applies the theme from a useEffect, which runs after
+   * hydration. Measured on /play with Daylight saved, before this was fixed:
+   * `data-theme` was null and the body was rgb(10, 14, 24) at DOMContentLoaded,
+   * then rgb(245, 247, 250) once hydrated - a full dark-to-light flash on every
+   * load. The landing page is a server component with no settings store at all,
+   * so it never got the attributes and stayed dark whatever had been chosen.
+   *
+   * `public/theme.js` runs before paint and therefore has its own copy of the
+   * theme names; a second list that drifts would silently stop honouring a
+   * theme, so it is checked against the real one here.
+   */
+  const script = fs.readFileSync(new URL('../public/theme.js', import.meta.url), 'utf8');
+  const listed = /var themes = \[([^\]]+)\]/.exec(script);
+  assert.ok(listed, 'theme.js must declare the themes it accepts');
+  const names = listed[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+  assert.deepEqual(names, [...THEMES], 'theme.js and useSettingsStore disagree about the themes');
+
+  assert.match(script, /fitdle:settings:v1/, 'and must read the key the store writes');
+  assert.match(script, /data-theme/, 'and stamp the attribute the CSS selects on');
+});
+
+test('the theme script blocks, or it is not a fix', () => {
+  /*
+   * `async` or `defer` would let the browser paint first, which is the entire
+   * bug. A same-origin file rather than an inline script: the CSP allows inline
+   * but the codebase has no dangerouslySetInnerHTML anywhere, and a file also
+   * satisfies MV3's stricter script-src 'self', so the extension gets it too.
+   */
+  const layout = readCode(new URL('../src/app/layout.tsx', import.meta.url));
+  const tag = /<script[^>]*src="\/theme\.js"[^>]*\/?>/.exec(layout);
+  assert.ok(tag, 'the root layout must load /theme.js');
+  assert.ok(!/\basync\b|\bdefer\b/.test(tag[0]), `${tag[0]} must not be async or deferred`);
+  assert.ok(
+    layout.indexOf('<head>') < layout.indexOf('theme.js'),
+    'it belongs in <head>, before the body it is meant to colour',
+  );
+  assert.ok(
+    !layout.includes('dangerouslySetInnerHTML'),
+    'still no dangerouslySetInnerHTML - that claim is in the README',
+  );
 });

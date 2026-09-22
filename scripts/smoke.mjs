@@ -263,6 +263,47 @@ async function check(mode) {
 
     await page.goto(`http://localhost:${mode.port}/play`, { waitUntil: 'networkidle' });
     await page.evaluate(() => localStorage.clear());
+
+    /*
+     * ── The theme has to be right before the first paint ────────────────────
+     *
+     * The settings store applies it from a useEffect, so until `/theme.js`
+     * existed a player on Daylight got a full dark-to-light flash on every
+     * load, and the landing page - a server component with no settings store -
+     * never got the theme at all. Both are properties of the served HTML, so
+     * nothing but a browser can see them.
+     *
+     * Read at DOMContentLoaded: the blocking script has run, React has not
+     * hydrated.
+     */
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'fitdle:settings:v1',
+        JSON.stringify({ colourblind: false, reduceMotion: false, theme: 'daylight' }),
+      ),
+    );
+    const themed = {};
+    for (const path of ['/play', '/']) {
+      const probe = await page.context().newPage();
+      await probe.goto(`http://localhost:${mode.port}${path}`, { waitUntil: 'domcontentloaded' });
+      themed[path] = await probe.evaluate(() => {
+        const tag = document.querySelector('script[src="/theme.js"]');
+        return {
+          theme: document.documentElement.getAttribute('data-theme'),
+          bg: getComputedStyle(document.body).backgroundColor,
+          /*
+           * Reading at DOMContentLoaded cannot tell a blocking script from a
+           * deferred one - deferred scripts have already run by then, so
+           * adding `defer` passed both checks above while reintroducing the
+           * flash. The DOM says what the server actually sent.
+           */
+          blocking: Boolean(tag) && !tag.defer && !tag.async,
+        };
+      });
+      await probe.close();
+    }
+    await page.evaluate(() => localStorage.clear());
+
     await page.reload({ waitUntil: 'networkidle' });
     await sleep(2500);
 
@@ -287,6 +328,21 @@ async function check(mode) {
         'the embedded drill starts and offers answers',
         drill.options >= 3 && drill.figure >= 1,
         `${drill.options} option(s), ${drill.figure} figure(s)`,
+      ],
+      [
+        'the saved theme is applied before the first paint',
+        themed['/play'].theme === 'daylight' && themed['/'].theme === 'daylight',
+        `/play ${themed['/play'].theme}, / ${themed['/'].theme}`,
+      ],
+      [
+        'and the light theme really is light on both pages',
+        themed['/play'].bg === 'rgb(245, 247, 250)' && themed['/'].bg === 'rgb(245, 247, 250)',
+        `/play ${themed['/play'].bg}, / ${themed['/'].bg}`,
+      ],
+      [
+        'the theme script is served blocking, not deferred',
+        themed['/play'].blocking && themed['/'].blocking,
+        `/play ${themed['/play'].blocking}, / ${themed['/'].blocking}`,
       ],
       ['no CSP violations', violations.length === 0, violations[0] ?? ''],
       ['no console errors', errors.length === 0, errors[0] ?? ''],

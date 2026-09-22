@@ -23,12 +23,12 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → dependency audit → 258 unit tests →
+`verify` runs typecheck → lint → dependency audit → 260 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
-17 browser checks in **both dev and production**. Individually:
+21 browser checks in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 258 unit tests
+npm test                 # 260 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -96,7 +96,14 @@ clue on your board. That one is a solver and says so: with 12-13 answers per len
 it will often leave a single word, which is why the plain list is the default
 and narrowing is a deliberate click.
 
-**Five themes**, including **Daylight**, a genuine light mode. The interesting
+**Five themes**, including **Daylight**, a genuine light mode - applied before
+the first paint, by a blocking `public/theme.js` in the root layout. The
+settings store applies it too, but from a `useEffect`, which is after
+hydration: measured on `/play` with Daylight saved, the body was
+`rgb(10, 14, 24)` at DOMContentLoaded and `rgb(245, 247, 250)` once hydrated, a
+full dark-to-light flash on every load. The landing page is a server component
+with no settings store at all, so it never got the theme and stayed dark
+whatever the player had chosen. Both now read `daylight` before React runs. The interesting
 part is how: the codebase writes text as `text-white` and `text-slate-300`
 throughout - 129 literal call sites. Tailwind 4 compiles those to
 `color: var(--color-slate-300)`, so remapping the variables under one selector
@@ -892,7 +899,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 258 tests over the things that must not silently break:
+`npm test` - 260 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

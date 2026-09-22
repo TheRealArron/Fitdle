@@ -1644,3 +1644,122 @@ items above.
 
 Two migrations still pending on the live project, both reported by
 `npm run cloud:check`.
+
+---
+
+## Iteration 14 — a dark flash on every load, and a landing page that ignored the theme
+
+**What I audited.** The client, which iteration 1 covered thinly: every
+component, both remaining stores, and the scripts. Scanned first for the defect
+classes this repo has actually been bitten by — module-scope `new Date()`, a
+Zustand selector building a fresh object without `useShallow`, unguarded
+`localStorage`, timers without cleanup, `dangerouslySetInnerHTML`. All clean;
+the `useShallow` discipline is applied at all three call sites that need it.
+
+Then `useSettingsStore`, which is where it stopped being clean. It applies the
+theme from `load()`, called in a `useEffect` — which runs after hydration.
+
+**Two defects, both measured in a browser.**
+
+```
+BEFORE
+/play  DOMContentLoaded : theme=null      body=rgb(10, 14, 24)   (main opacity 0)
+/play  hydrated         : theme=daylight  body=rgb(245, 247, 250)
+/play  FLASH            : YES
+
+/      DOMContentLoaded : theme=null      body=rgb(10, 14, 24)
+/      hydrated         : theme=null      body=rgb(10, 14, 24)
+```
+
+1. **A full dark-to-light flash on every single load** for anyone on Daylight.
+   Not a subtle flicker — near-black to near-white, every page, every time.
+2. **The landing page never applied the theme at all.** It is a server component
+   with no settings store, so `/` stayed dark whatever the player had chosen
+   while `/play` was light. The README calls Daylight "a genuine light mode"; on
+   the page that owns `/`, it was not applied.
+
+This is the shape DECISIONS already has a section about — `body { overflow:
+hidden }` outliving the assumption that there was only one screen. The theme was
+wired into the game, and then a second page appeared.
+
+**What I changed.** `public/theme.js` — a ~400-byte blocking script in the root
+layout that reads the one settings key and stamps the attributes before the
+browser paints. Being in the root layout, it fixes both at once.
+
+A file rather than an inline script, deliberately: the CSP allows inline
+(`'unsafe-inline'`, documented as the weak directive), but there is no
+`dangerouslySetInnerHTML` anywhere in this codebase and this is not the reason
+to add the first one. A same-origin file also satisfies MV3's stricter
+`script-src 'self'`, so the extension build gets the fix for free — and, as a
+side effect, `check:bundle` now scans 37 files instead of 36, because the script
+is copied into `extension-dist` and swept for answer data like everything else.
+
+`next/script` cannot do this job: every strategy it offers, `beforeInteractive`
+included, is documented as **not** blocking. I read that before writing the code
+rather than after.
+
+**Measured after:**
+
+```
+/play  DOMContentLoaded : theme=daylight  body=rgb(245, 247, 250)  (main opacity 0)
+/      DOMContentLoaded : theme=daylight  body=rgb(245, 247, 250)
+FLASH  : no, on either
+```
+
+`main opacity 0` is the proof it is pre-hydration.
+
+**Mutation table.**
+
+| Leg | What failed |
+|---|---|
+| The script removed from the layout | unit: `the theme script blocks, or it is not a fix`; smoke: both theme checks, `/play null, / null` |
+| The script marked `defer` | unit: `the theme script blocks, or it is not a fix`; smoke: `the theme script is served blocking, not deferred` |
+| `theme.js` drops a theme from its list | unit: `the theme is stamped before paint, from one list of themes` |
+
+**The `defer` leg initially passed both smoke checks**, and that is worth
+keeping. Reading at `DOMContentLoaded` cannot distinguish a blocking script from
+a deferred one — deferred scripts have already run by then — so `defer`
+reintroduced the flash while the behavioural checks stayed green. Only the
+source assertion caught it. I added a third smoke check that inspects the
+`<script>` element the server actually sent (`!tag.defer && !tag.async`), which
+closes it at the DOM level rather than at the source level.
+
+**A mistake of my own, recorded because it nearly shipped.** I ran
+`npx tsc --noEmit && npx eslint 2>&1 | head -5` and moved on. `head -5` cut off
+the error: `@next/next/no-sync-scripts` rejects a synchronous script, and
+`verify` failed on lint two steps later. Truncating the output of a check is how
+you turn a red build into a green-looking one. The rule now carries a targeted
+disable with the reason written next to it, and a test pins that the script
+stays blocking so the disable cannot quietly become wrong.
+
+**Measurements, with the command.**
+
+`npm run verify`, undecorated: **exit 0** — typecheck, lint, `check:audit` 0
+vulnerabilities, **260 tests**, extension build, web build, `check:bundle` clean
+over **37 files**, `check:size` 165.4 kB at 97% of the 170 kB budget,
+`check:contrast` clean, and smoke **21 checks in each of dev and prod** (was 17).
+
+`check:size` is unchanged again: `theme.js` is a static file, not part of the
+first-load JS the ratchet measures.
+
+**What I did NOT verify.**
+
+- **That there is no flash at the actual first paint**, as opposed to at
+  DOMContentLoaded. A blocking script in `<head>` runs before the parser reaches
+  `<body>`, so the browser cannot paint a wrong background — but I measured the
+  attribute and the computed style at DOMContentLoaded, not a frame capture.
+- **The extension popup.** The fix should reach it (same static file, same
+  root-relative path, allowed by MV3's CSP) and `build:extension` succeeds, but I
+  have still never loaded `extension-dist/` in Chrome.
+- **Colourblind and reduced-motion** are stamped by the same script and are
+  covered by the list test, but neither is asserted in the browser — only
+  `data-theme` is.
+- The other four items from the scan (timers, selectors, storage guards,
+  module-scope dates) were read and found clean; "clean" there means I read them,
+  not that anything exercises them.
+- `npm run coach:probe` — still no API key.
+
+**Found and not fixed.** Audit §12's remainder (your decision), plus the two
+items carried from iteration 12: the legacy-save migration leaves a migrated
+streak with no `lastSeed` anchor, and `useGameStore` drops the server's
+`day.spent` when adopting the banked record.
