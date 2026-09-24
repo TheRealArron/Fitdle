@@ -25,7 +25,7 @@ and `verify` exits 1.
 
 `verify` runs typecheck → lint → dependency audit → 260 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
-21 browser checks in **both dev and production**. Individually:
+23 browser checks in **both dev and production**. Individually:
 
 ```bash
 npm test                 # 260 unit tests
@@ -129,8 +129,16 @@ conflating them would let one paper over the other. Marking it done is the
 honour system, deliberately: a browser cannot verify a set of squats, and
 pretending otherwise would be worse than trusting the player.
 
-**Tap any muscle** on the figure. During the round it names the muscle and stops;
-the exercise lists unlock when the round ends.
+**Tap any muscle** on the figure - *after* the round. While it is live the
+regions are not interactive at all: no click handler, no `role="button"`, no
+label. Measured in a browser, mid-round `svg [role="button"]` is **0**; once the
+round ends it is **34**, each labelled "<Muscle> - show what else trains it".
+
+This paragraph used to say tapping mid-round "names the muscle and stops". That
+was an older behaviour and the code is now stricter than it described - the
+gate is that there is nothing to tap, rather than something that answers
+narrowly. A smoke check asserts both halves, because the difference is invisible
+to everything else.
 
 That gate is not caution, it is arithmetic. The figure already tells you which
 muscles the answer shares and the board tells you its length, so a list of

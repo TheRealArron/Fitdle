@@ -370,6 +370,21 @@ async function check(mode) {
      * Guesses come from the in-app exercise list, which is where a player gets
      * them, so this needs no copy of the word list and cannot drift from one.
      */
+    /*
+     * The muscle figure must not be interactive while the round is live.
+     *
+     * The figure already tells you which muscles the answer shares and the
+     * board tells you its length, so a list of "exercises that train this" is
+     * the third side of an intersection the player did not earn - measured over
+     * the schedule, tapping one lit muscle leaves 7.1 same-length candidates
+     * and sometimes exactly one. The gate is that the regions carry no click
+     * handler, no role and no label until the round ends, which nothing but a
+     * browser can see.
+     */
+    const regionsMidRound = await page.evaluate(
+      () => document.querySelectorAll('svg [role="button"]').length,
+    );
+
     await page.click('button:has-text("Exercise list")');
     await page.waitForSelector('[role="dialog"]');
     const candidates = await page.evaluate((n) => {
@@ -476,6 +491,10 @@ async function check(mode) {
      * round to a streak". Both are properties of the running client, so a
      * regression in either is invisible to every server-side test.
      */
+    const regionsAfterRound = await page.evaluate(
+      () => document.querySelectorAll('svg [role="button"]').length,
+    );
+
     // Read the result screen before anything closes it - practice comes next,
     // and it needs the modal out of the way.
     const modalText = await page.evaluate(
@@ -590,6 +609,16 @@ async function check(mode) {
         'the answer is absent from every payload sent mid-round',
         answer !== null && leaks.length === 0,
         `${duringPlay.length} payload(s) checked for "${answer ?? '?'}"`,
+      ],
+      [
+        'the muscle figure is not tappable mid-round',
+        regionsMidRound === 0,
+        `${regionsMidRound} tappable region(s) while playing`,
+      ],
+      [
+        'and becomes tappable once the round is over',
+        regionsAfterRound > 0,
+        `${regionsAfterRound} region(s) after`,
       ],
       [
         'practice scores locally, with no server call',

@@ -1763,3 +1763,110 @@ first-load JS the ratchet measures.
 items carried from iteration 12: the legacy-save migration leaves a migrated
 streak with no `lastSeed` anchor, and `useGameStore` drops the server's
 `day.spent` when adopting the banked record.
+
+---
+
+## Iteration 15 — a full functional recheck, at your request
+
+**What I did.** Re-walked every documented behaviour of the game against a
+running server and the live database, rather than picking an item to build. Four
+passes: the pipeline, the HTTP API, the signed-in cloud path, and the UI
+surfaces the smoke test does not reach.
+
+**Results.**
+
+| Pass | Result |
+|---|---|
+| `npm run verify`, undecorated | **exit 0** — 260 tests, 0 vulnerabilities, 37 chunks scanned, 165.4 kB at 97% of budget, contrast clean, 21 browser checks in each mode |
+| API walk — 52 assertions over every route and rule | **52 passed** |
+| Cloud walk — 30 assertions over banking, boards, floor, RLS, quota, reset | **30 passed** |
+| UI walk — menus, settings, countdown, drill, share, muscle map | 1 real defect, below |
+| `npm run cloud:check` | green except the two known pending migrations |
+
+The API walk covers: fresh board shape, token resume, stale and tampered tokens
+discarded, lowercase input, scoring, all four rejection reasons, the hint
+schedule at guesses 3 and 5 with `nextHintIn` counting down, muscle
+shared/missed disjointness, unprobed muscles staying dark, the reveal arriving
+only at the end, injected `status`/`progress` ignored, a finished board refusing
+extension, all nine opening-call rules, the three coach 403 gates, the guide
+being ungated, and both leaderboards returning uncached and id-free.
+
+The cloud walk creates throwaway accounts, plays real rounds through the real
+routes, and deletes everything in a `finally` — `cleanup: 3 throwaway
+account(s) removed`. It confirms banking, the denormalised username, board
+membership with a server-side `isYou`, the guess floor (five wrong, discard,
+win in one → **banked as six**, `distribution [0,0,0,0,0,1]`), all four forgery
+attempts refused as the row's own owner, the free tier allowing exactly five AI
+messages (`yyyyynn`), pro lifting it, a new day reading as unused, and the
+reset's delete path.
+
+**The one real defect: a README claim the code had outgrown.**
+
+> **Tap any muscle** on the figure. During the round it names the muscle and
+> stops; the exercise lists unlock when the round ends.
+
+Measured: mid-round `svg [role="button"]` is **0** — the regions carry no click
+handler, no role and no label at all. After the round it is **34**, each
+labelled `"<Muscle> - show what else trains it"`. `Game.tsx` passes
+`onSelectRegion` only when `roundOver`, and its own comment says so. The code is
+*stricter* than the README described, so the README is what was wrong.
+
+Corrected in place, and pinned by two new smoke checks — the difference is
+invisible to everything else in the repo.
+
+| Leg | Check that failed |
+|---|---|
+| The figure becomes tappable mid-round | `the muscle figure is not tappable mid-round` — "17 tappable region(s) while playing" |
+
+**Five probe errors of my own, all corrected, none of them app defects.** Worth
+recording because each one first looked like a failure:
+
+1. The hint schedule. I asserted the category hint arrives *after* the 3rd
+   guess; `CATEGORY_HINT_AT = 3` means it is there **for** guess 3, once two are
+   spent — which is what the README says and what the unit test pins
+   (`nextHintIn === 2` from an empty board).
+2. `streak === 0` after the forgery attempts. The probe account had legitimately
+   won, so 1 was correct; the assertion now compares against the pre-attack
+   value and that the forged 9999 did not take.
+3. Finishing a round with an out-of-band `fetch` from inside the page, which
+   never updates the client's save, so the reload restarted the round.
+4. `buildShareText`'s signature — seven positional arguments, not an object.
+5. Two text regexes that missed ("Rep completed", not "Solved") and a
+   `split('\n\n')` that counted the streak line as a grid row.
+
+**Measurements, with the command.** `npm run verify` after the change: exit 0,
+260 tests, 0 vulnerabilities, 37 files scanned, 165.4 kB at 97%, contrast clean,
+and smoke **23 checks in each of dev and prod** (was 21).
+
+Share text, printed verbatim during the walk:
+
+```
+Fitdle #267 2/6
+
+⬛⬛⬛⬛⬛⬛
+🟩🟩🟩🟩🟩🟩
+🔥 3 day streak
+
+https://fitdle.app
+```
+
+with 🟩 → 🟦 under colourblind mode, the drill badge on its own line, and the
+answer name absent.
+
+**What I did NOT verify.**
+
+- **`npm run coach:probe`** — still no `ANTHROPIC_API_KEY`. The coach answered
+  "The coach is not set up on this deployment" through the gate, which proves the
+  gate and the degradation, not the model's behaviour.
+- **The two pending migrations.** The walk confirms the *current* deployed
+  schema: `day_guesses` still ranks the guess array (1, where `save.day.spent`
+  is 6), and `fitdle_reset_progress` is absent so the reset uses the delete
+  fallback. Both are reported by `cloud:check` and both are yours to apply.
+- **The extension popup in Chrome** — still never loaded.
+- **The account modal and backup-code round trip** — I opened the menu surfaces
+  and confirmed each renders, but did not export a code, clear storage and
+  import it.
+- **Today's shortlist panel** and the stats modal's numbers after a played round
+  — opened and rendered, contents not asserted.
+- **Reduced motion** — the attribute is stamped by the same code path as
+  colourblind, which I did toggle, but I did not assert that animations shorten.
