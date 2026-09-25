@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CATALOGUE, exercisesOfLength } from '@/data/exercises';
+import { CATALOGUE, MAX_GUESSES, exercisesOfLength } from '@/data/exercises';
 import { evaluateGuess } from '@/lib/evaluate';
 import { answerFor, playGuesses } from '@/server/game';
 import { ANSWER_ORDER } from '@/server/answers';
+import { readCode } from './helpers/source.ts';
 
 const answerNames = new Set(ANSWER_ORDER);
 const answers = CATALOGUE.filter((e) => answerNames.has(e.name));
@@ -218,4 +219,61 @@ test('the record is per day, so tomorrow is a fresh call', async () => {
     'Chest',
     'a new seed must not inherit yesterday’s call',
   );
+});
+
+/* ── six guesses a day, however they are spread ───────────────────────────── */
+
+test('a day ends at six guesses even when the board shows fewer', () => {
+  /*
+   * The signed session is the server's only memory of a round and the client
+   * decides whether to send it, so discarding it used to hand back a clean six
+   * guesses for a puzzle already half played. A player about to lose simply
+   * restarted until they won, so a streak could never break.
+   *
+   * Measured live before this: three guesses, discard, three more, discard
+   * again - and the board came back `playing` with zero guesses, forever.
+   */
+  const two = [CATALOGUE.find((e) => e.name.length === answer.name.length && e.name !== answer.name)!.name];
+  const spentOut = playGuesses(seed, two, answer, undefined, MAX_GUESSES);
+  assert.equal(spentOut.status, 'lost', 'six spent ends the day whatever the token says');
+  assert.ok(spentOut.reveal, 'and the player is given the answer rather than a dead board');
+  assert.equal(spentOut.guesses.length, 1, 'the board still shows only what this session played');
+});
+
+test('the floor never ends a day early', () => {
+  const one = [CATALOGUE.find((e) => e.name.length === answer.name.length && e.name !== answer.name)!.name];
+  assert.equal(playGuesses(seed, one, answer, undefined, MAX_GUESSES - 1).status, 'playing');
+  assert.equal(playGuesses(seed, one, answer, undefined, 0).status, 'playing');
+});
+
+test('omitting the floor is exactly the old behaviour', () => {
+  // Every anonymous caller takes this path, deliberately: there is no identity
+  // to count against, and nothing but their own browser reads their save.
+  const wrong = CATALOGUE.filter((e) => e.name.length === answer.name.length && e.name !== answer.name)
+    .slice(0, MAX_GUESSES)
+    .map((e) => e.name);
+  for (let n = 1; n <= MAX_GUESSES; n++) {
+    const board = wrong.slice(0, n);
+    assert.equal(
+      playGuesses(seed, board, answer).status,
+      playGuesses(seed, board, answer, undefined, board.length).status,
+      `${n} guesses: the default must equal passing guesses.length`,
+    );
+  }
+});
+
+test('both board-building routes consult the floor', () => {
+  for (const file of ['today', 'guess']) {
+    const route = readCode(new URL(`../src/app/api/${file}/route.ts`, import.meta.url));
+    assert.match(route, /guessesSpent\(/, `${file} must read how much the day has cost`);
+    assert.match(route, /playGuesses\([\s\S]*?spent/, `${file} must pass it to playGuesses`);
+  }
+});
+
+test('the floor is per account, and anonymous callers have none', () => {
+  const game = readCode(new URL('../src/server/game.ts', import.meta.url));
+  const fn = game.slice(game.indexOf('export async function guessesSpent'));
+  assert.match(fn, /if \(!userId\) return 0;/, 'no identity means no floor');
+  assert.match(fn, /spent:\$\{seed\}:\$\{userId\}/, 'keyed per account per day');
+  assert.match(fn, /false,\s*\);/, 'and it peeks rather than counting a guess for opening the page');
 });

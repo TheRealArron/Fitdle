@@ -12,6 +12,7 @@ import type { MuscleRegion } from '@/data/muscles';
 import type { MuscleFeedback, RoundStatus } from '@/lib/contracts';
 import { evaluateGuess, type LetterState } from '@/lib/evaluate';
 import { ANSWER_ORDER, COACHING } from '@/server/answers';
+import { count, secondsUntilUtcMidnight } from '@/server/counter';
 
 /**
  * The authoritative game. Everything the client used to compute for itself.
@@ -142,18 +143,39 @@ export interface GuessRejection {
  * incremental update: the client sends a signed list of guesses and gets back
  * the complete truth, so there is no partial state on either side to disagree
  * about, and no way to inject a single fabricated result into a real game.
+ *
+ * `spent` lets a caller say the day has cost more than this token admits. See
+ * the comment on `lost` below.
  */
 export function playGuesses(
   seed: number,
   guesses: string[],
   answer: Exercise,
   call?: string,
+  spent = guesses.length,
 ): GuessOutcome {
   const wordLength = answer.name.length;
   const evaluations = guesses.map((g) => evaluateGuess(g, answer.name));
 
   const won = guesses[guesses.length - 1] === answer.name;
-  const lost = !won && guesses.length >= MAX_GUESSES;
+
+  /*
+   * `spent` is how many guesses the puzzle has actually cost this player today,
+   * which is not always how many are in the token they sent.
+   *
+   * The session is the server's only memory of a round and the client decides
+   * whether to send it, so discarding it hands out a fresh board for the same
+   * day. Measured before this existed: burn five guesses, discard the token,
+   * and you are playing the day again from zero - so a player who was about to
+   * lose simply never submitted the sixth, and a streak could never break.
+   *
+   * The server counts per account, so for a signed-in player the day ends when
+   * six have been spent however they were spread across sessions. `spent`
+   * defaults to `guesses.length`, which is exactly the old behaviour for every
+   * caller that does not know better - anonymous play included, deliberately:
+   * there is no identity to count against and their save is their own file.
+   */
+  const lost = !won && Math.max(guesses.length, spent) >= MAX_GUESSES;
   const status: GameStatus = won ? 'won' : lost ? 'lost' : 'playing';
   const over = status !== 'playing';
 
@@ -216,6 +238,30 @@ export function playGuesses(
         }
       : null,
   };
+}
+
+/**
+ * How many guesses today has already cost this player.
+ *
+ * Signed-in only. There is no identity to count an anonymous player against -
+ * an address is shared by everyone behind one NAT, and charging a stranger's
+ * guesses to you would be worse than the hole it closes - so they keep the
+ * old behaviour, which is safe because nothing but their own browser reads
+ * their save.
+ *
+ * A peek, never a claim: `/api/guess` is the only place a guess is counted,
+ * and counting one here would charge a player for opening the page.
+ */
+export async function guessesSpent(userId: string | null, seed: number): Promise<number> {
+  if (!userId) return 0;
+  const seen = await count(
+    `spent:${seed}:${userId}`,
+    MAX_GUESSES,
+    seed,
+    secondsUntilUtcMidnight(),
+    false,
+  );
+  return Math.min(seen.count, MAX_GUESSES);
 }
 
 /** Validates one new guess against the existing history. */

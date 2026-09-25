@@ -320,7 +320,7 @@ it, and the tests above are the first in this repo to call a route handler.
 
 | Verified in this repo | Not verified |
 |---|---|
-| 260 unit tests | The coach's and guide's model behaviour (no API key — `coach:probe` has never run) |
+| 268 unit tests | The coach's and guide's model behaviour (no API key — `coach:probe` has never run) |
 | A full round played in a real browser, in dev **and** prod | Any performance number under real network conditions |
 | Three attacks on the guess API, three on the coach API | Anything about users, retention, or engagement |
 | The RLS revocation, against a live project, as the row's own owner | `fitdle_reset_progress` and the new `day_guesses` column (migrations not yet run) |

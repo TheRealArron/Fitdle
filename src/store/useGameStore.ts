@@ -336,7 +336,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       day: { seed, guesses: d.guesses, status: d.status, serverState: d.state },
     };
     if (d.status !== 'playing') {
-      const day = next.day;
+      // Non-null by construction: it was just assigned above.
+      const day = next.day as NonNullable<SaveData['day']>;
 
       /*
        * `d.progress` is the server's record, written the moment the round ended
@@ -352,7 +353,19 @@ export const useGameStore = create<GameState>()((set, get) => ({
       next = d.progress
         ? { ...d.progress, day }
         : commitResult(next, seed, d.status === 'won', d.guesses.length, !clockRollback);
-      next.day = day;
+
+      /*
+       * The board is this session's; `spent` is the server's.
+       *
+       * `day` is rebuilt from `d.guesses`, which is the board in front of the
+       * player - right, because a reload has to restore what they are looking
+       * at. It has no `spent`, and overwriting the banked record's day with it
+       * threw away the one number that differs when a round was played across
+       * more than one session. Harmless for the leaderboard, which reads the
+       * server's row, and wrong in the local copy for no reason.
+       */
+      const banked = d.progress?.day?.spent;
+      next.day = banked === undefined ? day : { ...day, spent: banked };
     }
     writeSave(next);
 

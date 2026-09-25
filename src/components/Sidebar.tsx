@@ -115,8 +115,13 @@ export function Sidebar({
         <p className="numeric text-lg font-bold text-white">
           {mode === 'practice'
             ? 'Free play'
-            : /* Date-derived: blank until the client has read the real clock. */
-              hydrated
+            : /*
+               * Date-derived: blank until the SERVER has told us which puzzle
+               * this is. `hydrated` alone was the wrong gate - the offline path
+               * sets it while the seed is still 0, and `getPuzzleNumber(0)`
+               * rendered "Puzzle #-46052" at anyone whose API was unreachable.
+               */
+              hydrated && seed > 0
               ? `Puzzle #${getPuzzleNumber(seed)}`
               : '-'}
         </p>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { readCode } from './helpers/source.ts';
 import {
   commitResult,
   defaultSave,
@@ -252,7 +253,13 @@ test('the server writes only when the round is over', () => {
   const calls = [...route.matchAll(/await bankResult/g)].map((m) => m.index!);
   assert.equal(calls.length, 1, 'there must be exactly one call to bankResult');
 
-  const guard = route.indexOf("outcome.status !== 'playing'");
+  /*
+   * The guard is matched by what it MEANS, not by the name of the variable it
+   * reads. It has been `outcome.status` and is now `settled.status` - the
+   * outcome recomputed once the guess counter has actually been claimed - and a
+   * test about when a database write happens should not fail over a rename.
+   */
+  const guard = route.search(/\b\w+\.status !== 'playing'/);
   assert.notEqual(guard, -1, 'the round-over guard must still exist');
   assert.ok(calls[0] > guard, 'and the bank must come after it, never before');
 });
@@ -449,5 +456,27 @@ test('cloud:check proves the revocation instead of assuming it', () => {
   assert.ok(
     !/00000000-0000-0000-0000-000000000000[\s\S]{0,200}update/.test(probe),
     'it must not go back to updating a row id that does not exist',
+  );
+});
+
+test('the client keeps the server’s spent when it adopts the banked record', () => {
+  /*
+   * `day` is rebuilt from the response's guesses, which is the board in front
+   * of the player - right, because a reload has to restore what they are
+   * looking at. It carries no `spent`, and overwriting the banked record's day
+   * with it threw away the one number that differs when a round was played
+   * across more than one session: the board says 1, the day cost 6.
+   *
+   * Harmless for the leaderboard, which reads the server's row - and wrong in
+   * the local copy for no reason.
+   */
+  const store = readCode(new URL('../src/store/useGameStore.ts', import.meta.url));
+  const at = store.indexOf('next = d.progress');
+  assert.notEqual(at, -1, 'the adopt-the-banked-record path must still exist');
+  const block = store.slice(at, at + 700);
+  assert.match(block, /d\.progress\?\.day\?\.spent/, 'the banked spent has to be read');
+  assert.ok(
+    !/next\.day = day;/.test(block),
+    'assigning the local day wholesale is what dropped it',
   );
 });

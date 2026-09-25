@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { answerFor, dailySeed, playGuesses, validateGuess } from '@/server/game';
+import { answerFor, dailySeed, guessesSpent, playGuesses, validateGuess } from '@/server/game';
 import { openSession, sealSession } from '@/server/session';
 import { clientKey, rateLimit } from '@/server/rateLimit';
 import { bankResult } from '@/server/progress';
@@ -61,8 +61,16 @@ export async function POST(request: Request) {
   const user = await verifiedUser(request);
   const existing = session?.guesses ?? [];
 
+  /*
+   * What the day has already cost, which is not always what this token admits.
+   * Read BEFORE the guess is counted, so it is the state the guess arrives
+   * into - and so a sixth guess spread across two sessions is refused the same
+   * way a sixth guess in one session is.
+   */
+  const spentBefore = await guessesSpent(user?.id ?? null, seed);
+
   // Status of the game BEFORE this guess, so a finished board cannot be extended.
-  const before = playGuesses(seed, existing, answer, session?.call);
+  const before = playGuesses(seed, existing, answer, session?.call, spentBefore);
 
   const rejection = validateGuess(guess, existing, answer.name.length, before.status);
   if (rejection) {
@@ -73,7 +81,7 @@ export async function POST(request: Request) {
   }
 
   const guesses = [...existing, guess];
-  const outcome = playGuesses(seed, guesses, answer, session?.call);
+  const outcome = playGuesses(seed, guesses, answer, session?.call, spentBefore + 1);
 
   /*
    * How many guesses this puzzle has really cost them.
@@ -103,6 +111,8 @@ export async function POST(request: Request) {
     spent = Math.max(guesses.length, Math.min(seen.count, MAX_GUESSES));
   }
 
+  const settled = user ? playGuesses(seed, guesses, answer, session?.call, spent) : outcome;
+
   /*
    * Bank the streak here, on the server, at the moment the round ends.
    *
@@ -116,12 +126,12 @@ export async function POST(request: Request) {
    * A cloud problem must not cost someone the result they just earned.
    */
   let progress: Awaited<ReturnType<typeof bankResult>> = null;
-  if (outcome.status !== 'playing' && user) {
+  if (settled.status !== 'playing' && user) {
     try {
       progress = await bankResult(
         user.id,
         seed,
-        outcome.status === 'won',
+        settled.status === 'won',
         guesses,
         spent,
         user.username,
@@ -148,7 +158,7 @@ export async function POST(request: Request) {
     {
       seed,
       serverTime: new Date().toISOString(),
-      ...outcome,
+      ...settled,
       progress: progress?.save ?? null,
       state: sealSession({ seed, guesses, call: session?.call }),
     },

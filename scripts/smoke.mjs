@@ -22,6 +22,8 @@
  */
 
 import { spawn, execSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import net from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import path from 'node:path';
@@ -656,7 +658,154 @@ async function check(mode) {
   }
 }
 
+/**
+ * The extension popup, loaded into a real Chromium.
+ *
+ * `build:extension` succeeding proves the files were written. It does not prove
+ * the popup runs, and for a long time it did not: the build renamed `_next` to
+ * `next-assets` and rewrote the HTML to match, but the chunk paths baked into
+ * the runtime still said `/_next/...`, so React waited forever for a chunk it
+ * already had. No error, no failed request, no console output - a popup stuck
+ * at `opacity: 0`. Every check in this repo passed throughout, because the only
+ * thing anyone verified was that the output contained no inline scripts.
+ *
+ * So this loads the built extension and drives the popup. It is the same
+ * assertion the dev/prod modes make - "React actually hydrated" - against the
+ * one artefact that has no server to serve it.
+ */
+async function checkExtension() {
+  console.log(c.head(`\n── extension ────────────────────────────────────`));
+
+  if (!existsSync(path.join(root, 'extension-dist', 'manifest.json'))) {
+    console.log(c.bad('✗ no extension-dist/ - run `npm run build:extension` first'));
+    failures++;
+    return;
+  }
+
+  const { chromium } = await import('playwright');
+  const profile = mkdtempSync(path.join(tmpdir(), 'fitdle-ext-'));
+  const dist = path.join(root, 'extension-dist');
+  const manifestOf = (dir) => JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+
+  let ctx;
+  try {
+    ctx = await chromium.launchPersistentContext(profile, {
+      channel: 'chromium',
+      args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`],
+      viewport: { width: 420, height: 640 },
+    });
+  } catch (err) {
+    console.log(c.bad('✗ could not launch a browser with the extension loaded'));
+    console.log(c.dim(`  ${String(err).split('\n')[0]}`));
+    failures++;
+    return;
+  }
+
+  try {
+    await sleep(2500);
+    const manager = await ctx.newPage();
+    await manager.goto('chrome://extensions/');
+    await sleep(900);
+    const id = await manager
+      .evaluate(() => {
+        const mgr = document.querySelector('extensions-manager');
+        const items = mgr?.shadowRoot
+          ?.querySelector('extensions-item-list')
+          ?.shadowRoot?.querySelectorAll('extensions-item');
+        return items && items.length ? items[0].getAttribute('id') : null;
+      })
+      .catch(() => null);
+    await manager.close();
+
+    const results = [['Chromium accepts the unpacked extension', Boolean(id), id ?? 'not loaded']];
+
+    if (id) {
+      const popup = await ctx.newPage();
+      const violations = [];
+      const errors = [];
+      popup.on('console', (m) => {
+        const t = m.text();
+        if (/Content Security Policy|Refused to/i.test(t)) violations.push(t.slice(0, 120));
+        else if (m.type() === 'error' && !IGNORED_ERROR.test(t)) errors.push(t.slice(0, 120));
+      });
+      popup.on('pageerror', (e) => errors.push(e.message.slice(0, 120)));
+
+      await popup.goto(`chrome-extension://${id}/play.html`, { waitUntil: 'networkidle' });
+      await sleep(3500);
+
+      const dom = await popup.evaluate(() => ({
+        opacity: getComputedStyle(document.querySelector('main')).opacity,
+        cols:
+          document.querySelectorAll('[role="row"]')[0]?.querySelectorAll('.tile-perspective')
+            .length ?? 0,
+        keyboard: document.querySelectorAll('[aria-label="Keyboard"]').length,
+        inline: [...document.querySelectorAll('script')].filter((sc) => !sc.src).length,
+        body: document.body.innerText ?? '',
+        puzzle: /Puzzle #-\d+/.test(document.body.innerText ?? ''),
+      }));
+
+      await popup.keyboard.press('P');
+      await sleep(400);
+      const typed = await popup.evaluate(
+        () => document.querySelector('.tile-face:not(.tile-face-back)')?.textContent,
+      );
+
+      results.push(
+        ['the popup hydrates (main is visible)', dom.opacity === '1', `opacity ${dom.opacity}`],
+        ['the board renders at popup width', dom.cols >= 5 && dom.cols <= 9, `${dom.cols} columns`],
+        ['the keyboard is present', dom.keyboard === 1],
+        ["MV3 forbids inline scripts, and there are none", dom.inline === 0, `${dom.inline} inline`],
+        ['no CSP violations in the popup', violations.length === 0, violations[0] ?? ''],
+        [
+          'no nonsense puzzle number',
+          !dom.puzzle,
+          dom.puzzle ? 'rendered a negative puzzle number' : '',
+        ],
+      );
+
+      /*
+       * A static export has no server, so what the popup can do depends on
+       * whether the build was given one. Both configurations are real and both
+       * are asserted - the unconfigured one because that is what `verify`
+       * builds, and leaving it unchecked is how the popup was dead for months.
+       */
+      const configured = (manifestOf(dist).host_permissions ?? []).some((h) =>
+        /^https?:\/\/(?!.*supabase)/.test(h),
+      );
+
+      if (configured) {
+        results.push(
+          ['typing reaches the board', typed === 'P', `saw "${typed}"`],
+          ['no console errors in the popup', errors.length === 0, errors[0] ?? ''],
+        );
+      } else {
+        results.push(
+          [
+            'an unconfigured build says so instead of looking broken',
+            /Cannot reach the server/i.test(dom.body),
+            'NEXT_PUBLIC_API_URL was not set at build time',
+          ],
+          [
+            'and offers a retry rather than a dead board',
+            /Try again/i.test(dom.body),
+            '',
+          ],
+        );
+      }
+    }
+
+    for (const [name, ok, detail] of results) {
+      if (!ok) failures++;
+      console.log(`  ${ok ? c.ok('✓') : c.bad('✗')} ${name}${detail ? c.dim(`  ${detail}`) : ''}`);
+    }
+  } finally {
+    await ctx.close().catch(() => {});
+    rmSync(profile, { recursive: true, force: true });
+  }
+}
+
 for (const mode of MODES) await check(mode);
+if (wanted.length === 0 || wanted.includes('extension')) await checkExtension();
 
 console.log();
 if (failures > 0) {

@@ -1870,3 +1870,170 @@ answer name absent.
   — opened and rendered, contents not asserted.
 - **Reduced motion** — the attribute is stamped by the same code path as
   colourblind, which I did toggle, but I did not assert that animations shorten.
+
+---
+
+## Iteration 16 — fix everything outstanding
+
+**What I audited.** Every item still open: the two Supabase migrations, the
+never-breaking streak, the three small things I had read and left, and the
+extension popup I had never loaded.
+
+**The one thing I could not fix, and why.** The two migrations need DDL against
+your database and there is no path to it from here:
+
+```
+rpc exec_sql / execute_sql / sql / query / exec  ->  PGRST202, none exist
+.env.local / .env.example                        ->  no connection string, no DB password
+psql, supabase CLI                               ->  not installed
+```
+
+PostgREST exposes no SQL execution, and the service-role key is not a Postgres
+password. They have to be run from the Supabase dashboard's SQL Editor. Both are
+reported by `npm run cloud:check`.
+
+---
+
+### 1. A streak could never break — closed
+
+The hole: the session is the server's only memory of a round and the client
+decides whether to send it, so a player five guesses deep and wrong simply
+never submitted the sixth, discarded, and played the day again.
+
+You chose the guess floor over the stricter "closed day" in iteration 3, on the
+grounds that a closed day could strand someone who cleared their browser
+mid-round. That objection is answerable: the floor already counts, so the day
+can end at six **and** still hand over the reveal, which is exactly what the
+player would have got had they not cleared anything. And it is per verified
+account, so nobody behind a shared address is affected at all.
+
+`playGuesses` takes an optional `spent`, defaulting to `guesses.length` - the
+old behaviour for every caller that does not know better, anonymous play
+included. Both board-building routes pass it.
+
+Measured live, signed in:
+
+```
+three guesses, one session : status=playing board=3
+discard the token          : status=playing board=0
+three more on the new board: status=lost    board=3  reveal=CRUNCH
+discard again and reopen   : status=lost    board=0  reveal=CRUNCH
+a seventh guess (the answer) -> REFUSED: finished
+banked: streak=0 lastResult=lost spent=6
+
+an honest round is untouched: 3 guesses, resume with the token, win in 4
+anonymous: five guesses then reopen -> playing, board 0   (unchanged, by design)
+```
+
+| Leg removed | Test that failed |
+|---|---|
+| `playGuesses` ignores the floor | `a day ends at six guesses even when the board shows fewer` |
+| The floor counts anonymous callers too | `the floor is per account, and anonymous callers have none` |
+| `guessesSpent` claims instead of peeking | same |
+| `/api/today` stops consulting the floor | `both board-building routes consult the floor` |
+
+---
+
+### 2. The extension popup was a dead page, and always had been
+
+I had never loaded it. Loaded into a real Chromium with `--load-extension`, it
+came up at `opacity: 0` - React never hydrated. No console output, no failed
+requests, no CSP violations.
+
+Bisected against the raw export, served over plain HTTP:
+
+```
+out/ untouched                     hydrates   (opacity 1)
+rename + rewrite, inline kept      DEAD       (opacity 0)
+inline hoisted, paths untouched    hydrates   (opacity 1)
+```
+
+So the inline hoisting - the part MV3 genuinely requires - was fine, and the
+`_next` → `next-assets` rename was the cause. The rewrite only touched the
+HTML, so the chunk paths inside the RSC payload became `next-assets/...` while
+the runtime's own manifest, baked into the JavaScript, still said `/_next/...`.
+React waited for a chunk it already had under another name. Silently, forever.
+
+**The premise was false.** The rename existed because "Chrome refuses to load
+resources from directories whose name starts with an underscore". An extension
+built with `_next` intact loads and serves every resource under it - verified by
+loading one. So the fix is to delete the rename and the rewrite entirely;
+`/_next/...` is absolute and resolves to `chrome-extension://<id>/_next/...`,
+which is correct.
+
+The old verification was *"0 inline scripts, 0 `_next` references"* - a property
+of the files, not of the popup.
+
+`npm run smoke` now loads the built extension into Chromium and drives the
+popup. It is configuration-aware, because a static export can only play if the
+build was given a server:
+
+```
+configured (NEXT_PUBLIC_API_URL set)   7 columns, typing works, no errors
+unconfigured (what verify builds)      says "Cannot reach the server", offers retry
+```
+
+Both branches were exercised; the configured one needed the web build and the
+server started *before* `build:extension`, because that command overwrites
+`.next`.
+
+| Leg | Check that failed |
+|---|---|
+| The `_next` rename and rewrite come back | `the popup hydrates (main is visible)` — opacity 0 |
+
+---
+
+### 3. Two defects the extension work uncovered
+
+Running the unconfigured popup showed a normal-looking board that would not
+accept a letter, and **"Puzzle #-46052"**.
+
+- **The only sign of an unreachable server was a toast that clears itself after
+  2.2 seconds.** After that the player is looking at an ordinary game with a
+  dead keyboard. There is now a persistent banner with a retry, in the same
+  shape as the existing clock-rollback bar.
+- **`getPuzzleNumber(0)` rendered a negative puzzle number.** The sidebar gated
+  on `hydrated`, and the offline path sets `hydrated: true` while the seed is
+  still 0. It gates on a real seed now.
+
+Both are asserted by the unconfigured branch of the extension check.
+
+---
+
+### 4. The three small things carried from earlier iterations
+
+- **The client dropped the server's `day.spent`** when adopting the banked
+  record. Fixed; pinned by `the client keeps the server’s spent when it adopts
+  the banked record`, which survived its first mutation pass and now has a test.
+- **A migrated legacy streak could never break.** The migration left `lastSeed`
+  null, so `reconcile`'s gap check never ran. Anchored to **yesterday** - not
+  today, because `commitResult` refuses to pay out twice for one seed and
+  anchoring to today would have swallowed today's win. Driven through `loadSave`
+  with the real legacy key, because `migrateLegacy` is not exported and a test
+  that imports a name which does not exist passes for the wrong reason - my
+  first attempt did exactly that and I threw it away.
+- **A failed model call still consumes the player's quota.** Left, deliberately:
+  refunding needs `fitdle_claim_ai` to decrement, which is another migration,
+  and an exception after the request was sent may already have been billed. The
+  unambiguous case - no key configured - was fixed in iteration 11.
+
+---
+
+**Measurements.** `npm run verify`, undecorated: **exit 0** — typecheck, lint,
+`check:audit` 0 vulnerabilities, **268 tests**, extension build, web build,
+`check:bundle` clean over 37 files, `check:size` 165.4 kB at 97% of the 170 kB
+budget, `check:contrast` clean, and smoke **23 checks in dev, 23 in prod, 9 in
+the extension**.
+
+**What I did NOT verify.**
+
+- **The two migrations.** Unreachable from here, as shown above.
+- **`npm run coach:probe`** — still no `ANTHROPIC_API_KEY`. Unchanged all
+  session; the model's behaviour remains the one thing never exercised.
+- **The extension check needs `channel: 'chromium'` and a persistent profile.**
+  It works here and CI installs that channel, but I have not seen it run in CI.
+- **Whether the guess cap behaves across a UTC midnight**, when the seed changes
+  and the counter key changes with it. The key includes the seed, so it should
+  reset cleanly; I did not wait out a rollover to watch it.
+- **The offline banner in the web app** — asserted in the extension popup, which
+  is the same component, but not driven in dev or prod where the server is up.

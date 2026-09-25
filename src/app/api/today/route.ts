@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { answerFor, dailySeed, playGuesses } from '@/server/game';
+import { answerFor, dailySeed, guessesSpent, playGuesses } from '@/server/game';
 import { openSession, sealSession } from '@/server/session';
 import { clientKey, rateLimit } from '@/server/rateLimit';
+import { verifiedUser } from '@/server/supabase';
 
 /**
  * Opens (or resumes) today's puzzle.
@@ -39,7 +40,18 @@ export async function POST(request: Request) {
   const session = openSession(token, seed);
   const guesses = session?.guesses ?? [];
 
-  const outcome = playGuesses(seed, guesses, answer, session?.call);
+  /*
+   * A fresh board is not the same as an unspent day.
+   *
+   * Discarding the token used to hand back a clean six guesses for a puzzle
+   * already half played, so a player about to lose could simply never submit
+   * the sixth and their streak could never break. The server counts per
+   * account, so the day ends when six have been spent however they were spread.
+   */
+  const user = await verifiedUser(request);
+  const spent = await guessesSpent(user?.id ?? null, seed);
+
+  const outcome = playGuesses(seed, guesses, answer, session?.call, spent);
 
   return NextResponse.json(
     {

@@ -23,12 +23,12 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → dependency audit → 260 unit tests →
+`verify` runs typecheck → lint → dependency audit → 268 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
 23 browser checks in **both dev and production**. Individually:
 
 ```bash
-npm test                 # 260 unit tests
+npm test                 # 268 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -357,11 +357,31 @@ extension pages and forbids `'unsafe-inline'`, but Next's exported HTML carries
 inline bootstrap scripts (`self.__next_f.push(...)`). Chrome blocks them
 silently and the popup renders an empty shell.
 
-[build-extension.mjs](scripts/build-extension.mjs) post-processes the export:
-hoists every inline script into an external file, rewrites `/_next/` to relative
-paths, and renames `_next` → `next-assets` (Chrome refuses to serve resources
-from underscore-prefixed directories). Verified output: 0 inline scripts, 0
-`_next` references.
+[build-extension.mjs](scripts/build-extension.mjs) post-processes the export by
+hoisting every inline script into an external file. That is all it needs to do.
+
+**It used to do more, and that is what made the popup a dead page.** It also
+renamed `_next` → `next-assets` and rewrote the HTML to match, on the belief
+that Chrome refuses to serve resources from underscore-prefixed directories.
+Measured: it does not. An extension built with `_next` intact loads and serves
+every resource under it.
+
+The rewrite only touched the HTML, so the chunk paths inside the RSC payload
+became `next-assets/...` while the runtime's own manifest, baked into the
+JavaScript, still said `/_next/...`. React waited for a chunk it already had
+under another name — no error, no failed request, no console output, just a
+popup stuck at `opacity: 0`. Bisected against the raw export:
+
+```
+out/ untouched                     hydrates   (opacity 1)
+rename + rewrite, inline kept      DEAD       (opacity 0)
+inline hoisted, paths untouched    hydrates   (opacity 1)
+```
+
+The old verification was "0 inline scripts, 0 `_next` references" — a property
+of the files, not of the popup. `npm run smoke` now loads the built extension
+into a real Chromium and asserts the popup hydrates, renders a board, accepts
+typing, ships no inline scripts and logs no CSP violations.
 
 ---
 
@@ -410,6 +430,7 @@ board's centre exactly the viewport's centre at every width; a test asserts
 | Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 36 client chunks to prove it - 16 from the web build and 20 from a freshly built extension |
 | Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
 | Sweeping the opening call to learn the group for free | **Blocked for one caller.** The first call of the day is recorded server-side; a second group is refused and carries no outcome. Address-keyed for anonymous players, so it is a speed bump there - see SECURITY.md |
+| Restarting the day to dodge a loss | **Blocked for signed-in players.** Six guesses a day however they are spread; a seventh is refused as `finished`. Anonymous play is uncounted by design |
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
 | Replaying an old session | **Blocked.** The seed is inside the signature |
 | Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP - a speed bump, not a distributed defence |
@@ -558,11 +579,30 @@ guesses per account per UTC day and banks the larger of that count and the
 board it was sent, so a restart can only ever raise your score. Anonymous
 players are not counted and are not on the leaderboard.
 
-What it still does **not** stop: a player five guesses deep and wrong can
-discard rather than submit the sixth, so they never record a loss and a streak
-need never break. Closing that means refusing to reopen a day whose record is
-spent, which changes what happens to somebody who clears their browser
-mid-round - a product call, not a policy tweak.
+**And a day now ends at six guesses however they are spread.** The same count
+decides whether the round is over, so discarding the token hands back the
+guesses you have left rather than a fresh six. This used to be the remaining
+hole: a player five deep and wrong simply never submitted the sixth, restarted,
+and could not lose.
+
+Measured - three guesses, discard the token, three more:
+
+```
+three guesses, one session : status=playing board=3
+discard the token          : status=playing board=0
+three more on the new board: status=lost    board=3  reveal=CRUNCH
+discard again and reopen   : status=lost    board=0  reveal=CRUNCH
+a seventh guess            : REFUSED, reason "finished"
+banked                     : streak=0 lastResult=lost spent=6
+```
+
+Nobody is stranded on a dead board: reopening a spent day shows the reveal,
+which is what would have happened had they never cleared anything.
+
+Anonymous players keep the old behaviour, deliberately. There is no identity to
+count them against, an address is shared by everyone behind one NAT, and
+charging a stranger's guesses to you would be worse than the hole it closes -
+their save is their own file and nothing else reads it.
 
 ### The streak is the server's, not the browser's
 
@@ -907,7 +947,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 260 tests over the things that must not silently break:
+`npm test` - 268 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

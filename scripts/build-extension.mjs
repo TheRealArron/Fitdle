@@ -11,11 +11,33 @@
  *
  * So after exporting we:
  *   1. Hoist every inline <script> into an external file and re-reference it.
- *   2. Rewrite absolute `/_next/...` URLs to relative, since a popup is loaded
- *      from chrome-extension://<id>/index.html and `/` is the extension root.
- *   3. Rename `_next` to `next-assets` - Chrome refuses to load resources from
- *      directories whose name starts with an underscore.
- *   4. Drop the manifest and generated icons in beside it.
+ *   2. Drop the manifest and generated icons in beside it.
+ *
+ * ── What this used to do, and why it made the popup a dead page ─────────────
+ * It also renamed `_next` to `next-assets` and rewrote every `/_next/...` URL
+ * to match, on the belief that "Chrome refuses to load resources from
+ * directories whose name starts with an underscore". Measured: it does not.
+ * An extension built with `_next` intact loads, and every resource under it is
+ * served - no failed requests, no CSP violations.
+ *
+ * The rewrite only ever touched the HTML, so the chunk paths embedded in the
+ * RSC payload became `next-assets/...` while the runtime's own manifest, baked
+ * into the JavaScript, still said `/_next/...`. React then waited for a chunk
+ * it already had under a different name. No error, no failed request, no
+ * console output - just a popup stuck at `opacity: 0` forever.
+ *
+ * Bisected against the raw export, served over plain HTTP:
+ *
+ *   out/ untouched                          -> hydrates (opacity 1)
+ *   rename + rewrite, inline kept           -> DEAD    (opacity 0)
+ *   inline hoisted, paths untouched         -> hydrates (opacity 1)
+ *
+ * and confirmed in a real Chromium with the extension loaded: `opacity: 1`,
+ * keyboard present, typing registers.
+ *
+ * `/_next/...` is absolute, and in a page at `chrome-extension://<id>/play.html`
+ * that resolves to `chrome-extension://<id>/_next/...`, which is exactly right.
+ * So there is nothing to rewrite.
  *
  * Output: extension-dist/ - load it unpacked via chrome://extensions.
  *
@@ -38,7 +60,6 @@ const outDir = path.join(root, 'out');
 const distDir = path.join(root, 'extension-dist');
 const extDir = path.join(root, 'extension');
 
-const ASSET_DIR = 'next-assets';
 const INLINE_DIR = 'inline';
 
 const API_DIR = path.join(root, 'src', 'app', 'api');
@@ -102,12 +123,6 @@ function run() {
   fs.rmSync(distDir, { recursive: true, force: true });
   fs.cpSync(outDir, distDir, { recursive: true });
 
-  // 3. Underscore-prefixed directories are unreachable in an extension.
-  const from = path.join(distDir, '_next');
-  if (fs.existsSync(from)) {
-    fs.renameSync(from, path.join(distDir, ASSET_DIR));
-  }
-
   fs.mkdirSync(path.join(distDir, INLINE_DIR), { recursive: true });
 
   const htmlFiles = walk(distDir).filter((f) => f.endsWith('.html'));
@@ -116,15 +131,7 @@ function run() {
   for (const file of htmlFiles) {
     let html = fs.readFileSync(file, 'utf8');
 
-    // 2. Absolute asset paths -> relative, and off the underscored directory.
-    html = html
-      .replaceAll('"/_next/', `"${ASSET_DIR}/`)
-      .replaceAll("'/_next/", `'${ASSET_DIR}/`)
-      .replaceAll('(/_next/', `(${ASSET_DIR}/`)
-      .replaceAll('\\"/_next/', `\\"${ASSET_DIR}/`)
-      .replaceAll('/_next/', `${ASSET_DIR}/`);
-
-    // 1. Hoist inline scripts. Skip anything with a src, and skip non-JS
+    // Hoist inline scripts. Skip anything with a src, and skip non-JS
     //    types such as application/json which CSP does not execute anyway.
     html = html.replace(
       /<script(?![^>]*\ssrc=)([^>]*)>([\s\S]*?)<\/script>/gi,

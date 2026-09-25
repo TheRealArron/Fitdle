@@ -403,6 +403,24 @@ function migrateLegacy(): SaveData | null {
     // Attribute migrated wins to the middle of the distribution; it is a guess,
     // but leaving it empty would fail the coherence check on the next load.
     save.distribution[2] = streak;
+
+    /*
+     * Anchor it to YESTERDAY, or the streak can never break.
+     *
+     * `reconcile` breaks a streak when the gap since `lastSeed` exceeds a day,
+     * and a migrated save left `lastSeed` null - so the gap check never ran and
+     * a streak carried over from the old format survived any number of missed
+     * days. Yesterday rather than today for two reasons: today is still
+     * unplayed, and `commitResult` refuses to pay out twice for one seed, so
+     * anchoring to today would silently swallow today's win.
+     */
+    const yesterday = new Date(Date.now() - 86_400_000);
+    save.lastSeed =
+      yesterday.getUTCFullYear() * 10000 +
+      (yesterday.getUTCMonth() + 1) * 100 +
+      yesterday.getUTCDate();
+    save.lastResult = 'won';
+    save.highSeed = save.lastSeed;
     return save;
   } catch {
     return null;
