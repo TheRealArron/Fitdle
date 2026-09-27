@@ -497,6 +497,58 @@ async function check(mode) {
       () => document.querySelectorAll('svg [role="button"]').length,
     );
 
+    /*
+     * ── Can the game be played without sight, or without a mouse? ───────────
+     *
+     * Neither was true, and neither is visible to any other check here.
+     *
+     * The board's scoring lives entirely in the tiles' background colours, and
+     * both faces of a tile render the same letter - so a scored row read out as
+     * "SS EE AA" with no indication of green, yellow or grey. The only live
+     * region in the app was the toast, which carries rejections and never
+     * results.
+     *
+     * And the dialogs: measured with "How to play" open, focus stayed on the
+     * trigger behind the overlay, one Tab walked out into a page hidden behind
+     * a backdrop blur, and Escape left focus wherever the tabbing had gone.
+     */
+    const spoken = await page.evaluate(() => {
+      const row = document.querySelectorAll('[role="row"]')[0];
+      const live = document.querySelector('[role="grid"] [role="status"]');
+      const box = live ? getComputedStyle(live) : null;
+      return {
+        cells: [...row.querySelectorAll('[role="gridcell"]')].map((c) =>
+          c.getAttribute('aria-label'),
+        ),
+        facesHidden: [...row.querySelectorAll('.tile-face')].every(
+          (f) => f.getAttribute('aria-hidden') !== null,
+        ),
+        rowLabel: row.getAttribute('aria-label'),
+        announced: live?.textContent?.trim() ?? '',
+        hidden: box ? box.position === 'absolute' && parseFloat(box.width) <= 1 : false,
+      };
+    });
+
+    results.push(
+      [
+        'a scored tile says its letter AND its state',
+        spoken.cells.length > 0 &&
+          spoken.cells.every((l) => /^[A-Z], (correct|in the word, wrong place|not in the word)$/.test(l ?? '')),
+        spoken.cells.slice(0, 2).join(' / '),
+      ],
+      [
+        'and says each letter once, not twice',
+        spoken.facesHidden,
+        spoken.facesHidden ? 'both faces hidden from the tree' : 'a tile face is still readable',
+      ],
+      [
+        'the row announces the whole result',
+        /^Guess \d+: [A-Z] /.test(spoken.announced) && spoken.hidden,
+        `${spoken.announced.slice(0, 44)}… (visually hidden: ${spoken.hidden})`,
+      ],
+      ['rows are numbered for a screen reader', /^Guess \d+ of \d+$/.test(spoken.rowLabel ?? ''), spoken.rowLabel ?? ''],
+    );
+
     // Read the result screen before anything closes it - practice comes next,
     // and it needs the modal out of the way.
     const modalText = await page.evaluate(
@@ -534,6 +586,49 @@ async function check(mode) {
     } catch {
       /* reported by the checks below */
     }
+
+    /*
+     * Dialog focus, run here because the result modal has to be out of the way
+     * first - it is a full-screen overlay and it intercepts every click.
+     */
+    const focusReport = await (async () => {
+      const at = () =>
+        page.evaluate(() => {
+          const a = document.activeElement;
+          return {
+            inDialog: Boolean(a?.closest('[role="dialog"]')),
+            name: a?.getAttribute('aria-label') ?? a?.textContent?.trim().slice(0, 24) ?? '',
+          };
+        });
+      await page.click('button:has-text("How to play")');
+      await page.waitForSelector('[role="dialog"]');
+      const opened = await at();
+      let escaped = false;
+      for (let i = 0; i < 12 && !escaped; i += 1) {
+        await page.keyboard.press('Tab');
+        escaped = !(await at()).inDialog;
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[role="dialog"]', { state: 'detached' }).catch(() => {});
+      await sleep(400);
+      const restored = await at();
+      return { opened, escaped, restored };
+    })();
+
+
+    results.push(
+      [
+        'opening a dialog moves focus into it',
+        focusReport.opened.inDialog,
+        `focus on "${focusReport.opened.name}"`,
+      ],
+      ['and Tab cannot leave it', !focusReport.escaped, focusReport.escaped ? 'focus escaped' : '12 tabs, still inside'],
+      [
+        'and closing gives focus back to the trigger',
+        /How to play/i.test(focusReport.restored.name),
+        `focus on "${focusReport.restored.name}"`,
+      ],
+    );
 
     const bodies = (await Promise.all(payloads)).filter(Boolean);
     const revealed = bodies.filter((b) => /"reveal":\{/.test(b.body));

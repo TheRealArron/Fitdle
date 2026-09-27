@@ -2037,3 +2037,126 @@ the extension**.
   reset cleanly; I did not wait out a rollover to watch it.
 - **The offline banner in the web app** — asserted in the extension popup, which
   is the same component, but not driven in dev or prod where the server is up.
+
+---
+
+## Iteration 17 — the board could not be played without sight, and dialogs could not be used without a mouse
+
+**What I audited.** Accessibility, which nothing in this repo had examined. The
+affordances that exist are real - 23 `aria-label`s, `role="grid"`/`"row"`,
+`role="img"` on the figure, a labelled option list for the drill, ten
+contrast-checked theme combinations - so the gaps are the interesting part.
+
+Two counts made me look closer: `Modal.tsx` contains no `focus()`, no
+`autoFocus`, no `tabIndex` and no refs; and `aria-live` appears exactly twice in
+the whole codebase, in the toast and the drill. Neither is the board.
+
+**Three failures, measured in a browser.** With "How to play" open:
+
+```
+focus after opening   button("How to play")   inDialog=false
+one Tab               button("Exercise list") inDialog=false
+after Escape          button("Exercise list") inDialog=false
+```
+
+Focus never entered the dialog, one Tab walked out into a page hidden behind a
+`backdrop-blur` overlay, and closing left focus wherever the tabbing had gone.
+`aria-modal="true"` tells a screen reader to constrain itself and does nothing
+for a sighted keyboard user.
+
+**And a fourth, worse one.** A scored row exposed:
+
+```
+cells: [{role: null, label: null, text: "SS"}, {..., text: "EE"}, ...]
+```
+
+No `gridcell`, no label, and every letter **twice** - both faces of a tile
+render the same letter, which is how the flip works. The scoring exists only as
+a background colour, so the second of the game's two feedback channels was
+entirely unavailable without sight. Nothing announced a result either; the only
+live region carries rejections like "Not an exercise in the list".
+
+**What I chose.** Both, as one item: they are the same question - can this be
+played without a mouse, and without sight. Separating them would have split one
+coherent change across two iterations for no benefit.
+
+**What I changed.**
+
+- `Tile.tsx` — the cell is a `gridcell` whose label is `"E, correct"` or
+  `"S, not in the word"`; both faces are `aria-hidden`, so each letter is read
+  once. `STATE_LABEL` sits beside `FACE_CLASS` deliberately: the colour and the
+  wording are the same information in two channels, and a state added to one
+  without the other is a state one kind of player cannot perceive.
+- `Grid.tsx` — rows labelled `"Guess 3 of 6"`, and a visually-hidden
+  `role="status"` region that announces the whole row. Announced when the row has
+  **settled**, not when the response arrives, so the reveal is not spoiled for
+  one kind of player and not the other.
+- `Modal.tsx` — focus moves to the first focusable element on open, Tab and
+  Shift-Tab wrap at the edges, and focus returns to the trigger on close.
+- Seven new browser checks; README updated.
+
+**Measured after:**
+
+```
+cells: ["S, not in the word", "E, correct", "A, correct", "T, not in the word"]
+facesHidden: true
+rowLabel: "Guess 1 of 6"
+announced: "Guess 1: S not in the word, E correct, A correct, …"
+announcer box: 1px x 1px position:absolute     (so it is not visible)
+
+focus after opening   button[Close]           inDialog=true
+12 tabs               still inside
+after Escape          button("How to play")   inDialog=false
+```
+
+**Mutation table.** Each leg applied, `npm run smoke -- prod` re-run, restored.
+
+| Leg | Check that failed |
+|---|---|
+| Tile faces readable again | `and says each letter once, not twice` — "a tile face is still readable" |
+| The tile stops saying its state | `a scored tile says its letter AND its state` — "S / E" |
+| The live region removed | `the row announces the whole result` |
+| The modal stops moving focus in | `opening a dialog moves focus into it` — focus on "How to play" |
+| The focus wrap removed | `and Tab cannot leave it` — "focus escaped" |
+| Focus not restored on close | `and closing gives focus back to the trigger` |
+
+All six caught. **Leg 5's first attempt did not compile** — replacing a guard
+with a bare `return;` made the rest unreachable, lint rejected it, and the run
+printed nothing at all. A mutation that fails to build is indistinguishable from
+a check that cannot fail unless you notice the build failed; redone with code
+that compiles, it failed the right check.
+
+**Two ordering problems I hit, both recorded in the script.** The focus probe
+clicks a menu button, and the result modal from the played round is a
+full-screen overlay that intercepts every click — so it runs after the round's
+modal is dismissed. And the modal text has to be read *before* that dismissal,
+which is why those two reads sit apart.
+
+**Measurements, with the command.** `npm run verify`, undecorated: **exit 0** —
+typecheck, lint, `check:audit` 0 vulnerabilities, 268 tests, extension build, web
+build, `check:bundle` clean over 37 files, `check:size` 165.4 kB at 97% of the
+170 kB budget, `check:contrast` clean, and smoke **30 checks in dev, 30 in prod,
+9 in the extension** (was 23/23/9).
+
+`check:size` unchanged: the change is attributes and one hidden div.
+
+**What I did NOT verify.**
+
+- **With an actual screen reader.** Everything here is the accessible *tree* and
+  live-region markup, read out of the DOM. NVDA or VoiceOver would be the real
+  test and I cannot run one; what a browser can confirm is that the names,
+  roles and announcements exist and are correct, which is what the checks do.
+- **The announcement's timing as experienced.** It fires when the row settles,
+  which I assert from the store's `revealingRow`; I did not measure the delay
+  against the flip in milliseconds.
+- **Focus visibility.** I checked where focus *is*, not whether a visible ring
+  follows it. No check covers focus styling.
+- **The other dialogs individually.** They all render through `Modal`, and the
+  probe drives "How to play"; the drill and result modals have their own wrappers
+  that I did not separately exercise.
+- **Reduced-motion behaviour** of the new announcement, and whether the
+  live region is too chatty on a nine-letter row.
+- `npm run coach:probe` — still no API key.
+
+**Found and not fixed.** Nothing new. The two Supabase migrations remain
+unreachable from here, and `coach:probe` remains unrun.

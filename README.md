@@ -25,7 +25,8 @@ and `verify` exits 1.
 
 `verify` runs typecheck → lint → dependency audit → 268 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
-23 browser checks in **both dev and production**. Individually:
+30 browser checks in **both dev and production**, plus 9 that load the
+extension into Chromium. Individually:
 
 ```bash
 npm test                 # 268 unit tests
@@ -116,6 +117,31 @@ duty as the empty-tile background *and* the figure's idle muscle fill, so a pure
 white value made the anatomy figure vanish; and `.label` hardcoded
 `color: #64748b`, which no theme could touch and which measured 4.4:1 on light.
 Every text sample now clears AA, checked in a browser rather than by eye.
+
+### The board without sight, and the dialogs without a mouse
+
+Both were broken, and neither was visible to any other check here.
+
+**A scored tile carried its result only as a background colour**, and both faces
+of a tile render the same letter - so a screen reader read a scored row as
+"SS EE AA", with nothing at all about green, yellow or grey. The only live region
+in the app was the toast, which carries rejections and never results. The game's
+entire second feedback channel was unavailable without sight.
+
+Each tile is now a `gridcell` that says `"E, correct"` or `"S, not in the word"`,
+both faces are hidden from the accessible tree so every letter is read once, rows
+are labelled `"Guess 3 of 6"`, and a visually-hidden live region announces the
+whole row once it has finished flipping - after, not during, so the reveal is not
+spoiled for one kind of player and not the other.
+
+**Dialogs had `aria-modal="true"` and no focus management at all.** Measured with
+"How to play" open: focus stayed on the trigger *behind* the overlay, one Tab
+walked out into a page hidden behind a backdrop blur, and Escape left focus
+wherever the tabbing had wandered. `aria-modal` constrains a screen reader; it
+does nothing for a sighted keyboard user. Focus now moves in, wraps at both
+edges, and returns to the trigger on close.
+
+Seven browser checks cover it, and each was confirmed to fail on the real defect.
 
 **Colourblind mode** swaps green/yellow for blue/orange across tiles, keyboard,
 figure, legend and the share grid. The game runs two colour channels

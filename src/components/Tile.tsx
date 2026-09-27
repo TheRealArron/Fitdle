@@ -38,6 +38,19 @@ const FACE_CLASS: Record<LetterState, string> = {
   absent: 'bg-state-absent border-state-absent text-white/85 tile-glow-absent',
 };
 
+/**
+ * The three scored states in words, for the accessible name.
+ *
+ * Mirrors FACE_CLASS deliberately: the colour and the wording are the same
+ * information in two channels, and a state added to one without the other is a
+ * state one kind of player cannot perceive.
+ */
+const STATE_LABEL: Record<LetterState, string> = {
+  correct: 'correct',
+  present: 'in the word, wrong place',
+  absent: 'not in the word',
+};
+
 function TileImpl({
   letter,
   state,
@@ -50,8 +63,28 @@ function TileImpl({
   const showBack = revealing || settled;
   const filled = letter !== '';
 
+  /*
+   * What a screen reader gets out of a tile.
+   *
+   * Both faces render the same letter - that is how the flip works - so the
+   * accessible tree read every letter TWICE: a scored row came out as "SS EE
+   * AA". And the scoring itself was invisible, because it lives entirely in the
+   * background colour. Measured: a scored cell exposed no role and no label, so
+   * the game's whole feedback channel was unavailable without sight.
+   *
+   * The fix is additive and changes nothing visual: the faces are hidden from
+   * the tree, and the cell that wraps them carries the letter and its state.
+   */
+  const spoken = letter
+    ? state
+      ? `${letter}, ${STATE_LABEL[state]}`
+      : letter
+    : 'blank';
+
   return (
     <motion.div
+      role="gridcell"
+      aria-label={spoken}
       className="tile-perspective relative aspect-square w-full select-none"
       // Letter-entry pop. Only fires while the tile is still blank-faced.
       animate={
@@ -103,8 +136,9 @@ function TileImpl({
           if (revealing) onFlipComplete?.();
         }}
       >
-        {/* Front - unrevealed face. */}
+        {/* Front - unrevealed face. Hidden from the tree; the cell speaks. */}
         <motion.div
+          aria-hidden
           className={[
             'tile-face absolute inset-0 flex items-center justify-center',
             // Font scales off the tile's own width (see .tile-perspective in
@@ -127,6 +161,7 @@ function TileImpl({
 
         {/* Back - scored face, pre-rotated so it reads upright at 180deg. */}
         <div
+          aria-hidden
           className={[
             'tile-face tile-face-back absolute inset-0 flex items-center justify-center',
             // Font scales off the tile's own width (see .tile-perspective in
