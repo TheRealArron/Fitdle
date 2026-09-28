@@ -899,8 +899,30 @@ async function checkExtension() {
   }
 }
 
-for (const mode of MODES) await check(mode);
-if (wanted.length === 0 || wanted.includes('extension')) await checkExtension();
+/**
+ * A crash in one mode is a failed check, not the end of the run.
+ *
+ * `check()` drives a browser through a dozen navigations, and any of them can
+ * throw for reasons that have nothing to do with the app - a loaded machine
+ * answering `net::ERR_INSUFFICIENT_RESOURCES` on the first `page.goto`, which
+ * is exactly what happened here. That escaped as an uncaught exception, so the
+ * run ended in a stack trace with no check results at all and no attempt at the
+ * other modes. The failure was real; the reporting was useless.
+ */
+async function guarded(name, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    console.log(c.bad(`✗ ${name} crashed before it could finish`));
+    console.log(c.dim(`  ${String(err).split('\n')[0]}`));
+    failures++;
+  }
+}
+
+for (const mode of MODES) await guarded(mode.name, () => check(mode));
+if (wanted.length === 0 || wanted.includes('extension')) {
+  await guarded('extension', checkExtension);
+}
 
 console.log();
 if (failures > 0) {

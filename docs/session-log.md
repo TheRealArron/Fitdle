@@ -2160,3 +2160,81 @@ build, `check:bundle` clean over 37 files, `check:size` 165.4 kB at 97% of the
 
 **Found and not fixed.** Nothing new. The two Supabase migrations remain
 unreachable from here, and `coach:probe` remains unrun.
+
+---
+
+## Iteration 18 — every command run, every failure chased down
+
+**What I did.** Ran all sixteen npm scripts and recorded pass/fail, rather than
+assuming the last green `verify` still held.
+
+```
+typecheck PASS   lint PASS      check:audit PASS   test PASS
+check:bundle PASS check:size PASS check:contrast PASS logo PASS
+cloud:check FAIL  coach:probe FAIL
+```
+
+`npm run logo` regenerates six assets and left the working tree clean, so it is
+reproducible.
+
+**The two failures are both blocked on you, and neither is a code defect.**
+
+- `coach:probe` — `ANTHROPIC_API_KEY is not set`.
+- `cloud:check` — `the function fitdle_reset_progress is missing`. I re-confirmed
+  there is no route to DDL from here: `exec_sql`, `execute_sql`, `sql`, `query`
+  and `exec` all return PGRST202; `.env.local` holds no connection string or DB
+  password; neither `psql` nor the Supabase CLI is installed. The service-role
+  key is a PostgREST key, not a Postgres password.
+
+**A third failure, which was real and mine to fix.** `npm run verify` failed
+twice during this iteration, and neither time was the repo:
+
+1. `page.goto: net::ERR_INSUFFICIENT_RESOURCES` on the first navigation.
+2. A truncated log ending mid-`next build` — the build was killed.
+
+The machine has 15.6 GB and ~11 GB was held by a Brave with three days of uptime
+and VSCodium's language servers. I checked for leaks of my own first:
+`ms-playwright` and `chrome-headless-shell` processes: **none**; probe servers
+still listening on 4310/4311/4399/4401/4402/445x: **none**. The nine
+chrome-family processes were the user's own browser, which I did not touch.
+Re-run with ~4.2 GB available: **exit 0**.
+
+So the repo is fine on a machine with headroom, and I did not tune the build's
+worker count to paper over one machine's load — that would slow every build
+everywhere to fix nothing.
+
+**What the first failure did expose.** A `page.goto` throwing took the whole run
+down with a stack trace and no check results, and no attempt at the other modes.
+The failure was real; the reporting was useless. Each mode now runs inside a
+guard that turns a crash into a reported failed check.
+
+| Leg | What happened |
+|---|---|
+| `page.goto` pointed at an unreachable port | `✗ prod crashed before it could finish — Error: page.goto: net::ERR_UNSAFE_PORT`, then `1 smoke check(s) failed` — instead of an uncaught exception |
+
+**Also:** `cloud:check` collected its fixes but only printed them inline, so by
+the time a run had a dozen lines the two or three that needed doing were
+scattered through it. It now ends with a numbered **What to do**, and says
+explicitly that `supabase/schema.sql` is safe to re-run in full — which is the
+thing that stops people doing it. I verified that claim by inspecting every
+statement: all are `if not exists`, `drop … if exists` before `create`,
+`create or replace`, or `grant`/`revoke`. The one `add column` without
+`if not exists` is preceded by its own `drop column if exists` and is generated,
+so Postgres recomputes it.
+
+**`docs/TODO.md`** is new: what is blocked on you, what is a decision rather than
+a defect, what is known-and-accepted, and the order I would work in next.
+
+**Measurements.** `npm run verify`, undecorated: **exit 0** — 268 tests, 0
+vulnerabilities, 37 chunks scanned, 165.4 kB at 97% of the 170 kB budget,
+contrast clean, and **30 dev / 30 prod / 9 extension** browser checks.
+
+**What I did NOT verify.**
+
+- Both blocked commands, for the reasons above. `coach:probe` remains the only
+  thing in this repo that has never run.
+- **Why the build was killed.** I inferred OOM from the truncation point and the
+  memory figures; the kernel log is not readable here, so there is no
+  `oom-kill` line to point at.
+- Whether `verify` is reliably green under memory pressure. It passed with
+  ~4.2 GB available and was killed with ~1.2 GB. I did not find the boundary.

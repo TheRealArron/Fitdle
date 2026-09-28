@@ -27,11 +27,24 @@ const c = {
 };
 
 let failed = false;
+
+/*
+ * Fixes are collected as well as printed inline.
+ *
+ * The inline arrow is right next to the thing it explains, which is where you
+ * want it while reading - but by the time a run has a dozen lines of output the
+ * two or three that need doing are scattered through it. They are repeated as a
+ * numbered list at the end, so "what do I actually do now" is answerable from
+ * the last five lines.
+ */
+const todo = [];
+
 const pass = (m, d = '') => console.log(`${c.ok('✓')} ${m}${d ? c.dim(`  ${d}`) : ''}`);
 const fail = (m, fix) => {
   failed = true;
   console.log(`${c.bad('✗')} ${m}`);
   if (fix) console.log(`  ${c.warn('→')} ${fix}`);
+  if (fix) todo.push(fix);
 };
 
 /* ── 1. keys ──────────────────────────────────────────────────────────────── */
@@ -620,7 +633,29 @@ if (!redisUrl && !redisToken) {
 
 console.log();
 if (failed) {
-  console.log(c.bad('Cloud sync is not ready.'), 'Fix the items above and run again.');
+  console.log(c.bad('Cloud sync is not ready.'));
+
+  if (todo.length) {
+    console.log(`\n\x1b[1mWhat to do\x1b[0m`);
+    todo.forEach((fix, i) => console.log(`  ${i + 1}. ${fix}`));
+  }
+
+  /*
+   * Said explicitly because it is the thing that stops people doing it. Every
+   * statement in schema.sql is `if not exists`, `drop ... if exists` before
+   * `create`, `create or replace`, or a `grant`/`revoke` - so the file is
+   * designed to be re-run and re-running it costs nothing. The one statement
+   * without `if not exists` (`add column day_guesses`) is preceded by its own
+   * `drop column if exists`, and it is a generated column, so Postgres
+   * recomputes it from the same blob.
+   */
+  if (todo.some((t) => /schema\.sql/.test(t))) {
+    console.log(
+      `\n  ${c.dim('supabase/schema.sql is safe to re-run in full: Supabase → SQL Editor →')}` +
+        `\n  ${c.dim('New query → paste the whole file → Run. Every statement is idempotent.')}`,
+    );
+  }
+
   process.exit(1);
 }
 console.log(c.ok('Cloud sync is ready.'), 'Sign up in the app and your streak will follow you.');
