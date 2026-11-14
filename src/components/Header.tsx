@@ -37,7 +37,7 @@ export function Header({ onOpenMenu, onOpenStats }: HeaderProps) {
           Fitdle
         </h1>
         {mode === 'practice' && (
-          <span className="flex items-center gap-1 rounded-full bg-state-present/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yellow-300">
+          <span className="flex items-center gap-1 rounded-full bg-state-present/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-yellow-300">
             <Shuffle className="h-3 w-3" />
             Practice
           </span>

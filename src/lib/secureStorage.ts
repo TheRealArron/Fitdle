@@ -49,6 +49,22 @@ export interface DayRecord {
   guesses: string[];
   status: GameStatus;
   /**
+   * How many guesses this puzzle has actually cost the player, which is not
+   * always `guesses.length`.
+   *
+   * The signed session is the server's only memory of a round, and the client
+   * decides whether to send it - so discarding it hands you a fresh board for
+   * the same day. Measured: burn five guesses, discard the token, win in one,
+   * and the round banks as a one-guess win. `guesses` stays the board you are
+   * looking at; this is the number that is ranked.
+   *
+   * Written by the server when it banks a finished round. Absent on a save the
+   * server has not banked and on every save written before this existed, which
+   * is why it is optional and why anything reading it falls back to
+   * `guesses.length`.
+   */
+  spent?: number;
+  /**
    * The server's signed session for this day, stored so a reload resumes the
    * same game rather than starting a fresh one. Opaque and unforgeable - the
    * server re-verifies its HMAC on every request, so persisting it here grants
@@ -236,8 +252,18 @@ const GUESS_NAME = /^[A-Z]{4,10}$/;
  * Structural + semantic validation. A forged record that verifies must still be
  * internally coherent, which removes the easy wins (streak of 9e99, more wins
  * than games played, a distribution that does not sum to the win count).
+ *
+ * Exported because the server has to apply the SAME rule to a row it reads back
+ * out of Postgres, for the same reason it imports `reconcile` and
+ * `commitResult` rather than reimplementing them: a second opinion about what a
+ * valid save looks like is a second opinion that will eventually disagree.
+ *
+ * It caught a real one. `fitdle_claim_ai` seeds `save = '{}'` for a player who
+ * asks the AI a question before ever playing, and `normalise` only backfills
+ * the fields added after v1 - so `reconcile` was handed an object with no
+ * `distribution` and threw inside `/api/guess`. The player won and got a 500.
  */
-function isCoherent(d: unknown): d is SaveData {
+export function isCoherent(d: unknown): d is SaveData {
   if (!d || typeof d !== 'object') return false;
   const s = d as Record<string, unknown>;
 
@@ -283,6 +309,15 @@ function isCoherent(d: unknown): d is SaveData {
       if (!day.guesses.every((g) => (g as string).length === width)) return false;
     }
     if (day.status !== 'playing' && day.status !== 'won' && day.status !== 'lost') return false;
+    /*
+     * `spent` counts guesses across sessions, so it may exceed `guesses.length`
+     * - that is the whole point of it - but it can never be below, and it can
+     * never exceed the six a puzzle allows.
+     */
+    if (day.spent !== undefined) {
+      if (!isInt(day.spent)) return false;
+      if (day.spent < day.guesses.length || day.spent > MAX_GUESSES) return false;
+    }
     // Opaque to us; the server validates it. Only the shape is checked here.
     if (day.serverState !== undefined && typeof day.serverState !== 'string') return false;
   }
@@ -368,6 +403,24 @@ function migrateLegacy(): SaveData | null {
     // Attribute migrated wins to the middle of the distribution; it is a guess,
     // but leaving it empty would fail the coherence check on the next load.
     save.distribution[2] = streak;
+
+    /*
+     * Anchor it to YESTERDAY, or the streak can never break.
+     *
+     * `reconcile` breaks a streak when the gap since `lastSeed` exceeds a day,
+     * and a migrated save left `lastSeed` null - so the gap check never ran and
+     * a streak carried over from the old format survived any number of missed
+     * days. Yesterday rather than today for two reasons: today is still
+     * unplayed, and `commitResult` refuses to pay out twice for one seed, so
+     * anchoring to today would silently swallow today's win.
+     */
+    const yesterday = new Date(Date.now() - 86_400_000);
+    save.lastSeed =
+      yesterday.getUTCFullYear() * 10000 +
+      (yesterday.getUTCMonth() + 1) * 100 +
+      yesterday.getUTCDate();
+    save.lastResult = 'won';
+    save.highSeed = save.lastSeed;
     return save;
   } catch {
     return null;

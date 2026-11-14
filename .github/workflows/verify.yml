@@ -41,6 +41,11 @@ jobs:
 
       # Chromium only. smoke drives a real browser; the other engines are not
       # used and would triple the install.
-      - run: npx playwright install --with-deps chromium
+      #
+      # `chromium-headless-shell` is a SEPARATE download from `chromium`, and it
+      # is the one `chromium.launch()` reaches for by default. Installing only
+      # `chromium` leaves the launch failing with "Executable doesn't exist ...
+      # chrome-headless-shell" - measured locally with exactly this command.
+      - run: npx playwright install --with-deps chromium chromium-headless-shell
 
       - run: npm run verify

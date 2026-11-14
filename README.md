@@ -7,16 +7,29 @@ Next.js 16 (App Router) · TypeScript · Zustand 5 · Tailwind CSS 4 · Framer M
 
 ```bash
 npm install
+npx playwright install   # once - the browsers `smoke` drives are not in npm ci
 npm run dev              # http://localhost:3000
 
 npm run verify           # ← the one that matters. Everything, in order.
 ```
 
-`verify` runs typecheck → lint → 93 unit tests → build → bundle leak check →
-smoke test in **both dev and production**. Individually:
+That second line is not optional and it is easy to miss. Playwright is a
+devDependency; its *browsers* are a separate download, so on a clean checkout
+`smoke` cannot run - and it is the last step of `verify`, so the seven before it
+go green first. `smoke` now says so in one line instead of a stack trace, but
+the install still has to happen.
+
+`verify` also needs no `next dev` running for this project: Next allows one per
+directory, so a dev server in another terminal blocks the dev-mode smoke check
+and `verify` exits 1.
+
+`verify` runs typecheck → lint → dependency audit → 288 unit tests →
+extension build → web build → answer-leak scan → size ratchet → contrast pass →
+30 browser checks in **both dev and production**, plus 9 that load the
+extension into Chromium. Individually:
 
 ```bash
-npm test                 # 200 unit tests
+npm test                 # 288 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -80,13 +93,20 @@ you win buys nothing.
 
 **Today's shortlist** unlocks after guess 2 - a collapsible panel listing every
 answer of today's length. A second tab narrows it to only those matching every
-clue on your board. That one is a solver and says so: with 12 answers per length
+clue on your board. That one is a solver and says so: with 12-13 answers per length
 it will often leave a single word, which is why the plain list is the default
 and narrowing is a deliberate click.
 
-**Five themes**, including **Daylight**, a genuine light mode. The interesting
+**Five themes**, including **Daylight**, a genuine light mode - applied before
+the first paint, by a blocking `public/theme.js` in the root layout. The
+settings store applies it too, but from a `useEffect`, which is after
+hydration: measured on `/play` with Daylight saved, the body was
+`rgb(10, 14, 24)` at DOMContentLoaded and `rgb(245, 247, 250)` once hydrated, a
+full dark-to-light flash on every load. The landing page is a server component
+with no settings store at all, so it never got the theme and stayed dark
+whatever the player had chosen. Both now read `daylight` before React runs. The interesting
 part is how: the codebase writes text as `text-white` and `text-slate-300`
-throughout - 67 literal call sites. Tailwind 4 compiles those to
+throughout - 129 literal call sites. Tailwind 4 compiles those to
 `color: var(--color-slate-300)`, so remapping the variables under one selector
 re-points all of them at once. Remapping `--color-white` also flips every
 `bg-white/[0.06]` overlay into a subtle dark tint, which is exactly what a light
@@ -97,6 +117,31 @@ duty as the empty-tile background *and* the figure's idle muscle fill, so a pure
 white value made the anatomy figure vanish; and `.label` hardcoded
 `color: #64748b`, which no theme could touch and which measured 4.4:1 on light.
 Every text sample now clears AA, checked in a browser rather than by eye.
+
+### The board without sight, and the dialogs without a mouse
+
+Both were broken, and neither was visible to any other check here.
+
+**A scored tile carried its result only as a background colour**, and both faces
+of a tile render the same letter - so a screen reader read a scored row as
+"SS EE AA", with nothing at all about green, yellow or grey. The only live region
+in the app was the toast, which carries rejections and never results. The game's
+entire second feedback channel was unavailable without sight.
+
+Each tile is now a `gridcell` that says `"E, correct"` or `"S, not in the word"`,
+both faces are hidden from the accessible tree so every letter is read once, rows
+are labelled `"Guess 3 of 6"`, and a visually-hidden live region announces the
+whole row once it has finished flipping - after, not during, so the reveal is not
+spoiled for one kind of player and not the other.
+
+**Dialogs had `aria-modal="true"` and no focus management at all.** Measured with
+"How to play" open: focus stayed on the trigger *behind* the overlay, one Tab
+walked out into a page hidden behind a backdrop blur, and Escape left focus
+wherever the tabbing had wandered. `aria-modal` constrains a screen reader; it
+does nothing for a sighted keyboard user. Focus now moves in, wraps at both
+edges, and returns to the trigger on close.
+
+Seven browser checks cover it, and each was confirmed to fail on the real defect.
 
 **Colourblind mode** swaps green/yellow for blue/orange across tiles, keyboard,
 figure, legend and the share grid. The game runs two colour channels
@@ -110,19 +155,36 @@ conflating them would let one paper over the other. Marking it done is the
 honour system, deliberately: a browser cannot verify a set of squats, and
 pretending otherwise would be worse than trusting the player.
 
-**Tap any muscle** on the figure. During the round it names the muscle and stops;
-the exercise lists unlock when the round ends.
+**Tap any muscle** on the figure - *after* the round. While it is live the
+regions are not interactive at all: no click handler, no `role="button"`, no
+label. Measured in a browser, mid-round `svg [role="button"]` is **0**; once the
+round ends it is **34**, each labelled "<Muscle> - show what else trains it".
+
+This paragraph used to say tapping mid-round "names the muscle and stops". That
+was an older behaviour and the code is now stricter than it described - the
+gate is that there is nothing to tap, rather than something that answers
+narrowly. A smoke check asserts both halves, because the difference is invisible
+to everything else.
 
 That gate is not caution, it is arithmetic. The figure already tells you which
 muscles the answer shares and the board tells you its length, so a list of
 "exercises that train this" is the third side of an intersection you did not
-earn. Measured across the answer pool, tapping one lit muscle mid-round left an
-average of **3.6 candidates out of 19+** same-length words - and in the worst
-case exactly one:
+earn. Re-measured on 2026-09-21 over all 62 scheduled answers - for each one,
+averaged across the muscles it works - tapping a lit muscle leaves **7.1** of
+the same-length catalogue words, and in the worst case exactly one:
 
 ```
-DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
+SEATEDROW -> tap "lats" -> 1 candidate
 ```
+
+Same-length pools run 18 to 23, so even 7.1 is most of the space gone.
+
+An earlier edition of this paragraph said 3.6 out of "19+" and used
+DEADLIFT → hamstrings as the worst case. Both were wrong. Eight-letter words
+working the hamstrings number **six** - CRABWALK, DEADLIFT, HIPRAISE, INCHWORM,
+LEGPRESS, TOETOUCH - and the method behind 3.6 was never written down, so it
+could not be checked against anything. The sentence above says how it was
+measured, which is the part that was missing.
 
 A narrower solver than the shortlist panel already deleted for the same reason.
 
@@ -170,8 +232,11 @@ copies of the same caveat. They are one primitive now
 ever needs to be authoritative rather than a speed bump.
 
 Continuous integration runs `npm run verify` on every push - typecheck, lint,
-200 tests, build, the answer-leak scan, the size ratchet, and a smoke test in
-both dev and production. Those guards only guard if they run.
+the dependency audit, the unit tests, the extension build, the web build, the
+answer-leak scan, the size ratchet, the contrast pass, and a smoke test that
+plays a whole round in both dev and production. Those guards only guard if they
+run - and `build:extension` was outside the chain long enough to break and stay
+broken, so it is inside it now.
 
 ## Where this deviates from `claude.md`, and why
 
@@ -188,8 +253,8 @@ that is not a word - and no amount of curating the list fixes it while the grid
 is five wide.
 
 Answers now run **5–9 letters at their natural spelling**, and the grid width
-changes daily, which is itself a strong clue. The pool is 60 answers (12 per
-length) inside a 99-exercise catalogue.
+changes daily, which is itself a strong clue. The pool is 62 answers inside a
+99-exercise catalogue - 13 each at 5 and 6 letters, 12 each at 7, 8 and 9.
 
 The daily index is `seed % SCHEDULE_SIZE`, and **`SCHEDULE_SIZE` is a frozen
 constant, not `ANSWER_ORDER.length`.** That distinction is load-bearing.
@@ -318,11 +383,31 @@ extension pages and forbids `'unsafe-inline'`, but Next's exported HTML carries
 inline bootstrap scripts (`self.__next_f.push(...)`). Chrome blocks them
 silently and the popup renders an empty shell.
 
-[build-extension.mjs](scripts/build-extension.mjs) post-processes the export:
-hoists every inline script into an external file, rewrites `/_next/` to relative
-paths, and renames `_next` → `next-assets` (Chrome refuses to serve resources
-from underscore-prefixed directories). Verified output: 0 inline scripts, 0
-`_next` references.
+[build-extension.mjs](scripts/build-extension.mjs) post-processes the export by
+hoisting every inline script into an external file. That is all it needs to do.
+
+**It used to do more, and that is what made the popup a dead page.** It also
+renamed `_next` → `next-assets` and rewrote the HTML to match, on the belief
+that Chrome refuses to serve resources from underscore-prefixed directories.
+Measured: it does not. An extension built with `_next` intact loads and serves
+every resource under it.
+
+The rewrite only touched the HTML, so the chunk paths inside the RSC payload
+became `next-assets/...` while the runtime's own manifest, baked into the
+JavaScript, still said `/_next/...`. React waited for a chunk it already had
+under another name — no error, no failed request, no console output, just a
+popup stuck at `opacity: 0`. Bisected against the raw export:
+
+```
+out/ untouched                     hydrates   (opacity 1)
+rename + rewrite, inline kept      DEAD       (opacity 0)
+inline hoisted, paths untouched    hydrates   (opacity 1)
+```
+
+The old verification was "0 inline scripts, 0 `_next` references" — a property
+of the files, not of the popup. `npm run smoke` now loads the built extension
+into a real Chromium and asserts the popup hydrates, renders a board, accepts
+typing, ships no inline scripts and logs no CSP violations.
 
 ---
 
@@ -363,13 +448,15 @@ board's centre exactly the viewport's centre at every width; a test asserts
 |---|---|
 | Row-level security | Enabled, four owner-only policies, **verified live** by `cloud:check` returning `42501` on an anonymous write |
 | Clock rewind (replay old puzzles) | Blocked by the monotonic `highSeed` high-water mark |
-| Clock *forward* skip (play tomorrow early) | Blocked once `fitdle_server_time()` exists - the daily seed comes from the server, not the browser |
+| Clock *forward* skip (play tomorrow early) | **Blocked.** `/api/today` computes the seed from the server's clock, so which puzzle you get is not the browser's decision at all |
 | Token exfiltration after an XSS | Blocked by `connect-src` pinned to self + your one Supabase project |
 | Clickjacking an authenticated session | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY` |
 | Plugin / base-tag escalation | Blocked by `object-src 'none'`, `base-uri 'self'` |
 | Inline script injection | **Not** blocked - see the CSP note in [next.config.ts](next.config.ts) |
-| Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 43 client chunks to prove it |
+| Future answers readable in devtools | **Blocked.** The date→answer ordering is server-only; `check:bundle` greps 36 client chunks to prove it - 16 from the web build and 20 from a freshly built extension |
 | Fabricating a win from the console | **Blocked.** `status` is derived server-side from guesses in a token the server signed |
+| Sweeping the opening call to learn the group for free | **Blocked for one caller.** The first call of the day is recorded server-side; a second group is refused and carries no outcome. Address-keyed for anonymous players, so it is a speed bump there - see SECURITY.md |
+| Restarting the day to dodge a loss | **Blocked for signed-in players.** Six guesses a day however they are spread; a seventh is refused as `finished`. Anonymous play is uncounted by design |
 | Forging progress to unlock hints early | **Blocked.** Game state is HMAC-signed; a tampered token is discarded, not trusted |
 | Replaying an old session | **Blocked.** The seed is inside the signature |
 | Brute-forcing the answer via the API | Rate limited to 20 guesses/min per IP - a speed bump, not a distributed defence |
@@ -389,8 +476,14 @@ The obvious fix is to read the `Date` response header off any Supabase call.
 **It does not work, and it fails silently.** `Date` is not a CORS-safelisted
 response header, so cross-origin JavaScript reads `null` even though `curl` sees
 the header perfectly. It was built that way first, and the clock-skew test
-caught it. The time now comes back in the response *body*, from a small `stable`
-SQL function in [schema.sql](supabase/schema.sql).
+caught it. The time now comes back in the response *body* - every `/api/today`
+and `/api/guess` carries `serverTime`, and `adoptServerTime` takes the offset
+from it.
+
+This paragraph used to end "from a small `stable` SQL function in schema.sql".
+There is no such function, and there has not been one since `trustedTime.ts`
+dropped the RPC - it was a second mechanism for the same job, one more thing to
+install, and a 404 in the console for anyone on an older schema.
 
 ### The server owns the answer
 
@@ -400,12 +493,12 @@ readable in devtools, every future puzzle included. That is now split:
 | Client (`data/exercises.ts`) | Server (`server/answers.ts`) |
 |---|---|
 | All 99 exercise names, muscles, equipment | The date→answer **ordering** |
-| `isAnswer` flag | How-to text, video ids, daily challenge |
+| Nothing saying which of them can be an answer | How-to text, video ids, daily challenge |
 
 **The word list staying public is deliberate.** Wordle works because everyone
 carries common English in their head; nobody carries a list of exercise names,
 so the in-app index has to hand them over or the game is unplayable. Knowing a
-word *can* be an answer narrows 99 to 60. Knowing *which day* would give the
+word *can* be an answer narrows 99 to 62. Knowing *which day* would give the
 game away - and that is the part that moved.
 
 `server-only` on the answer module turns an accidental client import into a
@@ -441,9 +534,13 @@ So the import is deferred, gated on a one-key localStorage probe that answers
 "is anyone signed in here?" without loading anything:
 
 ```
-before  236.5 kB first-load JS
-after   178.0 kB   (-58.5 kB, -25%)
+before  236.5 kB first-load JS      recorded at the time of the change
+after   178.0 kB   (-58.5 kB, -25%) recorded at the time of the change
+now     165.4 kB                    npm run check:size, 2026-09-21
 ```
+
+The first two are historical and cannot be re-run - the code that produced them
+is gone. The third is the live number, and it is what the 170 kB ratchet guards.
 
 The first attempt only *looked* like it worked - the bundle shrank because the
 SDK moved to its own chunk, but `init()` still requested it on mount, so every
@@ -463,7 +560,7 @@ round, which `/api/guess` banks from a session it signed itself.
 | Board | Ranks by | Ties |
 |---|---|---|
 | **Streaks** | Current streak, descending | Whoever got there first |
-| **Today** | Fewest guesses | Whoever finished earlier |
+| **Today** | Fewest guesses the round actually cost | Whoever finished earlier |
 
 **No user id ever reaches the client.** A stable public identifier is a
 correlation key, and a leaderboard is exactly where someone would go to collect
@@ -473,7 +570,12 @@ same way: a count of players strictly ahead of you, never a list.
 
 **The ranking columns are generated, not written.** Postgres derives `streak`,
 `day_seed`, `day_guesses` and `day_won` from the save blob, so a leaderboard
-column physically cannot drift from the record it ranks - which it would within
+column physically cannot drift from the record it ranks - though it can rank a
+field nobody fills in, which is exactly what happened: nothing wrote `save.day`
+after the client lost write permission, so every banked row read
+`day_won = false` and the "Today" board returned zero rows for everybody, for as
+long as it had existed. Verified against a live project before and after: the
+board query went from 0 rows to 1 for a player who had just won - which it would within
 a week if the server had to remember to update both. `username` is the one
 exception: it lives in `auth.users`, which nobody may read for another account,
 so the API denormalises it at bank time.
@@ -487,9 +589,46 @@ is big enough to hurt.
 A speed board was the obvious second dimension, and it is not honestly
 measurable here. Nothing records when a player *started*, and anything that did
 would reset by discarding the session and asking for a fresh one - so the board
-would rank whoever worked that out rather than whoever solved it fastest. Guess
-count is already measured, already unforgeable, and is what the game is
-about. The UI never uses the word "fastest", and a test enforces that.
+would rank whoever worked that out rather than whoever solved it fastest. The UI
+never uses the word "fastest", and a test enforces that.
+
+**That paragraph was half wrong, and it is worth saying which half.** Guess
+count was described as "already unforgeable". It was not: the session is the
+server's only memory of a round and the client chooses whether to send it, so
+discarding it hands out a fresh board for the same day. Measured against a
+running server - burn five guesses, discard the token, win in one, and the round
+banked as a **one-guess win**. The very mechanism the paragraph names for the
+speed board applied to guess count too.
+
+It is unforgeable now, for the players the board contains. `/api/guess` counts
+guesses per account per UTC day and banks the larger of that count and the
+board it was sent, so a restart can only ever raise your score. Anonymous
+players are not counted and are not on the leaderboard.
+
+**And a day now ends at six guesses however they are spread.** The same count
+decides whether the round is over, so discarding the token hands back the
+guesses you have left rather than a fresh six. This used to be the remaining
+hole: a player five deep and wrong simply never submitted the sixth, restarted,
+and could not lose.
+
+Measured - three guesses, discard the token, three more:
+
+```
+three guesses, one session : status=playing board=3
+discard the token          : status=playing board=0
+three more on the new board: status=lost    board=3  reveal=CRUNCH
+discard again and reopen   : status=lost    board=0  reveal=CRUNCH
+a seventh guess            : REFUSED, reason "finished"
+banked                     : streak=0 lastResult=lost spent=6
+```
+
+Nobody is stranded on a dead board: reopening a spent day shows the reveal,
+which is what would have happened had they never cleared anything.
+
+Anonymous players keep the old behaviour, deliberately. There is no identity to
+count them against, an address is shared by everyone behind one NAT, and
+charging a stranger's guesses to you would be worse than the hole it closes -
+their save is their own file and nothing else reads it.
 
 ### The streak is the server's, not the browser's
 
@@ -505,7 +644,7 @@ So the write moved:
 |---|---|---|
 | Who computes the streak | The browser | `/api/guess`, from a session it signed itself |
 | Who writes the row | The browser, via RLS | The API, via the service-role key |
-| Client RLS on progress | select, insert, update, delete | **select and delete only** |
+| Client RLS on progress | select, insert, update, delete | **select only** (reset via `fitdle_reset_progress`) |
 
 `/api/guess` is the one place that knows both that the round is over and how
 many guesses it took, so it banks the result at that moment and returns the
@@ -521,6 +660,21 @@ Two properties worth stating:
 - **Fails soft.** An anonymous player, a deployment with no service-role key, or
   a failed write all fall back to the local save. A cloud problem must never
   cost someone the result they just earned.
+
+  **That was an assertion, not a guarantee, and it was false.** `bankResult`
+  handled a failed *write*; it did not handle a *throw*, and one was reachable.
+  `fitdle_claim_ai` creates the progress row for a player who has never played
+  and seeds `save` as `{}` - correct in itself, and not a save record. `normalise`
+  only backfills the fields added after v1, so `reconcile` was handed an object
+  with no `distribution` and threw straight out of the route. Reproduced end to
+  end against a live project: sign up, ask the guide one question, play, and the
+  guess that **wins** the round returns HTTP 500 - no reveal, no streak, nothing
+  banked. The flow is sign-up, ask how it works, play.
+
+  Fixed in two places: the stored row is now checked against the same coherence
+  rule the browser applies to local storage before it is trusted, and the bank
+  sits inside a try/catch so the next unforeseen throw costs a log line rather
+  than a round. Same flow, re-run after: `HTTP 200, status=won, streak=1`.
 
 `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS completely, so it is server-only and
 `npm run cloud:check` fails loudly if it is ever the anon key by mistake - or if
@@ -562,7 +716,7 @@ outcome of a bug in it is a wrong personal best. The badge it earns
 ### Do the exercise, wherever you are
 
 Solving the puzzle gives you a prescription - `4 x 8 Burpee`, `3 x 45 seconds
-Plank`. For the 25 answers that need a barbell, dumbbell, kettlebell or machine,
+Plank`. For the 26 answers that need a barbell, dumbbell, kettlebell or machine,
 that instruction is useless to anyone not standing in a gym, so each one carries
 a **no-equipment substitute**: a backpack, a towel, a chair, a wall.
 
@@ -615,6 +769,14 @@ spend is divided per account.
 | Anonymous | 2 | $0.23/mo | In memory, per address |
 | Free (signed in) | 5 | $0.57/mo | On the row, service-role written |
 | Pro | 100 | $11.44/mo | Same |
+
+**A deployment with no key charges nothing.** `askCoach` and `askGuide` check
+for `ANTHROPIC_API_KEY` and return "not set up on this deployment" without
+making a request - but the routes used to claim the player's quota *first*, so
+on a keyless deployment every question burned one of their 2, 5 or 100 for the
+day and answered none of them. The routes now ask whether a call is possible at
+all before spending anything, and peek instead so the counter still renders.
+Nobody reports a bug like that; it reads as the feature simply being bad.
 
 **If the migration is skipped, the quota fails closed.** A read error on those
 columns - almost always because `schema.sql` has not been re-run - drops the
@@ -775,9 +937,10 @@ result states, it reinforces the same one-saturated-colour rule.
 
 `FORM_VIDEO` in [exercises.ts](src/data/exercises.ts) pins one video per answer.
 Every ID was resolved from a real search and then checked against YouTube's
-oEmbed endpoint, which returns the live title and channel - 40/40 came back
-valid, so none are guessed and none were dead at the time of writing. The
-verified title sits beside each ID as a comment.
+oEmbed endpoint, which returns the live title and channel, so none are guessed
+and none were dead at the time of writing. The verified title sits beside each
+ID as a comment. 60 of the 62 answers carry one; the other two fall back to a
+search, and a test names them so a curated video cannot be dropped by accident.
 
 Videos still rot, so `formVideoUrl` prefers the pinned link while
 `searchVideoUrl` is always available as a fallback that cannot 404, and the UI
@@ -810,7 +973,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 106 tests over the things that must not silently break:
+`npm test` - 288 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each

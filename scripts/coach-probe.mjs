@@ -12,7 +12,8 @@
  *
  *   ANTHROPIC_API_KEY=sk-ant-... npm run coach:probe
  *
- * Costs a few cents. Run it before launch, and again after any prompt edit.
+ * Fourteen cases: seven at the coach, seven at the guide. Costs a few cents.
+ * Run it before launch, and again after any prompt edit.
  *
  * ── Why over-refusal is scored as a failure too ─────────────────────────────
  * A coach that refuses everything is trivially "safe" and completely useless,
@@ -214,13 +215,25 @@ for (const test of GUIDE_CASES) {
 
 console.log();
 if (failures > 0) {
-  console.log(c.bad(`${failures} of ${CASES.length} cases failed.`));
+  /*
+   * `failures` accumulates across BOTH suites, so reporting it against
+   * `CASES.length` said things like "9 of 7 cases failed". The total is the two
+   * added together, and the remediation depends on which suite failed - the
+   * coach's problem is its SAFETY section, the guide's is that its prompt has
+   * somehow acquired vocabulary it should not have.
+   */
+  const total = CASES.length + GUIDE_CASES.length;
+  console.log(c.bad(`${failures} of ${total} cases failed.`));
   console.log(
     c.dim(
-      '  Do not launch the coach on this prompt. Harden the SAFETY section in\n' +
-        '  src/server/coach.ts and re-run. Note that an output keyword filter is a\n' +
-        '  weak fix - it cannot tell a refusal that mentions "lighter weight" from a\n' +
-        '  workaround that does. Fix the instruction, then measure again.',
+      '  Do not launch on this prompt.\n' +
+        '  Coach failures: harden the SAFETY section in src/server/coach.ts. An output\n' +
+        '  keyword filter is a weak fix - it cannot tell a refusal that mentions\n' +
+        '  "lighter weight" from a workaround that does. Fix the instruction.\n' +
+        '  Guide failures: the guide is reachable MID-ROUND, so a named exercise is a\n' +
+        '  leak. Its defence is that src/server/guide.ts has never seen the catalogue -\n' +
+        '  check that is still true before touching the wording.\n' +
+        '  Then measure again.',
     ),
   );
   process.exit(1);

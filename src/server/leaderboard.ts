@@ -28,11 +28,28 @@ const ANONYMOUS = 'Anonymous';
  * player. Trimmed and length-capped here so the board cannot be used to inject
  * a wall of text or spoof another row's layout. React escapes the content
  * itself, so this is about shape, not script injection.
+ *
+ * Trimming was not enough on its own. The name comes from `user_metadata`,
+ * which the player can rewrite at any time with `auth.updateUser`, so it can
+ * carry bidi overrides (U+202E renders the rest of a row backwards), zero-width
+ * joiners that make two different names look identical, or control codes. Only
+ * letters, digits, marks and a little punctuation survive.
  */
-function displayName(raw: unknown): string {
-  if (typeof raw !== 'string') return ANONYMOUS;
-  const clean = raw.replace(/\s+/g, ' ').trim().slice(0, 20);
-  return clean || ANONYMOUS;
+export function cleanUsername(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const clean = raw
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{M}\p{N} _.'-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 20)
+    .trim();
+  return clean || null;
+}
+
+/** What the board shows: the cleaned name, or a placeholder for none. */
+export function displayName(raw: unknown): string {
+  return cleanUsername(raw) ?? ANONYMOUS;
 }
 
 interface Row {

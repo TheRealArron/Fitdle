@@ -33,11 +33,16 @@ interface MuscleDetailProps {
  * │ of "exercises that train this muscle" is the third side of an intersection │
  * │ the player did not have to earn.                                          │
  * │                                                                          │
- * │ Measured across the answer pool, tapping ONE lit muscle mid-round left an │
- * │ average of 3.6 candidates out of 19+ same-length words, and in the worst  │
- * │ case exactly one:                                                        │
+ * │ Re-measured 2026-09-21 over all 62 scheduled answers - for each one,     │
+ * │ averaged across the muscles it works - tapping ONE lit muscle mid-round  │
+ * │ leaves 7.1 of the same-length catalogue words, and in the worst case     │
+ * │ exactly one:                                                             │
  * │                                                                          │
- * │   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT                  │
+ * │   SEATEDROW -> tap "lats" -> 1 candidate                                 │
+ * │                                                                          │
+ * │ This used to claim 3.6 and name DEADLIFT -> hamstrings as the worst      │
+ * │ case. Eight-letter words working the hamstrings number six, and the      │
+ * │ method behind 3.6 was never recorded. Same-length pools run 18 to 23.    │
  * │                                                                          │
  * │ That is a narrower solver than the shortlist panel that was already       │
  * │ deleted for the same reason. So mid-round this names the muscle and       │
@@ -95,7 +100,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                 <h4 className="text-sm font-semibold text-white">{MUSCLE_LABEL[region]}</h4>
                 {worksIt !== null && answer && (
                   <p
-                    className={`text-[11px] leading-snug ${
+                    className={`text-xs leading-snug ${
                       worksIt ? 'text-state-correct' : 'text-slate-500'
                     }`}
                   >
@@ -125,7 +130,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                     <span
                       key={e.name}
                       title={e.display}
-                      className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-game text-[10px] font-bold text-slate-200"
+                      className="rounded-md bg-white/[0.06] px-1.5 py-0.5 font-game text-[11px] font-bold text-slate-200"
                     >
                       {e.name}
                     </span>
@@ -142,7 +147,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
                     <span
                       key={e.name}
                       title={e.display}
-                      className="rounded-md bg-white/[0.03] px-1.5 py-0.5 font-game text-[10px] text-slate-400"
+                      className="rounded-md bg-white/[0.03] px-1.5 py-0.5 font-game text-[11px] text-slate-400"
                     >
                       {e.name}
                     </span>
@@ -152,7 +157,7 @@ export function MuscleDetail({ region, answer, onClose }: MuscleDetailProps) {
             )}
 
             {others.length === 0 && assists.length === 0 && (
-              <p className="text-[11px] text-slate-500">
+              <p className="text-xs text-slate-500">
                 Nothing in the list targets this directly.
               </p>
             )}

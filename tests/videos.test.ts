@@ -109,3 +109,30 @@ test('the coaching map is keyed by the exact uppercase name', () => {
   assert.ok(formVideoId('SQUAT'));
   assert.equal(formVideoId('squat'), null);
 });
+
+test('the leak scan looks at every occurrence, not just the first', () => {
+  /*
+   * The catalogue ships to the browser by design, so the FIRST occurrence of
+   * any exercise name in a chunk is almost always innocent. The scan used to
+   * take `text.indexOf(run[0])` and look 400 bytes either side of exactly that
+   * one - so a real leak elsewhere in the same chunk was measured against the
+   * wrong bytes.
+   *
+   * Demonstrated rather than argued: the whole of ANSWER_ORDER was appended to
+   * the built chunk that already carries the catalogue, 35 kB past the first
+   * occurrence of the anchor, and `npm run check:bundle` printed "no answer
+   * ordering [...] in any client chunk" and exited 0. With the scan looking at
+   * every occurrence it exits 1 and names the byte offset.
+   */
+  const script = readFileSync(new URL('../scripts/check-bundle.mjs', import.meta.url), 'utf8');
+  const scan = script.slice(script.indexOf('for (const run of runs)'), script.indexOf('coachingSamples) {'));
+  assert.match(
+    scan,
+    /for \(let at = text\.indexOf\(run\[0\]\); at !== -1; at = text\.indexOf\(run\[0\], at \+ 1\)\)/,
+    'the scan must walk every occurrence of the anchor',
+  );
+  assert.ok(
+    !/const first = text\.indexOf\(run\[0\]\)/.test(scan),
+    'a single indexOf is the bug this replaced',
+  );
+});

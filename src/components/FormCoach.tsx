@@ -73,7 +73,7 @@ export function FormCoach() {
     <div className="flex flex-col gap-3">
       {reveal.homeVersion ? (
         <div className="rounded-xl bg-white/[0.04] p-3 ring-1 ring-inset ring-white/10">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+          <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-slate-400 uppercase">
             <Home className="h-3.5 w-3.5" />
             No {reveal.equipment.toLowerCase()}? Do this instead
           </p>
@@ -114,7 +114,7 @@ export function FormCoach() {
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white"
+                  className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white"
                 >
                   {s}
                 </button>
@@ -159,7 +159,7 @@ export function FormCoach() {
           </form>
 
           {quota ? (
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-slate-500">
               {quota.remaining > 0
                 ? `${quota.remaining} of ${quota.limit} questions left today`
                 : 'Out of questions until midnight UTC'}
@@ -167,7 +167,7 @@ export function FormCoach() {
             </p>
           ) : null}
 
-          <p className="text-[10px] leading-snug text-slate-500">
+          <p className="text-[11px] leading-snug text-slate-500">
             Coaching cues only, and it cannot see you. Anything that hurts is a question for a
             physio, not a word game.
           </p>

@@ -1,0 +1,17 @@
+{
+  // The static export, used only by `npm run build:extension`.
+  //
+  // `next build` typechecks whatever the tsconfig includes, and the extension
+  // build parks `src/app/api` aside because `output: 'export'` refuses to build
+  // with a route handler in the tree. A test that imports a route handler then
+  // fails to resolve, and the whole extension build fails on a file that is not
+  // in the extension.
+  //
+  // That is not hypothetical: adding the first route-level test broke
+  // `build:extension` and nothing noticed, because it is the one artefact
+  // `npm run verify` never built. It is in `verify` now, and the tests are out
+  // of this config - `npm run typecheck` still checks them, with the API
+  // present, which is where that check belongs.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "tests"]
+}

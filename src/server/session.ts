@@ -34,10 +34,12 @@ export interface GameSession {
    * The opening muscle-group call, if the player made one. Signed like
    * everything else, so it cannot be added after seeing a result or changed
    * once it turns out to be wrong.
+   *
+   * It is also recorded server-side against the caller - see `callRecord.ts`.
+   * The token alone could not enforce "only once", because a token is something
+   * the client can throw away.
    */
   call?: string;
-  /** Practice rounds carry their own answer; the daily never does. */
-  practiceAnswer?: string;
 }
 
 function secret(): string {

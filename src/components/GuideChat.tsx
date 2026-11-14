@@ -72,7 +72,7 @@ export function GuideChat() {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[11px] leading-snug text-slate-500">
+      <p className="text-xs leading-snug text-slate-500">
         Ask how anything in the game works. It does not know today&rsquo;s answer and has no
         access to the exercise list, so it cannot hint even if you ask it to.
       </p>
@@ -116,7 +116,7 @@ export function GuideChat() {
               key={s}
               type="button"
               onClick={() => void send(s)}
-              className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white"
+              className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white"
             >
               {s}
             </button>
@@ -130,7 +130,7 @@ export function GuideChat() {
         * upgrade is ever mentioned.
         */}
       {quota ? (
-        <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+        <p className="flex items-center gap-1.5 text-xs text-slate-500">
           {quota.remaining > 0 ? (
             <>
               <span className={quota.remaining <= 1 ? 'text-state-present' : undefined}>

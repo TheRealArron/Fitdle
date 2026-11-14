@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CATALOGUE, exercisesOfLength } from '@/data/exercises';
+import { CATALOGUE, MAX_GUESSES, exercisesOfLength } from '@/data/exercises';
 import { evaluateGuess } from '@/lib/evaluate';
 import { answerFor, playGuesses } from '@/server/game';
 import { ANSWER_ORDER } from '@/server/answers';
+import { readCode } from './helpers/source.ts';
 
 const answerNames = new Set(ANSWER_ORDER);
 const answers = CATALOGUE.filter((e) => answerNames.has(e.name));
@@ -14,10 +15,10 @@ test('the client cannot tell which words are answers', () => {
   /*
    * This is the fix, and it is worth stating why.
    *
-   * With `isAnswer` public, a player could restrict candidates to the 12
+   * With `isAnswer` public, a player could restrict candidates to the 12 or 13
    * answers of today's length: ~3.6 bits of entropy against a scored guess
    * worth up to 7.9. Measured over the whole pool, ONE optimal opener
-   * identified the answer for 60 of 60 answers. The game was solvable in two.
+   * identified the answer every time. The game was solvable in two.
    */
   for (const e of CATALOGUE) {
     assert.ok(!('isAnswer' in e), `${e.name} still carries an isAnswer flag`);
@@ -112,4 +113,167 @@ test('scoring is unchanged by the call', () => {
   assert.deepEqual(a.evaluations, b.evaluations);
   assert.deepEqual(a.muscles, b.muscles);
   assert.deepEqual(a.evaluations[0], evaluateGuess(guesses[0], answer.name));
+});
+
+/* ── the sweep ────────────────────────────────────────────────────────────── */
+
+/*
+ * These call the route handler, not a pure function.
+ *
+ * The tests above this line score a call that `playGuesses` is HANDED. They all
+ * passed while `/api/call` gave out unlimited calls, because a function given
+ * the call as an argument cannot see how many times it was asked. The exploit
+ * lived entirely in the route, so the test has to live there too.
+ *
+ * Measured against a live server before the fix: six requests with no token
+ * found the day's group and collected the equipment hint, with no forfeit.
+ */
+
+process.env.FITDLE_SESSION_SECRET ||= 'tests-only-not-a-real-secret-0000000000';
+
+const { POST: callRoute } = await import('@/app/api/call/route');
+const { dailySeed } = await import('@/server/game');
+const { recordCall, resetCallRecords } = await import('@/server/callRecord');
+const { GROUP_ORDER } = await import('@/data/muscles');
+
+/** One call, from a named address, with no session token - the sweep's shape. */
+async function call(group: string, address: string) {
+  const res = await callRoute(
+    new Request('http://localhost/api/call', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': address },
+      body: JSON.stringify({ group }),
+    }),
+  );
+  return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+}
+
+const todaysGroup = answerFor(dailySeed()).group;
+const otherGroup = GROUP_ORDER.find((g) => g !== todaysGroup)!;
+
+test('a second call from the same caller is refused, and reveals nothing', async () => {
+  resetCallRecords();
+  const first = await call(otherGroup, '198.51.100.10');
+  assert.equal(first.status, 200, 'the first call must be accepted');
+  assert.equal((first.body.call as { correct: boolean }).correct, false);
+
+  // The sweep: throw the token away and try the next group.
+  const second = await call(todaysGroup, '198.51.100.10');
+  assert.equal(second.status, 409, 'a second group must be refused');
+  assert.equal(second.body.call, undefined, 'a refusal must carry no outcome');
+  assert.equal(second.body.hints, undefined, 'a refusal must carry no hints');
+  assert.equal(second.body.called, otherGroup, 'and must name the call that stands');
+});
+
+test('sweeping every group finds nothing after the first request', async () => {
+  resetCallRecords();
+  const seen = [];
+  for (const group of GROUP_ORDER) {
+    const { status, body } = await call(group, '198.51.100.11');
+    if (status === 200) seen.push((body.call as { correct: boolean }).correct);
+  }
+  assert.equal(seen.length, 1, `the sweep got ${seen.length} outcomes; it must get exactly one`);
+});
+
+test('calling the same group again replays your own outcome', async () => {
+  /*
+   * The honest case this has to keep working: a player calls, then loses the
+   * token - cleared storage, a new tab, a dead phone. Refusing them would cost
+   * a call they already paid for, so the same group is idempotent rather than
+   * rejected.
+   */
+  resetCallRecords();
+  const first = await call(todaysGroup, '198.51.100.12');
+  const again = await call(todaysGroup, '198.51.100.12');
+  assert.equal(again.status, 200, 'the same group must be replayable');
+  assert.deepEqual(again.body.call, first.body.call, 'and must replay the same outcome');
+  assert.deepEqual(again.body.hints, first.body.hints);
+});
+
+test('one caller cannot spend another caller’s call', async () => {
+  /*
+   * The two must ask for DIFFERENT groups. With the same group a record keyed
+   * by nothing at all still replays a 200 for the second caller, so the test
+   * would pass with the key removed - which is exactly what it failed to catch
+   * the first time it was written.
+   */
+  resetCallRecords();
+  const a = await call(otherGroup, '198.51.100.13');
+  const b = await call(todaysGroup, '198.51.100.14');
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200, 'a different caller must still get their own first call');
+  assert.equal(
+    (b.body.call as { correct: boolean }).correct,
+    true,
+    'and must get the outcome for the group THEY asked about',
+  );
+});
+
+test('the record is per day, so tomorrow is a fresh call', async () => {
+  resetCallRecords();
+  const seed = dailySeed();
+  assert.equal(await recordCall('ip:203.0.113.1', seed, 'Legs'), 'Legs');
+  assert.equal(await recordCall('ip:203.0.113.1', seed, 'Chest'), 'Legs', 'same day, first wins');
+  assert.equal(
+    await recordCall('ip:203.0.113.1', seed + 1, 'Chest'),
+    'Chest',
+    'a new seed must not inherit yesterday’s call',
+  );
+});
+
+/* ── six guesses a day, however they are spread ───────────────────────────── */
+
+test('a day ends at six guesses even when the board shows fewer', () => {
+  /*
+   * The signed session is the server's only memory of a round and the client
+   * decides whether to send it, so discarding it used to hand back a clean six
+   * guesses for a puzzle already half played. A player about to lose simply
+   * restarted until they won, so a streak could never break.
+   *
+   * Measured live before this: three guesses, discard, three more, discard
+   * again - and the board came back `playing` with zero guesses, forever.
+   */
+  const two = [CATALOGUE.find((e) => e.name.length === answer.name.length && e.name !== answer.name)!.name];
+  const spentOut = playGuesses(seed, two, answer, undefined, MAX_GUESSES);
+  assert.equal(spentOut.status, 'lost', 'six spent ends the day whatever the token says');
+  assert.ok(spentOut.reveal, 'and the player is given the answer rather than a dead board');
+  assert.equal(spentOut.guesses.length, 1, 'the board still shows only what this session played');
+});
+
+test('the floor never ends a day early', () => {
+  const one = [CATALOGUE.find((e) => e.name.length === answer.name.length && e.name !== answer.name)!.name];
+  assert.equal(playGuesses(seed, one, answer, undefined, MAX_GUESSES - 1).status, 'playing');
+  assert.equal(playGuesses(seed, one, answer, undefined, 0).status, 'playing');
+});
+
+test('omitting the floor is exactly the old behaviour', () => {
+  // Every anonymous caller takes this path, deliberately: there is no identity
+  // to count against, and nothing but their own browser reads their save.
+  const wrong = CATALOGUE.filter((e) => e.name.length === answer.name.length && e.name !== answer.name)
+    .slice(0, MAX_GUESSES)
+    .map((e) => e.name);
+  for (let n = 1; n <= MAX_GUESSES; n++) {
+    const board = wrong.slice(0, n);
+    assert.equal(
+      playGuesses(seed, board, answer).status,
+      playGuesses(seed, board, answer, undefined, board.length).status,
+      `${n} guesses: the default must equal passing guesses.length`,
+    );
+  }
+});
+
+test('both board-building routes consult the floor', () => {
+  for (const file of ['today', 'guess']) {
+    const route = readCode(new URL(`../src/app/api/${file}/route.ts`, import.meta.url));
+    assert.match(route, /guessesSpent\(/, `${file} must read how much the day has cost`);
+    assert.match(route, /playGuesses\([\s\S]*?spent/, `${file} must pass it to playGuesses`);
+  }
+});
+
+test('the floor is per account, and anonymous callers have none', () => {
+  const game = readCode(new URL('../src/server/game.ts', import.meta.url));
+  const fn = game.slice(game.indexOf('export async function guessesSpent'));
+  assert.match(fn, /if \(!userId\) return 0;/, 'no identity means no floor');
+  assert.match(fn, /spent:\$\{seed\}:\$\{userId\}/, 'keyed per account per day');
+  assert.match(fn, /false,\s*\);/, 'and it peeks rather than counting a guess for opening the page');
 });

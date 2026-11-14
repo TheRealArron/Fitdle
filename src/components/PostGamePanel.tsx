@@ -98,7 +98,7 @@ export function PostGamePanel({ onOpenStats, onReopenResult }: PostGamePanelProp
           <Shuffle className="h-4 w-4" />
           Play a practice round
         </button>
-        <p className="-mt-1 text-center text-[11px] leading-snug text-slate-500">
+        <p className="-mt-1 text-center text-xs leading-snug text-slate-500">
           Unlimited, random, and never counted - your streak is safe.
         </p>
 

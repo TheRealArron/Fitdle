@@ -1,6 +1,6 @@
 import { MAX_GUESSES } from '@/data/exercises';
 import { getSupabase } from '@/lib/supabase';
-import type { SaveData } from '@/lib/secureStorage';
+import { isCoherent, normalise, type SaveData } from '@/lib/secureStorage';
 
 const TABLE = 'fitdle_progress';
 
@@ -94,36 +94,71 @@ async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | nu
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data?.save as SaveData | undefined) ?? null };
+
+  /*
+   * A row is not always a save. `fitdle_reset_progress` writes `'{}'`, and so
+   * does `fitdle_claim_ai` for a player who asks the guide before finishing a
+   * round. Handed to `mergeSaves`, `{}` threw on `distribution[i]` - and the
+   * sign-out path awaits a sync before calling `signOut()`, so that player
+   * could not sign out at all. Anything that is not a coherent save is no save,
+   * exactly as the server's `readRow` already treats it.
+   */
+  const save: unknown = data?.save;
+  if (!isCoherent(save)) return { ok: true, data: null };
+  return { ok: true, data: normalise(save) };
 }
 
 /**
- * Writes the player's row.
+ * Clears the player's cloud record.
  *
- * ⚠ The client no longer has permission to do this for progress. RLS grants
- * `select` and `delete` only; `insert` and `update` were revoked when the
- * server took ownership of the streak, so this now fails for ordinary players
- * and that is the intended behaviour rather than a bug to route around.
+ * "Reset my statistics" cannot be expressed as a merge - every counter here
+ * takes the max, so a cleared local save merged with the surviving cloud row
+ * restores it in full. It has to reach the cloud copy or it silently does
+ * nothing, which is the bug `overwriteCloud` was written to fix.
  *
- * It survives for `overwriteCloud`, which is how "reset my statistics" clears
- * the cloud copy - and a reset can only ever lower a streak, so nothing is at
- * risk. That path will move to a DELETE once there is a reason to touch it.
+ * It then came back. The fix was `pushCloudSave`, an upsert, and revoking the
+ * client's `insert`/`update` permission is exactly what forbids an upsert.
+ * Measured against a live project, signed in as the row's own owner:
+ *
+ *   UPDATE own row        -> 0 rows (no policy, so no row is visible to it)
+ *   UPSERT own row        -> 42501 new row violates row-level security policy
+ *   DELETE own row        -> 1 row
+ *
+ * The file previously said "It survives for `overwriteCloud`". It did not, and
+ * the test that pins why the overwrite is necessary went on passing throughout,
+ * because it tests the merge rather than the write.
+ *
+ * `fitdle_reset_progress` is the way back in: a security-definer function that
+ * clears the save on the caller's own row and nothing else. Deleting the row
+ * takes `tier` and the AI counters with it, which made it a free AI-quota
+ * reset, so the current schema revokes it. Deletion survives only as the
+ * fallback for a project that has not run the newer schema - which also still
+ * has the old delete policy, so the fallback works exactly where it runs.
  */
-export async function pushCloudSave(
-  userId: string,
-  save: SaveData,
-): Promise<CloudResult<true>> {
+export async function clearCloudSave(): Promise<CloudResult<true>> {
   const supabase = await getSupabase();
   if (!supabase) return { ok: false, error: 'Cloud sync is not configured.' };
 
-  const { error } = await supabase
-    .from(TABLE)
-    .upsert(
-      { user_id: userId, save, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' },
-    );
+  const { error } = await supabase.rpc('fitdle_reset_progress');
+  if (!error) return { ok: true, data: true };
 
-  if (error) return { ok: false, error: error.message };
+  /*
+   * The function is missing, which means the schema has not been re-run.
+   * Fall back to deleting the row: the player asked for their statistics to be
+   * cleared and a reset that silently does nothing is worse than one that also
+   * clears a tier nobody has yet set. `npm run cloud:check` names the fix.
+   */
+  const missing =
+    error.code === 'PGRST202' ||
+    error.code === '42883' ||
+    /could not find the function/i.test(error.message);
+  if (!missing) return { ok: false, error: error.message };
+
+  const { data: user } = await supabase.auth.getUser();
+  if (!user?.user) return { ok: false, error: 'Not signed in.' };
+
+  const del = await supabase.from(TABLE).delete().eq('user_id', user.user.id);
+  if (del.error) return { ok: false, error: del.error.message };
   return { ok: true, data: true };
 }
 

@@ -97,7 +97,7 @@ export function ExerciseIndex({ open, onClose }: ExerciseIndexProps) {
         <div className="flex flex-col gap-4">
           {list.map(([group, items]) => (
             <section key={group}>
-              <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-500">
                 {group}
               </h3>
               <div className="flex flex-col gap-1">
@@ -113,7 +113,7 @@ export function ExerciseIndex({ open, onClose }: ExerciseIndexProps) {
                     >
                       <span className="font-game font-bold tracking-wider text-white">
                         {e.name}
-                        {used && <span className="ml-2 text-[10px] text-slate-500">guessed</span>}
+                        {used && <span className="ml-2 text-[11px] text-slate-500">guessed</span>}
                       </span>
                       <span className="truncate text-right text-xs text-slate-400">
                         {e.display}

@@ -86,6 +86,31 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/*
+          Stamps the saved theme on <html> before the first paint.
+
+          The settings store does this too, but from a useEffect - after
+          hydration - so a player on Daylight got a full dark-to-light flash on
+          every load. Measured on /play: body was rgb(10, 14, 24) at commit and
+          rgb(245, 247, 250) once hydrated. The landing page is a server
+          component with no settings store at all, so it never got the
+          attributes and stayed dark whatever the player had chosen.
+
+          Plain and blocking on purpose: `async`/`defer` would let the paint
+          happen first, which is the whole bug.
+        */}
+        {/*
+          The rule disabled below exists to stop third-party scripts holding up
+          the render. Blocking is the point here: this is a ~400-byte
+          first-party file whose entire job is to finish before the browser
+          paints. `next/script` cannot do it - every strategy it offers,
+          beforeInteractive included, is documented as NOT blocking, and this
+          has to beat the paint. A test asserts it stays blocking.
+        */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme.js" />
+      </head>
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );

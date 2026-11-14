@@ -125,3 +125,69 @@ test('missing storage does not throw', async () => {
     assert.equal(save.streak, 0);
   });
 });
+
+test('`spent` may exceed the board it describes, but never undercut it', async () => {
+  /*
+   * `day.spent` is how many guesses the puzzle actually cost, counted by the
+   * server per account. It exceeds `day.guesses.length` exactly when somebody
+   * discarded their session and started the day over, which is the case it
+   * exists for - so the coherence rule is a floor and a ceiling, not equality.
+   */
+  const day = { seed: 20260917, guesses: ['SQUAT'], status: 'won' as const };
+  const base = { ...defaultSave(), played: 1, wins: 1, streak: 1, maxStreak: 1,
+    distribution: [1, 0, 0, 0, 0, 0], lastSeed: 20260917, lastResult: 'won' as const,
+    highSeed: 20260917 };
+
+  const load = async (spent: number | undefined) =>
+    withStorage(async () => {
+      const { loadSave } = await import('@/lib/secureStorage');
+      const save = { ...base, day: spent === undefined ? day : { ...day, spent } };
+      (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage.setItem(
+        'fitdle:save:v2',
+        envelope(save as SaveData),
+      );
+      return loadSave();
+    });
+
+  assert.equal((await load(6)).tampered, false, 'a restart legitimately spends more');
+  assert.equal((await load(1)).tampered, false, 'an honest round');
+  assert.equal((await load(0)).tampered, true, 'spent below its own board is impossible');
+  assert.equal((await load(7)).tampered, true, 'a round cannot cost more than MAX_GUESSES');
+  assert.equal((await load(undefined)).tampered, false, 'and a save written before it existed still loads');
+});
+
+test('a migrated legacy streak can still break', async () => {
+  /*
+   * The legacy migration set streak/played/wins and left `lastSeed` null.
+   * `reconcile` breaks a streak when the gap since `lastSeed` exceeds a day, so
+   * a null anchor meant that check never ran: a streak carried over from the
+   * old format survived any number of missed days, forever.
+   *
+   * Driven through `loadSave` with the legacy key in storage, because
+   * `migrateLegacy` is not exported - testing it by importing a name that does
+   * not exist is how you write a test that passes for the wrong reason.
+   */
+  const seedOf = (d: Date) =>
+    d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  const yesterday = seedOf(new Date(Date.now() - 86_400_000));
+  const today = seedOf(new Date());
+
+  await withStorage(async () => {
+    const { loadSave, reconcile } = await import('@/lib/secureStorage');
+    const v = '4';
+    const h = v.split('').reduce((a, b) => { a = (a << 5) - a + b.charCodeAt(0); return a & a; }, 0).toString(16);
+    (globalThis as unknown as { window: { localStorage: Storage } }).window.localStorage.setItem(
+      'fitdle-data',
+      JSON.stringify({ v, h }),
+    );
+
+    const { save } = loadSave();
+    assert.equal(save.streak, 4, 'the streak is carried over');
+    assert.equal(save.lastSeed, yesterday, 'anchored to yesterday');
+    assert.notEqual(save.lastSeed, today, 'never today, or commitResult swallows today’s win');
+    assert.equal(save.highSeed, yesterday, 'and the rollback high-water mark is set');
+
+    const missed = reconcile(save, seedOf(new Date(Date.now() + 2 * 86_400_000)));
+    assert.equal(missed.save.streak, 0, 'a missed day must still break it');
+  });
+});

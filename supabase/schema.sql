@@ -40,8 +40,6 @@ alter table public.fitdle_progress
   -- Today's board: which puzzle, how many guesses, and whether it was solved.
   add column if not exists day_seed int
     generated always as (nullif(save -> 'day' ->> 'seed', '')::int) stored,
-  add column if not exists day_guesses int
-    generated always as (jsonb_array_length(save -> 'day' -> 'guesses')) stored,
   add column if not exists day_won boolean
     generated always as ((save -> 'day' ->> 'status') = 'won') stored;
 
@@ -69,6 +67,86 @@ alter table public.fitdle_progress
   add column if not exists tier text not null default 'free',
   add column if not exists ai_day int not null default 0,
   add column if not exists ai_count int not null default 0;
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `day_guesses` ranks what the round COST, not what the board shows.
+ *
+ * It used to be `jsonb_array_length(save -> 'day' -> 'guesses')`, and that is
+ * the number a player can reset. The signed session is the server's only memory
+ * of a round and the client chooses whether to send it, so discarding it hands
+ * out a fresh board for the same day: burn five guesses, discard, win in one,
+ * and the round banks as a one-guess win - top of a board ranked by fewest
+ * guesses. Measured against a running server before this changed.
+ *
+ * `/api/guess` now counts guesses per account per day and writes the total as
+ * `save.day.spent`, which a restart cannot lower. The array stays truthful,
+ * because it is the board a reload restores.
+ *
+ * DROP then ADD rather than `add column if not exists`: the column already
+ * exists on any project running the previous schema, and `if not exists` would
+ * silently leave the old expression in place - which looks completely fine
+ * while ranking the forgeable number. It is a generated column, so there is
+ * nothing to lose by dropping it; Postgres recomputes it from the same blob.
+ *
+ * The coalesce keeps rows banked before this existed ranking sensibly rather
+ * than as null.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `banked_seed`: the last day the server paid out, kept OUTSIDE the save.
+ *
+ * The save's own `lastSeed` was the only guard against banking a day twice,
+ * and the player can clear the save - `fitdle_reset_progress` sets it to `{}`.
+ * Lose in the morning, reset, win in the afternoon, and the day banked twice.
+ * The reset writes only `save`, so this column survives it. Written only by
+ * `bankResult` under the service role; clients have no write path to it.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+alter table public.fitdle_progress
+  add column if not exists banked_seed int;
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * One name per row on the leaderboard.
+ *
+ * The name comes from `user_metadata`, which a player can rewrite whenever they
+ * like, so without this anybody could take the name at the top of the board.
+ * Case-insensitive, and the first holder keeps it: `bankResult` treats a 23505
+ * here as "do not write the name" and keeps the row's existing one.
+ *
+ * Duplicates that predate the index are cleared first - newest loses, by
+ * created_at - or `create unique index` would refuse to build. They read as
+ * Anonymous until their next round banks a name nobody else holds.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+update public.fitdle_progress p
+   set username = null
+  from (
+    select user_id,
+           row_number() over (partition by lower(username) order by created_at, user_id) as rn
+      from public.fitdle_progress
+     where username is not null
+  ) d
+ where p.user_id = d.user_id
+   and d.rn > 1;
+
+create unique index if not exists fitdle_username_unique
+  on public.fitdle_progress (lower(username))
+  where username is not null;
+
+alter table public.fitdle_progress drop column if exists day_guesses;
+
+alter table public.fitdle_progress
+  add column day_guesses int
+    generated always as (
+      coalesce(
+        nullif(save -> 'day' ->> 'spent', '')::int,
+        jsonb_array_length(save -> 'day' -> 'guesses')
+      )
+    ) stored;
 
 /*
  * Indexes.
@@ -115,20 +193,23 @@ create policy "read own progress"
  * The server is the only party that knows - from a session it signed itself -
  * that a round was genuinely won and in how many guesses.
  *
- * Deleting is kept, because a player must always be able to remove their own
- * data. It cannot be used to inflate anything: the worst it does is reset you
- * to zero.
+ * Deleting is revoked too. It used to be kept on the theory that the worst a
+ * delete does is reset you to zero - but the row also holds `ai_count`, so a
+ * delete was a free AI-quota reset: `fitdle_claim_ai` recreates the row at
+ * zero, and five more questions cost one devtools call. It also forgot the
+ * day's banked result, so a lost round could be banked again.
+ *
+ * Nothing legitimate needs it: "reset my statistics" is `fitdle_reset_progress`
+ * below, which clears the save and leaves the quota alone, and deleting the
+ * account removes the row through `on delete cascade`. The client's delete
+ * fallback only ever runs against a project that has not run this file - which
+ * still has the old policy, so it keeps working there.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 drop policy if exists "insert own progress" on public.fitdle_progress;
 drop policy if exists "update own progress" on public.fitdle_progress;
-
 drop policy if exists "delete own progress" on public.fitdle_progress;
-create policy "delete own progress"
-  on public.fitdle_progress
-  for delete
-  using (auth.uid() = user_id);
 
 -- Keep updated_at honest even if a client forgets to send it.
 create or replace function public.fitdle_touch_updated_at()
@@ -150,9 +231,153 @@ create trigger fitdle_progress_touch
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A note on trust.
 --
--- The client computes and uploads its own streak, so a determined user can
--- upload any number they like. This schema does not pretend otherwise. Making
--- streaks authoritative would mean moving the answer and the scoring server
--- side - a Postgres function that owns the daily word and validates each guess
--- - which is a different product decision, not a policy tweak.
+-- This used to say the client computes and uploads its own streak, so a
+-- determined user can upload any number they like. That stopped being true in
+-- this same file, ninety lines above: the insert and update policies are gone
+-- and `/api/guess` writes the row under the service-role key. Verified against
+-- a live project - signed in as the row's own owner, an UPDATE touches zero
+-- rows and an INSERT or UPSERT is refused 42501, while the streak column stays
+-- where the server put it.
+--
+-- What remains true: the numbers here are only as good as what the API writes,
+-- and the API is only as good as its session. The guesses a round cost are
+-- counted per account by the server rather than read off the client's token,
+-- because a token is discardable - see `day_guesses` above.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Atomic AI quota claim.
+--
+-- The server used to do this as read-modify-write over the REST API: SELECT the
+-- count, compare it to the limit, UPDATE it. Two requests arriving together
+-- both read the same number, both decide there is room, and both write it - so
+-- the counter advances by one while two messages were spent. On the one path in
+-- this app that costs actual money.
+--
+-- This is the same decision expressed as a single UPDATE. The limit test lives
+-- in the WHERE clause, so Postgres evaluates it against the row it is about to
+-- lock: if the row does not qualify, no update happens and no message is
+-- granted. There is no window between the check and the write because they are
+-- the same statement.
+--
+-- The limits are PARAMETERS, not literals. They belong to the application - see
+-- QUOTA in src/server/quota.ts - and duplicating them here would create two
+-- sources of truth that drift the first time one is tuned.
+--
+-- SECURITY DEFINER because it is called with the service-role key from the
+-- server and must be able to write a row the caller does not own. `search_path`
+-- is pinned: a definer function that resolves unqualified names through the
+-- caller's search_path can be tricked into running someone else's table.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.fitdle_claim_ai(
+  p_user    uuid,
+  p_day     int,
+  p_free    int,
+  p_pro     int,
+  p_consume boolean
+)
+returns table (allowed boolean, used int, quota int, tier text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tier  text;
+  v_used  int;
+  v_quota int;
+begin
+  -- A player who has never saved has no row yet, and asking the AI a question
+  -- should not be the thing that fails. `save` has no default, so it is seeded
+  -- empty; the generated leaderboard columns read null out of it, which is
+  -- correct for someone who has not played.
+  insert into public.fitdle_progress (user_id, save)
+  values (p_user, '{}'::jsonb)
+  on conflict (user_id) do nothing;
+
+  if p_consume then
+    update public.fitdle_progress p
+       set ai_day   = p_day,
+           -- A row left over from an earlier day restarts at one rather than
+           -- continuing, so no sweep job is needed to reset anybody.
+           ai_count = case when p.ai_day = p_day then p.ai_count + 1 else 1 end
+     where p.user_id = p_user
+       and (
+         p.ai_day <> p_day
+         or p.ai_count < case when p.tier = 'pro' then p_pro else p_free end
+       )
+    returning p.ai_count, p.tier into v_used, v_tier;
+
+    if found then
+      v_quota := case when v_tier = 'pro' then p_pro else p_free end;
+      return query select true, v_used, v_quota, v_tier;
+      return;
+    end if;
+  end if;
+
+  -- Reached either because this is a read-only peek, or because the update
+  -- above did not qualify - which means the allowance is already spent.
+  select p.tier, case when p.ai_day = p_day then p.ai_count else 0 end
+    into v_tier, v_used
+    from public.fitdle_progress p
+   where p.user_id = p_user;
+
+  v_quota := case when v_tier = 'pro' then p_pro else p_free end;
+  return query select (v_used < v_quota), v_used, v_quota, v_tier;
+end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Clearing your own record.
+--
+-- "Reset my statistics" has to reach the cloud copy or it silently does
+-- nothing: every counter in the merge takes the max, so a cleared local save
+-- merged with the surviving cloud row restores it in full. That was the
+-- behaviour before `overwriteCloud` existed, and revoking the client's write
+-- permission brought it straight back - `pushCloudSave` is an upsert, and an
+-- upsert is exactly what the revocation forbids. Measured against a live
+-- project, signed in as the row's own owner: 42501.
+--
+-- Deleting the row is permitted and would work, but it takes `tier`, `ai_day`
+-- and `ai_count` with it. Those are billing-adjacent state that a statistics
+-- reset has no business touching - the whole reason they are not in the save
+-- blob - and it would mean clearing your stats silently cancelled a paid tier.
+--
+-- So the reset clears the SAVE and leaves the rest of the row alone. It is
+-- security definer for the same reason the quota claim is: the caller no longer
+-- has update permission on their own row. It cannot be used to inflate
+-- anything - it takes no arguments, writes one constant, and only ever to the
+-- caller's own row, so the worst it can do is what it says on the button.
+--
+-- `'{}'` rather than a default save because that is the same "has not played"
+-- encoding `fitdle_claim_ai` seeds, and the server already treats a row that is
+-- not a coherent save as no record at all.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create or replace function public.fitdle_reset_progress()
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+
+  update public.fitdle_progress
+     set save = '{}'::jsonb
+   where user_id = auth.uid();
+end;
+$$;
+
+-- Callable by a signed-in player for their own row, and by nobody else. The
+-- function reads auth.uid() itself rather than taking a user id, so there is no
+-- argument to point at somebody else's record.
+revoke all on function public.fitdle_reset_progress() from public, anon;
+grant execute on function public.fitdle_reset_progress() to authenticated;
+
+-- Only the server may call it. The service-role key bypasses RLS, but the
+-- function is reachable by anyone who can reach PostgREST unless this is said.
+revoke all on function public.fitdle_claim_ai(uuid, int, int, int, boolean) from public, anon, authenticated;
+

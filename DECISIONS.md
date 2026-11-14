@@ -1,9 +1,18 @@
 # Decision log
 
-Six decisions where the interesting part is the trade-off, not the code. Every
-number here was measured in this repo and can be reproduced with the command
-given. Where something was **not** measured, it says so — a decision log whose
-figures fall apart under a follow-up question is worth less than no log at all.
+Seven decisions where the interesting part is the trade-off, not the code. Every
+number here was measured in this repo. Where something was **not** measured, it
+says so — a decision log whose figures fall apart under a follow-up question is
+worth less than no log at all.
+
+Two kinds of number appear below and they are labelled, because conflating them
+is how a log like this rots. **Live** figures can be reproduced with the command
+given, and were re-run on 2026-09-21. **Recorded** figures were measured against
+code that no longer exists — a before/after from a change already landed — and
+cannot be re-run by anyone, including me. This preamble used to promise that
+every number could be reproduced with the command given. That was never true of
+the before/after pairs, and several of the live figures had drifted since they
+were written.
 
 ---
 
@@ -58,8 +67,9 @@ leaderboard — yet waited for it before first paint.
 **Measured** (`npm run check:size`, gzipped first-load JS):
 
 ```
-before  236.5 kB
-after   178.0 kB      -58.5 kB, -25%
+before  236.5 kB      recorded — the code that produced it is gone
+after   178.0 kB      recorded — as above          -58.5 kB, -25%
+now     165.4 kB      live — npm run check:size, 2026-09-21
 ```
 
 **The first attempt only looked like it worked.** The bundle shrank because the
@@ -125,7 +135,9 @@ seed whose answer moves underneath them: the board stops matching its own
 feedback, and every share grid already posted becomes wrong. A total rewrite of
 the calendar dressed up as a content update.
 
-**Choice.** `SCHEDULE_SIZE` frozen at 60. Appended words land beyond it and are
+**Choice.** `SCHEDULE_SIZE` frozen — at **62**, not the 60 an earlier edition of
+this entry said; the README's own sweep table picked 62 and the constant has
+read 62 throughout. Appended words land beyond it and are
 never drawn, so vocabulary can grow at any time with zero calendar effect —
 which is what makes content iteration workable at all. Golden date→answer pairs
 are pinned by tests.
@@ -212,18 +224,114 @@ where every case refuses is a broken run, not a passing one.
 
 ---
 
+## 7. The opening call needed a memory the player does not hold
+
+**Problem.** The call is meant to be a bet: name the answer's muscle group
+before your first guess, and a correct call unlocks the equipment hint
+immediately while a wrong one forfeits the guess-3 category hint. The route
+enforced "only once" by looking at the session token it was sent:
+
+```ts
+if (session?.call !== undefined) return 409;
+```
+
+A token is something the client holds, so a client that sent none was always
+making a first call. Measured against a running server:
+
+```
+call Chest … Arms … Core  -> correct=false
+call Legs                 -> correct=true, equipment "Dumbbell", at guess zero
+```
+
+Six requests. Seven is the worst case. The token from the winning sweep resumes
+as an ordinary session carrying `correct: true` and none of the forfeit.
+
+**What it was worth**, averaged over all 62 scheduled answers against the
+99-word catalogue:
+
+```
+length only                     19.8 candidates
+length + muscle group            4.3
+length + group + equipment       2.7   <- and exactly 1 on 27 of the 62 days
+```
+
+Not a hint. The answer, before the first guess, on 44% of days.
+
+`tests/openingCall.test.ts` contained a test named *"calling is a genuine risk,
+not a free hint"*, and it passed throughout. It scores `playGuesses`, which is
+**handed** the call as an argument and therefore cannot see how many times the
+route was asked. The exploit lived in the route; no test had ever called one.
+
+**Choice.** The call is recorded server-side against the caller — the verified
+user id when signed in, the address when not — and the first call for a seed
+wins. The same group again replays your own outcome; a different one is refused
+and told which stands, carrying no result for the group just asked about, so a
+sweep learns nothing after its first request.
+
+**Why a stored value and not a count.** `counter.ts` could have answered "has
+this player called?" with a limit of one, and that kills the sweep. It also
+breaks the honest case: a player who calls and then loses their token — cleared
+storage, a new tab, a dead phone — would be refused a call they had already
+paid for. Remembering *which* group makes the endpoint idempotent instead, which
+is strictly better and no more code.
+
+**Measured after the fix**, same sweep, same server:
+
+```
+call Chest -> 200  correct=false
+call Back  -> 409  "You already called Chest today."     (no call, no hints)
+…and the remaining five, identically
+```
+
+and the honest path, also live: call Legs → `correct: true` + equipment; throw
+the token away and call Legs again → the same outcome, not a refusal.
+
+**Cost, and what this does not close.** The record is keyed by the caller, and
+an anonymous caller is only an address, so rotating addresses still buys fresh
+calls exactly as it buys fresh rate-limit windows. With no Redis configured the
+record is per process, so a multi-instance deployment gives one free call per
+instance. Both are the trade `memoryCounter.ts` already documents. This closes a
+sweep; it does not make the call unforgeable, and calling it closed would be the
+same overclaim the route was already making.
+
+It also fails OPEN: an unreachable Redis falls back to the in-process record
+rather than refusing the call, because losing your opening call to a blip is a
+worse outcome than the sweep.
+
+**Rejected.**
+
+- *Hide `correct` until after guess 1.* Raises the sweep's cost from six free
+  requests to six requests plus six throwaway guesses, and no further — still
+  brute-forceable, and it takes immediate feedback away from honest players.
+- *Signed-in players only.* Genuinely unforgeable, and it deletes the mechanic
+  for everyone else. A game feature should not require an account.
+- *Delete the opening call.* Closes it completely. It is also the one mechanic
+  in the game a solver cannot play, which is the whole reason it exists.
+
+**Side effect worth recording.** No route handler could be imported by a test,
+because `next` ships no `exports` field and Node's ESM resolver will not find the
+extensionless `next/server` that every route imports. That is why all six routes
+were asserted against as **strings**. One line in `tests/resolve-alias.mjs` fixes
+it, and the tests above are the first in this repo to call a route handler.
+
+---
+
 ## What is verified, and what is not
 
 | Verified in this repo | Not verified |
 |---|---|
-| 159 unit tests | The RLS revocation (needs a live project) |
-| Browser checks against production builds | The leaderboard's actual ranking (needs the service-role key) |
-| Three attacks on the guess API, three on the coach API | The coach's model behaviour (no API key) |
-| Bundle budget, enforced in `npm run verify` | Any performance number under real network conditions |
-| Answer schedule absent from 48 client chunks | Anything about users, retention, or engagement |
+| 288 unit tests | The coach's and guide's model behaviour (no API key — `coach:probe` has never run) |
+| A full round played in a real browser, in dev **and** prod | Any performance number under real network conditions |
+| Three attacks on the guess API, three on the coach API | Anything about users, retention, or engagement |
+| The RLS revocation, against a live project, as the row's own owner | `fitdle_reset_progress` and the new `day_guesses` column (migrations not yet run) |
+| The leaderboard's ranking, end to end against a live project | Whether the built extension loads in Chrome |
+| Bundle budget and dependency audit, enforced in `npm run verify` | |
+| Answer schedule absent from 36 client chunks | |
 
-`npm run verify` runs typecheck, lint, tests, build, the answer-leak scan, the
-size budget, and a smoke test in both dev and production. It exits 0.
+`npm run verify` runs typecheck, lint, the dependency audit, the tests, the
+extension build, the web build, the answer-leak scan, the size ratchet, the
+contrast pass, and a smoke test that plays a whole round in both dev and
+production. Measured 2026-09-21: it exits 0.
 
 ## The logo is one file, cropped by a script
 
@@ -261,4 +369,120 @@ not say what the thing is.
 Deleted on the way: the extension build's hand-rolled PNG encoder (~80 lines
 drawing an approximate dumbbell). It was the right call when the alternative was
 a binary asset in git and no image dependency. There is a real logo now.
+
+## The landing page is a server component, and its numbers are not typed
+
+The game moved from `/` to `/play` so a landing page could own the root. Two
+choices in it are worth keeping.
+
+**The page is not a client component.** Almost all of it is text that never
+changes, and marking the file `'use client'` would ship every word of that copy
+to the browser as JavaScript. Interactivity is allowed, but as an island: the
+anatomy drill is embedded and playable, and only it crosses the boundary. That
+was cheap because the drill was already built to touch no puzzle state - no
+streak, no seed, no server call - which is exactly what makes it safe to put in
+front of someone who has not started a round. Shared bundle 164.5 to 164.9 kB.
+
+**Every number is read from the data.** The first version of this copy, written
+by a page generator from a brief, claimed 100 exercises when there were 99 - a
+number I had put in the brief myself from a bad grep. It also said "five themes
+including colourblind mode" when the truth is five themes *and* a colourblind
+mode that layers on any of them, which is the better claim and the one that got
+lost. So the page imports `CATALOGUE`, `MAX_GUESSES`, `SCHEDULE_SIZE` and
+`CATEGORY_HINT_AT`, and a test fails on any literal count sitting next to the
+word "exercises".
+
+Two couplings that would otherwise have broken silently, both now tested:
+
+- The browser extension's popup opens a file out of the static export, so moving
+  the game moved its entry point. A manifest still pointing at `index.html`
+  builds, installs and opens - it just shows a marketing page in a 400px popup.
+- The static export refuses to build with a dynamic route in the tree, and a
+  metadata route is dynamic unless it says otherwise. `manifest.ts` needed
+  `export const dynamic = 'force-static'` or `build:extension` failed outright.
+
+The hero ships two crops rather than one responsive image. The desktop capture
+scaled to a phone is a picture of a layout, not of a game - the tiles go
+illegible and the anatomy panel becomes a smudge. Neither is marked `priority`:
+the LCP element is the headline, and preloading an image the other breakpoint
+hides spends bandwidth on something nobody sees.
+
+## `body { overflow: hidden }` outlived the assumption it was built on
+
+The game is a fixed viewport - board and keyboard, never scrolling - so the
+stylesheet locked the body. Correct, for exactly as long as the game was the
+only page.
+
+The landing page is several screens tall, and the lock silently disabled
+scrolling on it. Nothing failed: the page rendered perfectly and simply refused
+to move. It went unnoticed here because every check in the repo either measures
+the game (which is supposed to be unscrollable) or measures markup rather than
+behaviour.
+
+The fix is that the lock was never the body's job. The game's own root is
+`h-dvh overflow-hidden`, so it already locks itself; the body just needed to
+stop making that decision for every page that would ever exist.
+
+The same shape of bug, found the same day: the physical-keyboard listener was on
+`window` and suspended only for modals. The guide chat is not a modal, so typing
+a question filled in the guess grid at the same time, and Backspace was
+`preventDefault()`ed before it reached the input - you could type into the chat
+but not correct a typo. The fix is not another flag per feature but a rule about
+origin: ignore any key whose target is a text field. Every input added later
+inherits it.
+
+Both are the same lesson. A global that encodes "there is only one screen here"
+stops being true the first time that is false, and neither a type checker nor a
+DOM assertion can see it.
+
+## The two documented races are now closed
+
+Two things in here were honest caveats rather than working code: the rate limits
+counted in process, and the AI quota was a read-modify-write. Both were written
+up as deliberate trades, and both were the kind of trade that is only defensible
+until someone asks you to fix it.
+
+**Rate limiting is now shared.** `sharedCounter.ts` puts the counter in Upstash
+Redis over its REST API - no connection pool, which is the wrong shape for a
+function that may be frozen between requests and may never run on the same
+instance twice. `counter.ts` is the seam: Redis when it answers, the in-process
+map when it does not, and no caller knows which.
+
+The increment is one Lua script rather than two commands, because both obvious
+two-command versions are wrong. `INCR` then `EXPIRE` every time pushes the
+expiry out on each request, so a key under steady load never expires and the
+window stops being a window. `INCR` then `EXPIRE` only when the count is 1 is
+correct in principle, but the test happens on the client between two round
+trips, so two requests racing on a fresh key can both see 1 and neither may set
+the TTL. Redis runs a script atomically, so the test belongs inside it - and it
+is one round trip, which matters when it sits in front of every limited request.
+
+It fails OPEN. If Redis is unreachable the request falls back to in-process
+counting rather than being refused, because an outage in the thing that limits
+abuse must not become an outage of the game. The limit degrades to what it was
+before rather than disappearing.
+
+Proved end to end rather than asserted: two independent `next start` processes
+pointed at one counter, hitting a 60-per-minute route. The first took 40
+requests, the second was allowed 20 and then refused 10. Sixty across the fleet.
+Before the change the second process had its own counter and would have allowed
+all thirty.
+
+**The AI quota is now atomic.** It used to SELECT the count, compare it in
+JavaScript, and UPDATE - so two requests arriving together both read the same
+number, both concluded there was room, and both wrote it. The counter advanced
+by one while two messages were spent, on the only path in this app that costs
+money. `fitdle_claim_ai` is the same decision as a single UPDATE whose WHERE
+clause carries the limit test, so Postgres evaluates it against the row it is
+about to lock and there is no window between the check and the write.
+
+The limits are parameters to that function, not literals in it. They belong to
+`QUOTA` in the application, and writing them in SQL as well would create two
+sources of truth that drift the first time one is tuned - invisibly, until
+somebody is charged for the difference. A test asserts none of the numbers
+appear in the function body.
+
+Both keep their old behaviour as the fallback, which is what made this safe to
+land before either service is provisioned: with no Redis and no migration run,
+the app behaves exactly as it did yesterday.
 

@@ -21,7 +21,7 @@ import 'server-only';
  * and this as what degrades gracefully before you reach them.
  */
 
-import { count, secondsUntilUtcMidnight, utcDay } from '@/server/memoryCounter';
+import { count, secondsUntilUtcMidnight, utcDay } from '@/server/counter';
 
 /** Requests per UTC day, across all callers. Override with AI_DAILY_BUDGET. */
 const DEFAULT_BUDGET = 500;
@@ -45,6 +45,24 @@ function budget(): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : DEFAULT_BUDGET;
 }
 
+/**
+ * Whether a model call is possible at all on this deployment.
+ *
+ * Lives here rather than in either surface because both ask the same question
+ * of the same variable, and because the answer has to be available to the
+ * ROUTES - which is the point. `askCoach` and `askGuide` check the key too and
+ * own the message they return; what they cannot do is stop the route spending
+ * somebody's daily allowance before they are reached.
+ *
+ * Without this, a deployment with no key charged every question against the
+ * player's 2, 5 or 100 a day and answered none of them. Small, and exactly the
+ * kind of unfairness nobody reports because it looks like the feature is just
+ * bad.
+ */
+export function aiConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
 export interface BudgetCheck {
   allowed: boolean;
   used: number;
@@ -57,15 +75,15 @@ export interface BudgetCheck {
  * Call it immediately before the model request, not after: a check that runs
  * afterwards has already spent the money it was meant to prevent.
  */
-export function claimAiBudget(name: string): BudgetCheck {
+export async function claimAiBudget(name: string): Promise<BudgetCheck> {
   const limit = budget();
-  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight());
+  const r = await count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight());
   return { allowed: r.allowed, used: r.count, limit };
 }
 
 /** Current usage without claiming. For diagnostics only. */
-export function aiBudgetUsed(name: string): BudgetCheck {
+export async function aiBudgetUsed(name: string): Promise<BudgetCheck> {
   const limit = budget();
-  const r = count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight(), false);
+  const r = await count(`budget:${name}`, limit, utcDay(), secondsUntilUtcMidnight(), false);
   return { allowed: r.allowed, used: r.count, limit };
 }

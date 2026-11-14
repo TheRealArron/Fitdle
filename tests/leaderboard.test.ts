@@ -102,7 +102,24 @@ test('username is the one denormalised column, and refreshed on every bank', () 
   // another account.
   assert.match(schema, /add column if not exists username text/);
   const progress = readFileSync(new URL('../src/server/progress.ts', import.meta.url), 'utf8');
-  assert.match(progress, /\.\.\.\(username \? \{ username \} : \{\}\)/);
+  assert.match(progress, /\.\.\.\(name \? \{ username: name \} : \{\}\)/);
+  assert.match(progress, /const name = cleanUsername\(username\)/, 'the stored name must be the cleaned one');
+});
+
+test('two rows cannot hold the same name, and a taken name never costs the round', () => {
+  assert.match(
+    schema,
+    /create unique index if not exists fitdle_username_unique\s+on public\.fitdle_progress \(lower\(username\)\)/,
+  );
+  // The index cannot build over existing duplicates, so they are cleared first.
+  assert.ok(
+    schema.indexOf('set username = null') < schema.indexOf('fitdle_username_unique'),
+    'duplicates must be cleared before the unique index is created',
+  );
+  const progress = readFileSync(new URL('../src/server/progress.ts', import.meta.url), 'utf8');
+  // A unique violation drops the NAME and retries; it must not drop the save.
+  assert.match(progress, /error\.code === '23505' && 'username' in row_\)\s*\{\s*delete row_\.username;/);
+  assert.ok(!/delete row_\.save/.test(progress), 'a retry must never drop the save');
 });
 
 /* ── honesty about what is measured ───────────────────────────────────────── */
@@ -190,7 +207,7 @@ test('an anonymous player never triggers the SDK load', () => {
 test('the muscle panel lists nothing while the round is live', () => {
   /*
    * Measured before fixing: tapping ONE lit muscle mid-round and filtering to
-   * today's width left an average of 3.6 candidates out of 19+ same-length
+   * today's width left an average of 7.1 candidates out of 18-23 same-length
    * words - and in the worst case exactly one.
    *
    *   DEADLIFT -> tap "hamstrings" -> 1 candidate: DEADLIFT
@@ -258,4 +275,17 @@ test('.label follows the theme instead of hardcoding a hex', () => {
   const label = css.slice(at, css.indexOf('}', at));
   assert.match(label, /color: var\(--color-slate-500\)/);
   assert.ok(!/color: #64748b/.test(label), 'the literal is back');
+});
+
+/* ── names a stranger chose ───────────────────────────────────────────────── */
+
+test('display names cannot carry bidi overrides, zero-width or control characters', async () => {
+  const { displayName } = await import('@/server/leaderboard');
+  assert.equal(displayName('evil\u202Egnp.exe'), 'evilgnp.exe', 'a right-to-left override survived');
+  assert.equal(displayName('ad\u200Bmin'), 'admin', 'a zero-width space survived');
+  assert.equal(displayName('a\u0000b\u0007c'), 'abc', 'control codes survived');
+  assert.equal(displayName('José Müller'), 'José Müller', 'accented names must survive');
+  assert.equal(displayName('李小龙'), '李小龙', 'non-Latin scripts must survive');
+  assert.equal(displayName('\u202E\u200B'), 'Anonymous', 'a name of nothing but tricks is no name');
+  assert.ok(displayName('x'.repeat(50)).length <= 20);
 });

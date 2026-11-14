@@ -330,6 +330,39 @@ await emit('src/app/apple-icon.png', REGIONS.figure, 180, {
 });
 
 /*
+ * Installable-app icons, referenced by the web manifest.
+ *
+ * Separate from src/app/icon.png because Chrome will only offer to install a
+ * site that declares a 192 and a 512, and because these are declared
+ * "maskable" - Android crops an installed icon to whatever shape the launcher
+ * uses, so the padding here is the wider 20% that keeps a circular crop from
+ * cutting into the figure.
+ */
+for (const size of [192, 512]) {
+  await emit(`public/icon-${size}.png`, REGIONS.figure, size, {
+    colour: ACCENT,
+    plate: PLATE,
+    pad: 0.14,
+  });
+}
+
+/*
+ * The maskable variant, padded wider.
+ *
+ * Android crops an installed icon to the launcher's shape, and a circular crop
+ * of a 14%-padded square clips the figure's arms. The maskable contract is that
+ * everything important sits inside the middle 80%, so this one is padded to
+ * suit and declared separately - the manifest lists purposes as distinct
+ * entries rather than one combined string, which is both what Next's types
+ * allow and what platforms handle most predictably.
+ */
+await emit('public/icon-maskable-512.png', REGIONS.figure, 512, {
+  colour: ACCENT,
+  plate: PLATE,
+  pad: 0.24,
+});
+
+/*
  * Browser-extension icons.
  *
  * Emitted here rather than in the extension build so there is exactly one

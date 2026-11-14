@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface ModalProps {
   open: boolean;
@@ -11,14 +11,70 @@ interface ModalProps {
   children: ReactNode;
 }
 
+/** Everything inside the panel a keyboard can land on, in document order. */
+function focusables(panel: HTMLElement): HTMLElement[] {
+  return [
+    ...panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ].filter((el) => el.offsetParent !== null);
+}
+
 export function Modal({ open, onClose, title, children }: ModalProps) {
+  const panel = useRef<HTMLDivElement>(null);
+
+  /*
+   * ── Focus, which `aria-modal` alone does not move ───────────────────────────
+   *
+   * Measured before this existed, with "How to play" open:
+   *
+   *   focus after opening   button("How to play")  inDialog=false
+   *   one Tab               button("Exercise list") inDialog=false
+   *   after Escape          button("Exercise list") inDialog=false
+   *
+   * So focus stayed on the trigger behind the overlay, one Tab walked out into
+   * a page hidden behind a backdrop blur, and closing left focus wherever the
+   * tabbing had wandered to. `aria-modal="true"` tells a screen reader to
+   * constrain itself; it does nothing for a sighted keyboard user, who was
+   * tabbing through controls they could not see.
+   *
+   * Three things, which is what a dialog owes a keyboard: move focus in, keep
+   * it in, and give it back.
+   */
   useEffect(() => {
     if (!open) return;
+
+    const returnTo = document.activeElement as HTMLElement | null;
+    const first = panel.current ? focusables(panel.current)[0] : null;
+    (first ?? panel.current)?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panel.current) return;
+
+      const items = focusables(panel.current);
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const edge = e.shiftKey ? items[0] : items[items.length - 1];
+      // Wrap at the edge. Also catches focus that is outside the panel
+      // entirely, which is where it starts if the panel had nothing to take it.
+      if (document.activeElement === edge || !panel.current.contains(document.activeElement)) {
+        e.preventDefault();
+        (e.shiftKey ? items[items.length - 1] : items[0]).focus();
+      }
     };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      // Back where they were, so closing a dialog does not lose their place.
+      returnTo?.focus?.();
+    };
   }, [open, onClose]);
 
   return (
@@ -36,6 +92,8 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
           aria-label={title}
         >
           <motion.div
+            ref={panel}
+            tabIndex={-1}
             className="panel max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] p-5 shadow-2xl shadow-black/70"
             initial={{ opacity: 0, y: 32, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

@@ -9,6 +9,14 @@
  *
  * So absence checks read the CODE, and presence checks can read the whole file.
  * Two functions, named so the choice is explicit at the call site.
+ *
+ * ── A correction, because that rule is not quite right ──────────────────────
+ * "Presence checks can read the whole file" holds only when what you are
+ * looking for is PROSE. A presence check for a code CONSTRUCT has exactly the
+ * same problem as an absence check, in reverse: `assert.match(src, /finally/)`
+ * passed in this repo with the `finally` block deleted, because the comment
+ * explaining the block still said the word. If you are asserting that code
+ * exists, read the code.
  */
 
 import { readFileSync } from 'node:fs';

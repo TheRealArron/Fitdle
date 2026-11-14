@@ -31,6 +31,10 @@ const ASSETS = [
   'assets/extension/icon16.png',
   'assets/extension/icon48.png',
   'assets/extension/icon128.png',
+  // Chrome will not offer to install the app without both of these.
+  'public/icon-192.png',
+  'public/icon-512.png',
+  'public/icon-maskable-512.png',
 ];
 
 test('every generated logo asset is present and non-trivial', () => {

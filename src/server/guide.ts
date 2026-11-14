@@ -99,7 +99,7 @@ export async function askGuide(question: string): Promise<GuideReply> {
    * Claimed BEFORE the request, not after - a check that runs afterwards has
    * already spent the money it exists to prevent.
    */
-  if (!claimAiBudget('guide').allowed) {
+  if (!(await claimAiBudget('guide')).allowed) {
     return {
       status: 'error',
       text: 'The guide has hit its daily limit. It will be back tomorrow.',

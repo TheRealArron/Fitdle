@@ -3,7 +3,8 @@ import { answerFor, dailySeed, playGuesses } from '@/server/game';
 import { openSession } from '@/server/session';
 import { askCoach } from '@/server/coach';
 import { clientKey, rateLimit } from '@/server/rateLimit';
-import { claimQuota } from '@/server/quota';
+import { claimQuota, peekQuota } from '@/server/quota';
+import { aiConfigured } from '@/server/aiBudget';
 import { userIdFromRequest } from '@/server/supabase';
 
 /**
@@ -19,7 +20,7 @@ import { userIdFromRequest } from '@/server/supabase';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`coach:${clientKey(request)}`, 10, 60_000);
+  const limit = await rateLimit(`coach:${clientKey(request)}`, 10, 60_000);
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many questions. Give it a minute.' },
@@ -57,8 +58,19 @@ export async function POST(request: Request) {
   }
 
   const userId = await userIdFromRequest(request);
-  const quota = await claimQuota(userId, clientKey(request));
-  if (!quota.allowed) {
+  /*
+   * Only spend the allowance if there is something to spend it on. With no key
+   * configured `askCoach` returns "not set up on this deployment" and makes
+   * no request - but the claim used to happen first, so a player on such a
+   * deployment burned their day's questions on a feature that answered none of
+   * them. Peek instead, so the counter still renders.
+   */
+  const configured = aiConfigured();
+  const quota = configured
+    ? await claimQuota(userId, clientKey(request))
+    : await peekQuota(userId, clientKey(request));
+
+  if (configured && !quota.allowed) {
     return NextResponse.json(
       {
         status: 'quota',

@@ -34,7 +34,7 @@ function Toggle({
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-white">{title}</span>
-        <span className="mt-0.5 block text-[11px] leading-snug text-slate-400">{detail}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-slate-400">{detail}</span>
       </span>
       <span
         className={[
@@ -106,7 +106,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               );
             })}
           </div>
-          <p className="px-1 text-[11px] leading-snug text-slate-500">
+          <p className="px-1 text-xs leading-snug text-slate-500">
             Themes change the surfaces only. Green, yellow and grey always mean the same thing,
             so a screenshot reads identically whichever theme took it.
           </p>
@@ -127,7 +127,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           checked={reduceMotion}
           onChange={(v) => setSetting('reduceMotion', v)}
         />
-        <p className="px-1 text-[11px] leading-relaxed text-slate-500">
+        <p className="px-1 text-xs leading-relaxed text-slate-500">
           Saved in this browser. Reduce motion also follows your system setting automatically -
           this forces it on regardless.
         </p>

@@ -111,8 +111,8 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-white">{user.username}</p>
-                <p className="truncate text-[11px] text-slate-500">{user.email}</p>
-                <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <p className="truncate text-xs text-slate-500">{user.email}</p>
+                <p className="flex items-center gap-1.5 text-xs text-slate-400">
                   {syncState === 'syncing' ? (
                     <>
                       <LoaderCircle className="h-3 w-3 animate-spin" /> Syncing…
@@ -212,7 +212,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
                     placeholder="How you want to be known"
                     className="field"
                   />
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-xs text-slate-500">
                     Shown in the menu. Nobody else sees it - there is no leaderboard.
                   </span>
                 </label>
@@ -262,7 +262,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
               </button>
             </form>
 
-            <p className="text-[11px] leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-slate-500">
               Signing in merges whatever you have played on this device with your account - you
               will not lose the streak you already have.
             </p>
@@ -287,7 +287,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
           {showBackup ? (
             <>
               <h3 className="label">Backup code</h3>
-              <p className="text-[11px] leading-relaxed text-slate-500">
+              <p className="text-xs leading-relaxed text-slate-500">
                 A snapshot of your progress you can paste into another browser. Restoring
                 replaces whatever is stored here.
               </p>
@@ -297,7 +297,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
                 rows={3}
                 onFocus={(e) => e.currentTarget.select()}
                 aria-label="Backup code"
-                className="field resize-none break-all font-game text-[10px] leading-relaxed"
+                className="field resize-none break-all font-game text-[11px] leading-relaxed"
               />
               <button type="button" onClick={onCopy} className="btn btn-ghost w-full">
                 {copied ? (
@@ -317,7 +317,7 @@ export function AccountModal({ open, onClose }: AccountModalProps) {
                 rows={2}
                 placeholder="…or paste a code here to restore"
                 aria-label="Paste backup code"
-                className="field mt-1 resize-none break-all font-game text-[10px] leading-relaxed"
+                className="field mt-1 resize-none break-all font-game text-[11px] leading-relaxed"
               />
               {codeError && <p className="text-xs text-rose-400">{codeError}</p>}
               <button

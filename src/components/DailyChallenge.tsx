@@ -40,7 +40,7 @@ export function DailyChallenge() {
           Today&apos;s challenge
         </h3>
         {streak > 0 && (
-          <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-300">
+          <span className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-bold text-orange-300">
             <Flame className="h-3 w-3" />
             {streak} day{streak === 1 ? '' : 's'}
           </span>
@@ -69,7 +69,7 @@ export function DailyChallenge() {
         </button>
       )}
 
-      <p className="mt-2 text-center text-[11px] leading-snug text-slate-500">
+      <p className="mt-2 text-center text-xs leading-snug text-slate-500">
         {done
           ? 'Counts once per day. Come back tomorrow.'
           : 'Honour system - nobody is checking, and there is no leaderboard.'}

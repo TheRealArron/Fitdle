@@ -2,8 +2,8 @@
 
 import { create } from 'zustand';
 import { friendlyAuthError, getSupabase, hasStoredSession, isCloudConfigured } from '@/lib/supabase';
-import { pushCloudSave, syncSave } from '@/lib/cloudSync';
-import { clearSave, defaultSave, loadSave, writeSave, type SaveData } from '@/lib/secureStorage';
+import { clearCloudSave, syncSave } from '@/lib/cloudSync';
+import { clearSave, defaultSave, loadSave, writeSave } from '@/lib/secureStorage';
 import { useGameStore } from '@/store/useGameStore';
 
 export interface AuthUser {
@@ -49,7 +49,8 @@ export interface AuthState {
   signOut: () => Promise<void>;
   syncNow: () => Promise<void>;
   /** Push `save` over the cloud copy without merging. Used by reset. */
-  overwriteCloud: (save: SaveData) => Promise<void>;
+  /** Clears the cloud record. Takes nothing: it only ever writes empty. */
+  overwriteCloud: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -194,18 +195,23 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   /**
-   * Replaces the cloud copy outright instead of merging into it.
+   * Clears the cloud copy instead of merging into it.
    *
    * Merging cannot express a deletion - every counter takes the max, so a
    * cleared save merged with the old cloud row restores it in full. "Reset
-   * statistics" therefore has to overwrite, or it silently does nothing for
+   * statistics" therefore has to clear it, or it silently does nothing for
    * signed-in players.
+   *
+   * This used to write the cleared save back as an upsert, which is precisely
+   * what revoking the client's `insert`/`update` permission forbids - so it had
+   * been failing 42501 and the reset had been silently doing nothing again.
+   * See `clearCloudSave`.
    */
-  overwriteCloud: async (save) => {
+  overwriteCloud: async () => {
     const { user, cloudAvailable } = get();
     if (!cloudAvailable || !user) return;
     set({ syncState: 'syncing' });
-    const result = await pushCloudSave(user.id, save);
+    const result = await clearCloudSave();
     set(
       result.ok
         ? { syncState: 'synced', lastSyncedAt: Date.now() }
@@ -240,13 +246,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 }));
 
 /**
- * Replaces the cloud copy outright. Used by "reset statistics", where merging
- * would restore exactly what the player asked to delete.
+ * Clears the cloud copy. Used by "reset statistics", where merging would
+ * restore exactly what the player asked to delete.
  */
-export async function overwriteCloudIfSignedIn(save: SaveData): Promise<void> {
+export async function clearCloudIfSignedIn(): Promise<void> {
   const { user, cloudAvailable } = useAuthStore.getState();
   if (!cloudAvailable || !user) return;
-  await useAuthStore.getState().overwriteCloud(save);
+  await useAuthStore.getState().overwriteCloud();
 }
 
 /**

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { digest, defaultSave, reconcile, commitResult, type SaveData } from '@/lib/secureStorage';
+import { readCode } from './helpers/source.ts';
 
 /* ── digest ───────────────────────────────────────────────────────────────── */
 
@@ -201,4 +202,13 @@ test('the guess distribution always sums to the win count', () => {
   );
   assert.ok(save.streak <= save.wins);
   assert.ok(save.maxStreak >= save.streak);
+});
+
+test('the legacy migration leaves an anchor at all', () => {
+  const code = readCode(new URL('../src/lib/secureStorage.ts', import.meta.url));
+  const fn = code.slice(code.indexOf('const save = defaultSave();'));
+  const body = fn.slice(0, fn.indexOf('return save;'));
+  assert.match(body, /save\.lastSeed =/, 'a migrated streak with no lastSeed can never break');
+  assert.match(body, /save\.highSeed =/, 'and no high-water mark means no rollback protection');
+  assert.ok(!/getUTCDate\(\)\s*\+\s*1/.test(body), 'the anchor must not be in the future');
 });

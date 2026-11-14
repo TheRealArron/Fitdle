@@ -67,6 +67,25 @@
   --color-accent: #34d399;
   --color-accent-dim: #0f3d31;
 
+  /*
+   * The small end of the type scale, raised.
+   *
+   * Tailwind's defaults are 0.75rem/0.875rem for xs/sm, which is a comfortable
+   * floor on a marketing page and too small in a dense app - and this app is
+   * mostly dense: rails of labels, legends, stat chips, hint text. Read on a
+   * real screen the 12px tier was genuinely hard work.
+   *
+   * Overriding the scale rather than editing ~120 call sites means every
+   * `text-xs` moves together and none can be missed, and anything written
+   * later inherits the corrected size. Line heights go up with them; raising
+   * a font size inside a tight leading only trades one legibility problem for
+   * another.
+   */
+  --text-xs: 0.8125rem; /* 13px, was 12 */
+  --text-xs--line-height: 1.15rem;
+  --text-sm: 0.9375rem; /* 15px, was 14 */
+  --text-sm--line-height: 1.4rem;
+
   /* ── keyboard ── */
   --color-key-idle: #2b374d;
   --color-key-hover: #38465f;
@@ -322,14 +341,25 @@
 
 html,
 body {
-  height: 100%;
+  /*
+   * min-height, not height, and no overflow lock.
+   *
+   * `body { overflow: hidden }` was correct while the only page was the game,
+   * which is a fixed viewport of board and keyboard that must never scroll. It
+   * became a bug the moment a second page existed: it silently disabled
+   * scrolling everywhere, on every page, including a landing page several
+   * screens tall.
+   *
+   * The game does not need it - its own root is `h-dvh overflow-hidden`, so it
+   * locks itself. Anything taller than the viewport now scrolls normally.
+   */
+  min-height: 100%;
 }
 
 body {
   background-color: var(--color-app-bg);
   color: #e8edf7;
   font-family: var(--font-ui);
-  overflow: hidden;
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -366,7 +396,8 @@ body > * {
  */
 .label {
   font-family: var(--font-ui);
-  font-size: 0.625rem;
+  /* Raised with the scale above; 10px small caps was the worst offender. */
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;

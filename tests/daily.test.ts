@@ -170,7 +170,8 @@ test('the schedule size is frozen, not derived from the array length', () => {
    * Freezing the divisor makes appending vocabulary a no-op on the calendar.
    */
   const src = readFileSync(new URL('../src/server/game.ts', import.meta.url), 'utf8');
-  assert.match(src, /ANSWER_ORDER\[seed % SCHEDULE_SIZE\]/);
+  assert.match(src, /const slot = seed % SCHEDULE_SIZE;/);
+  assert.match(src, /ANSWER_ORDER\[scheduledSlot\(seed\)\]/);
   assert.ok(
     !/seed % ANSWER_ORDER\.length/.test(src),
     'the divisor is derived from the array length again',
@@ -214,4 +215,89 @@ test('every scheduled index is a real catalogue entry', () => {
   for (let i = 0; i < SCHEDULE_SIZE; i++) {
     assert.ok(getExercise(ANSWER_ORDER[i]), `${ANSWER_ORDER[i]} is not in the catalogue`);
   }
+});
+
+/* ── the keyed schedule ───────────────────────────────────────────────────── */
+
+/*
+ * With FITDLE_SCHEDULE_SECRET set, a public repository no longer publishes the
+ * calendar. These pin what it must preserve - the width rotation and the gap
+ * between repeats - and the rollout guard that keeps a live round's answer
+ * from moving.
+ */
+
+const KEY_A = 'a-test-schedule-secret-that-is-long-enough-000';
+const KEY_B = 'b-test-schedule-secret-that-is-long-enough-000';
+
+function withSchedule<T>(secret: string | undefined, from: string | undefined, fn: () => T): T {
+  const saved = [process.env.FITDLE_SCHEDULE_SECRET, process.env.FITDLE_SCHEDULE_FROM];
+  if (secret === undefined) delete process.env.FITDLE_SCHEDULE_SECRET;
+  else process.env.FITDLE_SCHEDULE_SECRET = secret;
+  if (from === undefined) delete process.env.FITDLE_SCHEDULE_FROM;
+  else process.env.FITDLE_SCHEDULE_FROM = from;
+  try {
+    return fn();
+  } finally {
+    if (saved[0] === undefined) delete process.env.FITDLE_SCHEDULE_SECRET;
+    else process.env.FITDLE_SCHEDULE_SECRET = saved[0];
+    if (saved[1] === undefined) delete process.env.FITDLE_SCHEDULE_FROM;
+    else process.env.FITDLE_SCHEDULE_FROM = saved[1];
+  }
+}
+
+function calendar(days: number): string[] {
+  const start = new Date(Date.UTC(2026, 7, 6));
+  const out: string[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const seed = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+    out.push(answerFor(seed).name);
+  }
+  return out;
+}
+
+function tightestGap(days: string[]): number {
+  const last = new Map<string, number>();
+  let tightest = Infinity;
+  days.forEach((name, i) => {
+    const prev = last.get(name);
+    if (prev !== undefined) tightest = Math.min(tightest, i - prev);
+    last.set(name, i);
+  });
+  return tightest;
+}
+
+test('the keyed schedule is not the public order', () => {
+  const plain = withSchedule(undefined, undefined, () => calendar(120));
+  const keyed = withSchedule(KEY_A, '20200101', () => calendar(120));
+  const moved = keyed.filter((n, i) => n !== plain[i]).length;
+  assert.ok(moved > 80, `only ${moved}/120 days differ from the order on GitHub`);
+});
+
+test('the keyed schedule keeps every day’s grid width and the repeat gap', () => {
+  const plain = withSchedule(undefined, undefined, () => calendar(730));
+  const keyed = withSchedule(KEY_A, '20200101', () => calendar(730));
+  keyed.forEach((n, i) => assert.equal(n.length, plain[i].length, `day ${i} changed width`));
+  assert.equal(tightestGap(keyed), tightestGap(plain), 'the minimum gap between repeats moved');
+  assert.equal(new Set(keyed).size, new Set(plain).size, 'the keyed schedule dropped some words');
+});
+
+test('the keyed schedule is deterministic and depends on the secret', () => {
+  const a1 = withSchedule(KEY_A, '20200101', () => calendar(62));
+  const a2 = withSchedule(KEY_A, '20200101', () => calendar(62));
+  const b = withSchedule(KEY_B, '20200101', () => calendar(62));
+  assert.deepEqual(a1, a2);
+  assert.notDeepEqual(a1, b);
+});
+
+test('dates before the cutover keep the old answer, so no live round moves', () => {
+  const seed = 20261114;
+  const plain = withSchedule(undefined, undefined, () => answerFor(seed).name);
+  assert.equal(withSchedule(KEY_A, '20261115', () => answerFor(seed).name), plain);
+});
+
+test('a half-configured keyed schedule fails loudly rather than silently', () => {
+  assert.throws(() => withSchedule(KEY_A, undefined, () => answerFor(20261114)), /SCHEDULE_FROM/);
+  assert.throws(() => withSchedule('short', '20200101', () => answerFor(20261114)), /too short/);
 });

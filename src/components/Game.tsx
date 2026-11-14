@@ -51,6 +51,7 @@ export function Game() {
   const initGame = useGameStore((s) => s.initGame);
   const hydrated = useGameStore((s) => s.hydrated);
   const clockRollback = useGameStore((s) => s.clockRollback);
+  const offline = useGameStore((s) => s.offline);
 
   const revealingRow = useGameStore((s) => s.revealingRow);
   const target = useGameStore((s) => s.reveal);
@@ -179,6 +180,30 @@ export function Game() {
     <div className="flex h-dvh flex-col overflow-hidden">
       <Header onOpenMenu={() => setDrawerOpen(true)} onOpenStats={() => setStatsOpen(true)} />
 
+      {/*
+        The daily is unplayable without the server, and until now the only sign
+        of that was a toast that cleared itself after 2.2 seconds. A popup or a
+        tab opened while the API was unreachable showed the message briefly and
+        then looked like an ordinary game with a board that would not accept a
+        single letter. Measured in the extension: "5 letters" and a full
+        keyboard, and typing did nothing.
+
+        The clock-rollback bar below is the same shape, for the same reason.
+      */}
+      {offline && (
+        <div className="flex w-full shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+          <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+          <span>Cannot reach the server, so today&rsquo;s puzzle cannot load.</span>
+          <button
+            type="button"
+            onClick={() => void initGame()}
+            className="rounded-md border border-rose-400/30 px-2 py-0.5 font-medium text-rose-200 transition-colors hover:bg-rose-500/20"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
       {clockRollback && (
         <div className="flex w-full shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
           <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
@@ -263,7 +288,7 @@ export function Game() {
           <div className="w-full">{figure}</div>
           <MuscleDetail region={region} answer={target} onClose={() => setRegion(null)} />
           {!region && (
-            <p className="text-center text-[11px] leading-snug text-slate-500">
+            <p className="text-center text-xs leading-snug text-slate-500">
               {roundOver
                 ? 'Tap a muscle to see what else trains it.'
                 : 'Muscle details unlock when the round ends.'}

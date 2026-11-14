@@ -1,0 +1,245 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { CATALOGUE } from '@/data/exercises';
+import { THEMES } from '@/store/useSettingsStore';
+import { readCode } from './helpers/source.ts';
+
+/**
+ * The landing page makes factual claims about the product, and nothing else in
+ * the repo would notice if they stopped being true.
+ *
+ * This is not hypothetical. The first published version of this copy said "100
+ * exercises" when there were 99, because the number was typed rather than read.
+ * A marketing page that misstates the product is worse than one that says less,
+ * and the reader who checks is exactly the reader worth having.
+ */
+
+const root = path.resolve(import.meta.dirname, '..');
+
+test('the landing page derives its numbers instead of typing them', () => {
+  const src = readCode(new URL('../src/app/page.tsx', import.meta.url));
+
+  // Each of these is a claim on the page that must track a real constant.
+  for (const symbol of ['CATALOGUE', 'MAX_GUESSES', 'SCHEDULE_SIZE', 'CATEGORY_HINT_AT']) {
+    assert.match(src, new RegExp(`\\b${symbol}\\b`), `the page should read ${symbol}, not restate it`);
+  }
+
+  /*
+   * The specific bug, guarded: a bare count of exercises written as a literal.
+   * Any number in that range sitting next to the word "exercises" is either
+   * wrong now or will be the next time one is added.
+   */
+  assert.ok(
+    !/\b\d{2,4}\s+exercises\b/i.test(src),
+    'the exercise count is hardcoded; read CATALOGUE.length instead',
+  );
+
+  /*
+   * And the same literal hiding one level up.
+   *
+   * The check above only sees a number written next to the word. Replacing
+   * `const EXERCISE_COUNT = CATALOGUE.length` with `= 100` renders exactly the
+   * same wrong claim and slipped straight past it - measured, by doing that.
+   * So no top-level constant in this file may be a bare number: every figure
+   * the page states has to come from the data it imports.
+   */
+  const literals = [...src.matchAll(/^const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*-?\d/gm)].map(
+    (m) => m[1],
+  );
+  assert.deepEqual(
+    literals,
+    [],
+    `${literals.join(', ')} is a hardcoded number on a page whose numbers must be derived`,
+  );
+});
+
+test('the exercise count the page would render is the real one', () => {
+  // Proves the derivation resolves, not just that the symbol appears.
+  assert.ok(CATALOGUE.length > 0);
+  assert.equal(CATALOGUE.length, new Set(CATALOGUE.map((e) => e.name)).size, 'duplicate names');
+});
+
+test('the landing page sends people to the game', () => {
+  const src = readCode(new URL('../src/app/page.tsx', import.meta.url));
+  assert.match(src, /href="\/play"/, 'nothing on the landing page links to the game');
+  assert.ok(fs.existsSync(path.join(root, 'src/app/play/page.tsx')), '/play does not exist');
+});
+
+test('the extension popup opens the game, not the landing page', () => {
+  /*
+   * The static export names files after routes, so moving the game from `/` to
+   * `/play` moved the popup's entry point too. Nothing at build time checks
+   * this: a manifest pointing at index.html still builds, installs, and opens -
+   * it just shows a marketing page in a 400px popup instead of the board.
+   */
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension/manifest.json'), 'utf8'));
+  assert.equal(manifest.action.default_popup, 'play.html');
+});
+
+test('the landing page itself stays a server component', () => {
+  // readCode, not readSource: the comment below names framer-motion, and an
+  // absence check that reads comments matches its own explanation.
+  const src = readCode(new URL('../src/app/page.tsx', import.meta.url));
+  /*
+   * The page is the first thing a cold visitor loads, and almost all of it is
+   * text that never changes. Marking the whole file 'use client' would ship
+   * every word of that copy to the browser as JavaScript.
+   *
+   * Interactivity is allowed, but as an island: the anatomy drill is its own
+   * client component and only it crosses the boundary. That is the distinction
+   * this guards - not "no interactivity", but "the page is not the client
+   * component".
+   */
+  assert.ok(!/^'use client'/m.test(src), 'the landing page must not be a client component');
+  assert.ok(!/framer-motion/.test(src), 'animate with CSS here; let islands own their runtimes');
+});
+
+test('the embedded drill cannot touch puzzle state', () => {
+  /*
+   * The drill sits in front of people who have not started a round, so it must
+   * not be able to spend a guess, move a streak, or reveal a seed. It was built
+   * that way deliberately; this keeps it that way.
+   */
+  const drill = readCode(new URL('../src/components/AnatomyDrill.tsx', import.meta.url));
+  assert.ok(!/useGameStore/.test(drill), 'the drill must not read or write puzzle state');
+  assert.ok(!/\/api\//.test(drill), 'the drill must not call the game API');
+});
+
+/* ── what the extension asks for ──────────────────────────────────────────── */
+
+test('the committed manifest asks for no permissions at all', () => {
+  /*
+   * It used to ask for every https host on the internet, which Chrome renders
+   * to the user as "Read and change all your data on all websites" and which is
+   * the most common reason a Web Store review stalls.
+   *
+   * What the popup needs is cross-origin fetch to two known origins - the
+   * deployment and the Supabase project - and both are build-time constants, so
+   * `build-extension.mjs` derives them. The committed file must therefore ask
+   * for nothing, or a stale broad grant ships behind the generated one.
+   */
+  const manifest = JSON.parse(
+    fs.readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(manifest.host_permissions, undefined, 'host permissions are generated, not committed');
+  assert.equal(manifest.permissions, undefined, 'and nothing in src/ calls a chrome.* API');
+});
+
+test('the build derives host permissions from where it actually talks', () => {
+  const script = fs.readFileSync(new URL('../scripts/build-extension.mjs', import.meta.url), 'utf8');
+  const fn = script.slice(script.indexOf('function writeManifest'));
+  assert.match(fn, /NEXT_PUBLIC_API_URL/, 'the deployment it plays against');
+  assert.match(fn, /NEXT_PUBLIC_SUPABASE_URL/, 'and the project it signs in to');
+  assert.match(fn, /new URL\(value\)\.origin/, 'as origins, not as whatever was pasted in');
+});
+
+test('nothing in the app calls a chrome.* API, so no permission is needed', () => {
+  /*
+   * The pair to the manifest assertion above. If a `chrome.*` call ever lands,
+   * this fails and whoever added it has to add the permission deliberately
+   * rather than discovering at review time that the manifest never asked.
+   */
+  const srcDir = path.dirname(new URL('../src/', import.meta.url).pathname);
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(ts|tsx)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(srcDir);
+
+  for (const file of files) {
+    const code = readCode(new URL(`file://${file}`));
+    assert.ok(
+      !/\bchrome\.(storage|tabs|runtime|permissions)\b/.test(code),
+      `${path.relative(srcDir, file)} calls a chrome.* API but the manifest requests no permissions`,
+    );
+  }
+});
+
+/* ── numbers the documents claim ──────────────────────────────────────────── */
+
+test('the documented test count is the real one', () => {
+  /*
+   * The README and DECISIONS between them carried FOUR different test counts -
+   * 93, 200, 106 and 159 - for one suite that had 220 at the time, and the
+   * bundle size, the chunk count and the answer-pool size had drifted too. A
+   * document nobody can trust on a number nobody can trust on anything.
+   *
+   * The count is the one claim that moves every time a test is added, so it is
+   * the one worth wiring to the source. Everything else in that class is either
+   * derived from the data (the landing page already does that, above) or is a
+   * historical before/after that cannot be re-run and is labelled as such.
+   */
+  const files = fs
+    .readdirSync(new URL('../tests/', import.meta.url).pathname)
+    .filter((f) => f.endsWith('.test.ts'));
+
+  let actual = 0;
+  for (const f of files) {
+    const src = fs.readFileSync(new URL(`../tests/${f}`, import.meta.url), 'utf8');
+    actual += (src.match(/^test\(/gm) ?? []).length;
+  }
+  assert.ok(actual > 0, 'found no tests to count');
+
+  for (const doc of ['README.md', 'DECISIONS.md', 'SECURITY.md']) {
+    const text = fs.readFileSync(new URL(`../${doc}`, import.meta.url), 'utf8');
+    for (const m of text.matchAll(/(\d+)\s+(?:unit\s+)?tests?\b/g)) {
+      assert.equal(
+        Number(m[1]),
+        actual,
+        `${doc} says "${m[0]}" but there are ${actual}`,
+      );
+    }
+  }
+});
+
+/* ── the theme, before the first paint ────────────────────────────────────── */
+
+test('the theme is stamped before paint, from one list of themes', () => {
+  /*
+   * The settings store applies the theme from a useEffect, which runs after
+   * hydration. Measured on /play with Daylight saved, before this was fixed:
+   * `data-theme` was null and the body was rgb(10, 14, 24) at DOMContentLoaded,
+   * then rgb(245, 247, 250) once hydrated - a full dark-to-light flash on every
+   * load. The landing page is a server component with no settings store at all,
+   * so it never got the attributes and stayed dark whatever had been chosen.
+   *
+   * `public/theme.js` runs before paint and therefore has its own copy of the
+   * theme names; a second list that drifts would silently stop honouring a
+   * theme, so it is checked against the real one here.
+   */
+  const script = fs.readFileSync(new URL('../public/theme.js', import.meta.url), 'utf8');
+  const listed = /var themes = \[([^\]]+)\]/.exec(script);
+  assert.ok(listed, 'theme.js must declare the themes it accepts');
+  const names = listed[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+  assert.deepEqual(names, [...THEMES], 'theme.js and useSettingsStore disagree about the themes');
+
+  assert.match(script, /fitdle:settings:v1/, 'and must read the key the store writes');
+  assert.match(script, /data-theme/, 'and stamp the attribute the CSS selects on');
+});
+
+test('the theme script blocks, or it is not a fix', () => {
+  /*
+   * `async` or `defer` would let the browser paint first, which is the entire
+   * bug. A same-origin file rather than an inline script: the CSP allows inline
+   * but the codebase has no dangerouslySetInnerHTML anywhere, and a file also
+   * satisfies MV3's stricter script-src 'self', so the extension gets it too.
+   */
+  const layout = readCode(new URL('../src/app/layout.tsx', import.meta.url));
+  const tag = /<script[^>]*src="\/theme\.js"[^>]*\/?>/.exec(layout);
+  assert.ok(tag, 'the root layout must load /theme.js');
+  assert.ok(!/\basync\b|\bdefer\b/.test(tag[0]), `${tag[0]} must not be async or deferred`);
+  assert.ok(
+    layout.indexOf('<head>') < layout.indexOf('theme.js'),
+    'it belongs in <head>, before the body it is meant to colour',
+  );
+  assert.ok(
+    !layout.includes('dangerouslySetInnerHTML'),
+    'still no dangerouslySetInnerHTML - that claim is in the README',
+  );
+});
