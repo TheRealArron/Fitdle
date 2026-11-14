@@ -1,6 +1,6 @@
 import { MAX_GUESSES } from '@/data/exercises';
 import { getSupabase } from '@/lib/supabase';
-import type { SaveData } from '@/lib/secureStorage';
+import { isCoherent, normalise, type SaveData } from '@/lib/secureStorage';
 
 const TABLE = 'fitdle_progress';
 
@@ -94,7 +94,18 @@ async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | nu
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data?.save as SaveData | undefined) ?? null };
+
+  /*
+   * A row is not always a save. `fitdle_reset_progress` writes `'{}'`, and so
+   * does `fitdle_claim_ai` for a player who asks the guide before finishing a
+   * round. Handed to `mergeSaves`, `{}` threw on `distribution[i]` - and the
+   * sign-out path awaits a sync before calling `signOut()`, so that player
+   * could not sign out at all. Anything that is not a coherent save is no save,
+   * exactly as the server's `readRow` already treats it.
+   */
+  const save: unknown = data?.save;
+  if (!isCoherent(save)) return { ok: true, data: null };
+  return { ok: true, data: normalise(save) };
 }
 
 /**
@@ -119,10 +130,10 @@ async function fetchCloudSave(userId: string): Promise<CloudResult<SaveData | nu
  *
  * `fitdle_reset_progress` is the way back in: a security-definer function that
  * clears the save on the caller's own row and nothing else. Deleting the row
- * would also work and is still permitted, but it takes `tier` and the AI
- * counters with it - a statistics reset must not cancel somebody's paid tier -
- * so deletion is the fallback for a project that has not run the newer schema,
- * not the design.
+ * takes `tier` and the AI counters with it, which made it a free AI-quota
+ * reset, so the current schema revokes it. Deletion survives only as the
+ * fallback for a project that has not run the newer schema - which also still
+ * has the old delete policy, so the fallback works exactly where it runs.
  */
 export async function clearCloudSave(): Promise<CloudResult<true>> {
   const supabase = await getSupabase();

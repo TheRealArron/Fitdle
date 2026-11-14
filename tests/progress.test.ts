@@ -98,11 +98,14 @@ test('the schema revokes client insert and update on progress', () => {
   );
 });
 
-test('the client keeps read and delete', () => {
-  // Read, or sync breaks. Delete, or a player cannot remove their own data -
-  // and a delete can only ever lower a streak, so it risks nothing.
+test('the client keeps read, and loses delete', () => {
+  // Read, or sync breaks. Delete is gone: the row carries the AI quota, so a
+  // client delete was a free quota reset. The reset function and account
+  // deletion (on delete cascade) cover every legitimate use.
   assert.match(schema, /create policy "read own progress"[\s\S]*?for select/);
-  assert.match(schema, /create policy "delete own progress"[\s\S]*?for delete/);
+  assert.ok(!/create policy "delete own progress"/.test(schema), 'the delete policy is still created');
+  assert.match(schema, /drop policy if exists "delete own progress"/, 'and existing projects must drop it');
+  assert.match(schema, /references auth\.users \(id\) on delete cascade/);
 });
 
 test('syncSave writes nothing at all', () => {
@@ -479,4 +482,37 @@ test('the client keeps the server’s spent when it adopts the banked record', (
     !/next\.day = day;/.test(block),
     'assigning the local day wholesale is what dropped it',
   );
+});
+
+/* ── a day pays out once, whatever the save says ─────────────────────────── */
+
+test('a reset cannot re-open a day that was already banked', () => {
+  /*
+   * The reset sets the save to `{}`, which forgets `lastSeed` - the only thing
+   * that stopped a second payout. `banked_seed` lives outside the save, the
+   * reset leaves it alone, and bankResult refuses a seed it already banked.
+   */
+  assert.match(schema, /add column if not exists banked_seed int/);
+  const reset = schema.slice(schema.indexOf('create or replace function public.fitdle_reset_progress'));
+  assert.ok(!reset.slice(0, reset.indexOf('$$;', reset.indexOf('as $$') + 5)).includes('banked_seed'),
+    'the reset must not clear banked_seed');
+
+  const progress = readFileSync(new URL('../src/server/progress.ts', import.meta.url), 'utf8');
+  assert.match(progress, /if \(row\?\.bankedSeed === seed\) return \{ save: rolled, written: false \};/);
+  assert.match(progress, /banked_seed: seed,/, 'every bank must record the seed it paid out');
+  // An un-migrated project has no column; banking must still work there.
+  assert.match(progress, /missingColumn\(error, 'banked_seed'\)/);
+});
+
+test('a cloud row that is not a save never reaches the merge', () => {
+  /*
+   * `{}` - written by the reset, and by the AI quota claim for a player who
+   * has not finished a round - threw inside mergeSaves, and sign-out awaits a
+   * sync before signOut(), so that player could not sign out.
+   */
+  const fetch = cloudSync.slice(
+    cloudSync.indexOf('async function fetchCloudSave'),
+    cloudSync.indexOf('export async function clearCloudSave'),
+  );
+  assert.match(fetch, /if \(!isCoherent\(save\)\) return \{ ok: true, data: null \};/);
 });

@@ -1,4 +1,5 @@
 import 'server-only';
+import { createHmac } from 'node:crypto';
 import {
   CATEGORY_HINT_AT,
   EQUIPMENT_HINT_AT,
@@ -73,9 +74,77 @@ export const SCHEDULE_SIZE = 62;
 /**
  * The one line that used to be in the browser. `ANSWER_ORDER` is server-only,
  * so this mapping cannot be read out of the bundle.
+ *
+ * ── Server-only is not secret when the repository is public ─────────────────
+ * Keeping `ANSWER_ORDER` out of the bundle meant nothing once the source was on
+ * a public GitHub repository: `answers.ts` plus `seed % 62` IS every future
+ * answer, readable without opening the app at all.
+ *
+ * So with `FITDLE_SCHEDULE_SECRET` set, the slot a date lands on is mapped
+ * through a permutation derived from that secret, which lives only in the
+ * deployment's environment. The permutation:
+ *
+ *   - only swaps words of the SAME length (slots k, k+5, k+10, ... all hold
+ *     5+k letters), so the daily width rotation is exactly what it was;
+ *   - is fixed rather than reshuffled per cycle, so each date keeps its slot
+ *     and the 45-day minimum gap between repeats is exactly what it was. A
+ *     per-cycle reshuffle could put the same word on two adjacent days.
+ *
+ * What it does not do: anyone who records every reveal for a full cycle can
+ * rebuild the table, exactly as before. It turns "read it on GitHub" back into
+ * "watch for two months".
+ *
+ * `FITDLE_SCHEDULE_FROM` (a YYYYMMDD seed) is required alongside it, and dates
+ * before it keep the old mapping, so switching it on never changes the answer
+ * of a round somebody is already playing. Set it to tomorrow.
  */
+function scheduledSlot(seed: number): number {
+  const slot = seed % SCHEDULE_SIZE;
+  const secret = process.env.FITDLE_SCHEDULE_SECRET?.trim();
+  if (!secret) return slot;
+
+  if (secret.length < 32) {
+    throw new Error('FITDLE_SCHEDULE_SECRET is too short (need 32+ chars).');
+  }
+  const from = Number(process.env.FITDLE_SCHEDULE_FROM?.trim());
+  if (!Number.isInteger(from) || from < 20000101 || from > 99991231) {
+    throw new Error(
+      'FITDLE_SCHEDULE_SECRET is set but FITDLE_SCHEDULE_FROM is not a YYYYMMDD date. ' +
+        'Set it to tomorrow so no round in progress changes answer.',
+    );
+  }
+  if (seed < from) return slot;
+
+  return keyedPermutation(secret)[slot];
+}
+
+let cachedPermutation: { secret: string; perm: number[] } | null = null;
+
+function keyedPermutation(secret: string): number[] {
+  if (cachedPermutation?.secret === secret) return cachedPermutation.perm;
+
+  const perm = Array.from({ length: SCHEDULE_SIZE }, (_, i) => i);
+  for (let k = 0; k < 5; k++) {
+    const positions: number[] = [];
+    for (let i = k; i < SCHEDULE_SIZE; i += 5) positions.push(i);
+
+    // Fisher-Yates, each draw from an HMAC of the secret. Modulo bias over a
+    // 32-bit draw into at most 13 buckets is below one part in 300 million.
+    const shuffled = [...positions];
+    for (let j = shuffled.length - 1; j > 0; j--) {
+      const mac = createHmac('sha256', secret).update(`fitdle-schedule:${k}:${j}`).digest();
+      const r = mac.readUInt32BE(0) % (j + 1);
+      [shuffled[j], shuffled[r]] = [shuffled[r], shuffled[j]];
+    }
+    positions.forEach((p, i) => (perm[p] = shuffled[i]));
+  }
+
+  cachedPermutation = { secret, perm };
+  return perm;
+}
+
 export function answerFor(seed: number): Exercise {
-  const name = ANSWER_ORDER[seed % SCHEDULE_SIZE];
+  const name = ANSWER_ORDER[scheduledSlot(seed)];
   const exercise = getExercise(name);
   if (!exercise) throw new Error(`answer ${name} is not in the catalogue`);
   return exercise;

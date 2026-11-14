@@ -21,7 +21,7 @@ import 'server-only';
  */
 
 import { count as memoryCount, type CountResult } from '@/server/memoryCounter';
-import { sharedCount } from '@/server/sharedCounter';
+import { sharedCount, sharedPeek } from '@/server/sharedCounter';
 
 export interface CountOutcome extends CountResult {
   /** True when the answer came from the shared counter rather than memory. */
@@ -43,15 +43,20 @@ export async function count(
   consume = true,
 ): Promise<CountOutcome> {
   /*
-   * A peek is served from memory even when Redis is configured.
+   * A peek reads Redis too when it is configured.
    *
-   * There is no read-only form of the script - it increments, that is what it
-   * is for - and adding a second GET round trip to render a counter would put
-   * network latency on a path whose only job is to display a number. A peek
-   * that is occasionally low is a cosmetic inaccuracy; every decision that
-   * matters goes through the consuming path.
+   * It used to be served from memory on the theory that a peek only renders a
+   * number. That stopped being true when `guessesSpent` became a peek the guess
+   * route decides with: in Redis mode the consuming path never touches memory,
+   * so the peek read 0 for every player, every day, and a signed-in player who
+   * discarded their token was shown a fresh board for a round they had lost.
    */
-  if (consume) {
+  if (!consume) {
+    const n = await sharedPeek(`${key}:${window}`);
+    if (n !== null) {
+      return { allowed: n < limit, count: n, limit, retryAfter: resetsIn, shared: true };
+    }
+  } else {
     /*
      * The Redis key carries the window id, so expiry and correctness come from
      * the same value: a new window is a new key, and the old one dies on its

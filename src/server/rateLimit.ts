@@ -45,12 +45,51 @@ export async function rateLimit(
 }
 
 /**
- * Best-effort client identity. Behind a proxy the first `x-forwarded-for` entry
- * is the client; the header is spoofable, which is another reason this is a
- * speed bump rather than a control.
+ * Client identity for every address-keyed control: rate limits, the anonymous
+ * AI quota, and the anonymous opening-call record.
+ *
+ * ── Why not the first `x-forwarded-for` entry ──────────────────────────────
+ * It used to be. The leftmost entry is whatever the CLIENT wrote: a proxy
+ * appends the address it saw to the right of anything already there. So on any
+ * host that does not overwrite the header, a random value per request was a
+ * fresh rate-limit window, a fresh anonymous AI quota, and a fresh opening call
+ * - the sweep `callRecord.ts` closes, reopened by one header.
+ *
+ * So:
+ *   - On Vercel, the platform sets `x-real-ip` itself and the client cannot
+ *     influence it. Use that.
+ *   - Elsewhere, count `FITDLE_TRUSTED_PROXY_HOPS` (default 1) entries in from
+ *     the RIGHT. That entry was written by your own outermost proxy, so it is
+ *     the address that proxy actually saw. Set it to the number of proxies you
+ *     run in front of the app (nginx alone: 1; a CDN then nginx: 2).
+ *   - Set it to 0 only when nothing sits in front of `next start`. Then no
+ *     header can be trusted and Route Handlers cannot see the socket address,
+ *     so every caller shares one key - strict, but not spoofable.
+ *
+ * The result is length-capped because it becomes a map and Redis key.
  */
 export function clientKey(request: Request): string {
+  const cap = (v: string) => v.trim().slice(0, 64) || 'unknown';
+
+  if (process.env.VERCEL) {
+    const ip = request.headers.get('x-real-ip') ?? request.headers.get('x-vercel-forwarded-for');
+    if (ip) return cap(ip.split(',')[0]);
+  }
+
+  const hops = trustedHops();
+  if (hops === 0) return 'unknown';
+
   const fwd = request.headers.get('x-forwarded-for');
-  if (fwd) return fwd.split(',')[0].trim();
-  return request.headers.get('x-real-ip') ?? 'unknown';
+  if (fwd) {
+    const entries = fwd.split(',').map((s) => s.trim()).filter(Boolean);
+    if (entries.length > 0) return cap(entries[Math.max(0, entries.length - hops)]);
+  }
+  return cap(request.headers.get('x-real-ip') ?? 'unknown');
+}
+
+function trustedHops(): number {
+  const raw = process.env.FITDLE_TRUSTED_PROXY_HOPS?.trim();
+  if (!raw) return 1;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : 1;
 }

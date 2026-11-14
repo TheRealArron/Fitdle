@@ -62,6 +62,14 @@ end
 return redis.call('GET', KEYS[1])
 `.trim();
 
+/**
+ * Reads a counter without spending it. A missing key is zero, returned as a
+ * number so "nothing counted yet" is distinguishable from "Redis unreachable".
+ */
+const PEEK = `
+return tonumber(redis.call('GET', KEYS[1]) or '0')
+`.trim();
+
 /** Never let a limiter's own latency become the outage it was meant to prevent. */
 const TIMEOUT_MS = 1_000;
 
@@ -152,6 +160,18 @@ export async function sharedCount(key: string, windowSeconds: number): Promise<n
 }
 
 /**
+ * Reads the current count at `key` without incrementing it. Null means no
+ * shared store or no answer - fall back, never read it as zero.
+ */
+export async function sharedPeek(key: string): Promise<number | null> {
+  const result = await evalScript(PEEK, key, []);
+  if (result === null) return null;
+
+  const n = Number(result);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * Claims `key` for `value`, first writer wins.
  *
  * Returns the value that stands - `value` if this caller won the key, the
@@ -173,3 +193,6 @@ export const INCREMENT_SCRIPT = INCREMENT;
 
 /** Exported so a test can assert first-writer-wins is decided inside Redis. */
 export const SET_IF_ABSENT_SCRIPT = SET_IF_ABSENT;
+
+/** Exported so a test can assert the peek never writes. */
+export const PEEK_SCRIPT = PEEK;

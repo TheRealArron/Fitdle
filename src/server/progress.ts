@@ -8,6 +8,7 @@ import {
   type SaveData,
 } from '@/lib/secureStorage';
 import { adminClient } from '@/server/supabase';
+import { cleanUsername } from '@/server/leaderboard';
 
 /**
  * The authoritative streak.
@@ -35,18 +36,45 @@ export interface BankedProgress {
   written: boolean;
 }
 
+interface StoredRow {
+  save: SaveData | null;
+  /** The last seed the server banked, held outside the save - see below. */
+  bankedSeed: number | null;
+}
+
+/** A column this file writes is missing: the project has not re-run the schema. */
+function missingColumn(error: { code?: string; message?: string }, column: string): boolean {
+  return (
+    (error.code === '42703' || error.code === 'PGRST204') &&
+    (error.message ?? '').includes(column)
+  );
+}
+
 /** Reads a user's authoritative record. Null when absent or unreachable. */
-async function readRow(userId: string): Promise<SaveData | null> {
+async function readRow(userId: string): Promise<StoredRow | null> {
   const client = adminClient();
   if (!client) return null;
 
-  const { data, error } = await client
+  let { data, error } = await client
     .from(TABLE)
-    .select('save')
+    .select('save, banked_seed')
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (error || !data?.save) return null;
+  // Before the schema is re-run there is no `banked_seed`. Banking must keep
+  // working on such a project, so read the save alone and skip the guard.
+  if (error && missingColumn(error, 'banked_seed')) {
+    ({ data, error } = await client
+      .from(TABLE)
+      .select('save')
+      .eq('user_id', userId)
+      .maybeSingle());
+  }
+
+  if (error || !data) return null;
+  const raw = data as { save?: unknown; banked_seed?: unknown };
+  const bankedSeed = typeof raw.banked_seed === 'number' ? raw.banked_seed : null;
+  if (!raw.save) return { save: null, bankedSeed };
 
   /*
    * A row is not automatically a save.
@@ -69,11 +97,11 @@ async function readRow(userId: string): Promise<SaveData | null> {
    * "no record" - which for the `{}` case is exactly right, since that is what
    * it means.
    */
-  if (!isCoherent(data.save)) {
+  if (!isCoherent(raw.save)) {
     console.error('[progress] stored record is not a usable save; treating as none');
-    return null;
+    return { save: null, bankedSeed };
   }
-  return normalise(data.save);
+  return { save: normalise(raw.save), bankedSeed };
 }
 
 /**
@@ -103,7 +131,8 @@ export async function bankResult(
   const client = adminClient();
   if (!client) return null;
 
-  const existing = (await readRow(userId)) ?? defaultSave();
+  const row = await readRow(userId);
+  const existing = row?.save ?? defaultSave();
 
   // Same order the client uses: roll the day forward first (which breaks a
   // streak for missed days and detects a rolled-back clock), then bank.
@@ -141,23 +170,44 @@ export async function bankResult(
   // Nothing changed - the round was already banked. Skip the write.
   if (before === seed) return { save: next, written: false };
 
-  const { error } = await client
-    .from(TABLE)
-    .upsert(
-      {
-        user_id: userId,
-        save: next,
-        updated_at: new Date().toISOString(),
-        /*
-         * Denormalised so the leaderboard can show a name without reading
-         * auth.users - which nobody can do for another account, correctly.
-         * Refreshed on every bank, so a rename propagates on the next round
-         * rather than needing a migration.
-         */
-        ...(username ? { username } : {}),
-      },
-      { onConflict: 'user_id' },
-    );
+  /*
+   * The save cannot be the only memory of what was banked, because the player
+   * can clear it: `fitdle_reset_progress` sets it to `{}`, which forgets
+   * `lastSeed`, so a round lost this morning could be reset and banked again as
+   * a win this afternoon. `banked_seed` is a column only this function writes
+   * and the reset does not touch, so a day pays out once whatever the save says.
+   * The reset record is returned as it stands - nothing is committed to it.
+   */
+  if (row?.bankedSeed === seed) return { save: rolled, written: false };
+
+  /*
+   * `username` is denormalised so the leaderboard can show a name without
+   * reading auth.users - which nobody can do for another account, correctly.
+   * Refreshed on every bank, so a rename propagates on the next round. It is
+   * cleaned here, and unique (case-insensitively) in the schema, so two rows
+   * cannot wear the same name: a name somebody else already holds is simply
+   * not written, and the row keeps whatever it had.
+   */
+  const name = cleanUsername(username);
+  const row_: Record<string, unknown> = {
+    user_id: userId,
+    save: next,
+    updated_at: new Date().toISOString(),
+    banked_seed: seed,
+    ...(name ? { username: name } : {}),
+  };
+
+  // Each retry drops exactly one optional field for a known reason, so this
+  // runs at most three times and never drops the save itself.
+  let { error } = await client.from(TABLE).upsert(row_, { onConflict: 'user_id' });
+  if (error && error.code === '23505' && 'username' in row_) {
+    delete row_.username;
+    ({ error } = await client.from(TABLE).upsert(row_, { onConflict: 'user_id' }));
+  }
+  if (error && missingColumn(error, 'banked_seed')) {
+    delete row_.banked_seed;
+    ({ error } = await client.from(TABLE).upsert(row_, { onConflict: 'user_id' }));
+  }
 
   if (error) {
     // A failed write must not fail the guess. The player still gets their

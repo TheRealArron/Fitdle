@@ -62,6 +62,12 @@ function fakeUpstash(behaviour: 'ok' | 'error' | 'garbage' | 'hang' = 'ok') {
         return;
       }
 
+      if (!script.includes("'INCR'")) {
+        // The peek: a read that must never write.
+        res.end(JSON.stringify({ result: keys.get(key) ?? 0 }));
+        return;
+      }
+
       const next = (keys.get(key) ?? 0) + 1;
       keys.set(key, next);
       res.end(JSON.stringify({ result: next }));
@@ -109,6 +115,36 @@ test('with Redis configured, the count is shared and enforces the limit', async 
 
     // The token must actually be sent, or a real deployment 401s.
     assert.equal(up.seen[0].auth, 'Bearer test-token');
+  } finally {
+    unset();
+    await up.close();
+  }
+});
+
+test('with Redis configured, a peek reads the shared count rather than memory', async () => {
+  /*
+   * The consuming path never writes to memory in Redis mode, so a peek served
+   * from memory read 0 forever - and `guessesSpent` is a peek the guess route
+   * decides with. Two consumes then a peek must see 2, and the peek must not
+   * have spent anything.
+   */
+  const up = await fakeUpstash('ok');
+  pointAt(up.port);
+  try {
+    const key = `p${Math.random()}`;
+    await count(key, 6, 1, 60);
+    await count(key, 6, 1, 60);
+    const peek = await count(key, 6, 1, 60, false);
+    const again = await count(key, 6, 1, 60, false);
+
+    assert.equal(peek.shared, true, 'the peek should have gone to Redis');
+    assert.equal(peek.count, 2);
+    assert.equal(again.count, 2, 'a peek must not increment');
+    assert.equal(peek.allowed, true);
+
+    const full = `f${Math.random()}`;
+    for (let i = 0; i < 6; i++) await count(full, 6, 1, 60);
+    assert.equal((await count(full, 6, 1, 60, false)).allowed, false, 'a spent limit peeks as spent');
   } finally {
     unset();
     await up.close();

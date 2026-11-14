@@ -94,6 +94,49 @@ alter table public.fitdle_progress
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * `banked_seed`: the last day the server paid out, kept OUTSIDE the save.
+ *
+ * The save's own `lastSeed` was the only guard against banking a day twice,
+ * and the player can clear the save - `fitdle_reset_progress` sets it to `{}`.
+ * Lose in the morning, reset, win in the afternoon, and the day banked twice.
+ * The reset writes only `save`, so this column survives it. Written only by
+ * `bankResult` under the service role; clients have no write path to it.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+alter table public.fitdle_progress
+  add column if not exists banked_seed int;
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * One name per row on the leaderboard.
+ *
+ * The name comes from `user_metadata`, which a player can rewrite whenever they
+ * like, so without this anybody could take the name at the top of the board.
+ * Case-insensitive, and the first holder keeps it: `bankResult` treats a 23505
+ * here as "do not write the name" and keeps the row's existing one.
+ *
+ * Duplicates that predate the index are cleared first - newest loses, by
+ * created_at - or `create unique index` would refuse to build. They read as
+ * Anonymous until their next round banks a name nobody else holds.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+update public.fitdle_progress p
+   set username = null
+  from (
+    select user_id,
+           row_number() over (partition by lower(username) order by created_at, user_id) as rn
+      from public.fitdle_progress
+     where username is not null
+  ) d
+ where p.user_id = d.user_id
+   and d.rn > 1;
+
+create unique index if not exists fitdle_username_unique
+  on public.fitdle_progress (lower(username))
+  where username is not null;
+
 alter table public.fitdle_progress drop column if exists day_guesses;
 
 alter table public.fitdle_progress
@@ -150,20 +193,23 @@ create policy "read own progress"
  * The server is the only party that knows - from a session it signed itself -
  * that a round was genuinely won and in how many guesses.
  *
- * Deleting is kept, because a player must always be able to remove their own
- * data. It cannot be used to inflate anything: the worst it does is reset you
- * to zero.
+ * Deleting is revoked too. It used to be kept on the theory that the worst a
+ * delete does is reset you to zero - but the row also holds `ai_count`, so a
+ * delete was a free AI-quota reset: `fitdle_claim_ai` recreates the row at
+ * zero, and five more questions cost one devtools call. It also forgot the
+ * day's banked result, so a lost round could be banked again.
+ *
+ * Nothing legitimate needs it: "reset my statistics" is `fitdle_reset_progress`
+ * below, which clears the save and leaves the quota alone, and deleting the
+ * account removes the row through `on delete cascade`. The client's delete
+ * fallback only ever runs against a project that has not run this file - which
+ * still has the old policy, so it keeps working there.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 drop policy if exists "insert own progress" on public.fitdle_progress;
 drop policy if exists "update own progress" on public.fitdle_progress;
-
 drop policy if exists "delete own progress" on public.fitdle_progress;
-create policy "delete own progress"
-  on public.fitdle_progress
-  for delete
-  using (auth.uid() = user_id);
 
 -- Keep updated_at honest even if a client forgets to send it.
 create or replace function public.fitdle_touch_updated_at()

@@ -5,6 +5,12 @@
 | | How |
 |---|---|
 | Answer not in the client bundle | `server-only` on the schedule + `check:bundle` greps compiled chunks |
+| Answer not in the public repo | `FITDLE_SCHEDULE_SECRET` permutes the order by a key only the deployment holds. **Opt-in** - without it, `answers.ts` on GitHub is the calendar |
+| Caller address can't be forged | `clientKey` reads `X-Forwarded-For` from the right (`FITDLE_TRUSTED_PROXY_HOPS`), or the platform header on Vercel |
+| AI quota can't be reset by the client | Client `delete` on the progress row revoked; `fitdle_reset_progress` clears the save and leaves the quota |
+| A day pays out once | `banked_seed` is written by the server outside the save, so resetting the save cannot re-open a banked day |
+| Leaderboard names can't be spoofed | Cleaned server-side (no bidi, zero-width or control characters) and unique case-insensitively; a taken name is not written |
+| New advisories are noticed | `.github/workflows/audit.yml` runs `npm audit --audit-level=high` daily, not only on push |
 | Wins can't be forged | Server derives status from an HMAC-signed session it issued |
 | Streaks can't be forged | Client `insert`/`update` revoked; API writes under service-role. **Verified live** - signed in as the row's own owner, UPDATE touches 0 rows and INSERT/UPSERT return 42501 |
 | Guess counts can't be forged | Counted per account per UTC day by the server, not read off the client's session token |
@@ -17,7 +23,25 @@
 
 ## Known and accepted
 
+**Today's answer can be learned from a second session.** Lose once signed out,
+or in a private window, then sign in and win in one. No server check can tell
+that apart from a lucky first guess, because the two requests share nothing.
+Every daily puzzle with anonymous play has this; the daily board is ranked by
+guesses on trust in that sense. The keyed schedule stops it being worse - the
+answer can no longer be read off GitHub in advance - and signed-in players can
+no longer win a round after spending all six guesses on it.
+
+**The CSP allows inline scripts.** A nonce needs every page rendered per
+request; Next's experimental SRI does not remove `'unsafe-inline'`, because the
+framework still inlines its own scripts. With no `dangerouslySetInnerHTML` or
+`eval` anywhere, the static page was judged worth more. See `next.config.ts`.
+
 **Dependency advisories are checked by `verify`, not asserted here.**
+
+It happened again: on 2026-11-14 `npm audit` found a critical advisory
+against Next 16.0.0–16.4.0 (including RCE and SSRF in Image Optimization,
+which this app exposes through `next/image`). Patched to Next 16.4.6, along
+with sharp, zod and source-map-js.
 
 This file used to say *"`npm audit` reports 0 vulnerabilities on Next 16.3.0"*.
 That was true when it was written and had since stopped being true, which is the

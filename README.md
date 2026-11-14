@@ -23,13 +23,13 @@ the install still has to happen.
 directory, so a dev server in another terminal blocks the dev-mode smoke check
 and `verify` exits 1.
 
-`verify` runs typecheck → lint → dependency audit → 268 unit tests →
+`verify` runs typecheck → lint → dependency audit → 288 unit tests →
 extension build → web build → answer-leak scan → size ratchet → contrast pass →
 30 browser checks in **both dev and production**, plus 9 that load the
 extension into Chromium. Individually:
 
 ```bash
-npm test                 # 268 unit tests
+npm test                 # 288 unit tests
 npm run smoke            # boots dev AND prod, drives a real browser
 npm run smoke -- dev     # one mode, while iterating
 npm run check:bundle     # prove the answer schedule is not in the shipped JS
@@ -644,7 +644,7 @@ So the write moved:
 |---|---|---|
 | Who computes the streak | The browser | `/api/guess`, from a session it signed itself |
 | Who writes the row | The browser, via RLS | The API, via the service-role key |
-| Client RLS on progress | select, insert, update, delete | **select and delete only** |
+| Client RLS on progress | select, insert, update, delete | **select only** (reset via `fitdle_reset_progress`) |
 
 `/api/guess` is the one place that knows both that the round is over and how
 many guesses it took, so it banks the result at that moment and returns the
@@ -973,7 +973,7 @@ derived with `useMemo` in the component instead.
 
 ## Tests
 
-`npm test` - 268 tests over the things that must not silently break:
+`npm test` - 288 tests over the things that must not silently break:
 
 - **daily** - seed formula, timezone invariance, the UTC-midnight boundary, the
   pinned answer order and length cycle, catalogue integrity, and that each
